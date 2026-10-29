@@ -19,6 +19,11 @@ use tokio::{
 
 static NEXT_SOCKET: AtomicU64 = AtomicU64::new(0);
 
+#[cfg(test)]
+tokio::task_local! {
+    pub(super) static SPAWN_FAILURES: std::cell::Cell<usize>;
+}
+
 #[derive(Debug)]
 pub(super) struct Disconnected {
     pub instance: u64,
@@ -47,6 +52,7 @@ pub(super) struct Mpv {
     request_id: u64,
     pub entry_id: Option<i64>,
     alive: Arc<AtomicBool>,
+    playback: Arc<Mutex<(Option<i64>, Option<f64>)>>,
 }
 
 impl Mpv {
@@ -115,7 +121,8 @@ impl Mpv {
                         let _ = child.kill().await;
                         #[cfg(unix)]
                         let _ = std::fs::remove_file(&endpoint);
-                        return Err(error).context("mpv IPC connection failed");
+                        return Err(Disconnected { instance: id })
+                            .context(format!("mpv IPC connection failed: {error}"));
                     }
                     tokio::time::sleep(Duration::from_millis(25)).await;
                 }
@@ -126,6 +133,8 @@ impl Mpv {
         let responses = requests.clone();
         let alive = Arc::new(AtomicBool::new(true));
         let reader_alive = alive.clone();
+        let playback = Arc::new(Mutex::new((None, None)));
+        let reader_playback = playback.clone();
         let reader = tokio::spawn(async move {
             let mut lines = BufReader::new(read).lines();
             let mut entry_id = None;
@@ -145,6 +154,15 @@ impl Mpv {
                             }
                             if value["event"] == "start-file" {
                                 entry_id = value["playlist_entry_id"].as_i64();
+                                *reader_playback.lock().expect("mpv playback poisoned") =
+                                    (entry_id, None);
+                            }
+                            if value["event"] == "property-change"
+                                && value["name"] == "time-pos"
+                                && let Some(position) = value["data"].as_f64()
+                            {
+                                reader_playback.lock().expect("mpv playback poisoned").1 =
+                                    Some(position);
                             }
                             // Property observations do not carry mpv's entry ID. Stamp them
                             // in wire order, before engine commands can overtake queued events.
@@ -191,11 +209,29 @@ impl Mpv {
             request_id: 0,
             entry_id: None,
             alive,
+            playback,
             #[cfg(unix)]
             socket: Some(endpoint),
             #[cfg(windows)]
             socket: None,
         };
+        // Fault injection kills only this task's newly spawned real child, before
+        // the observation writes that can fail before Engine owns the instance.
+        #[cfg(test)]
+        if SPAWN_FAILURES
+            .try_with(|remaining| {
+                let count = remaining.get();
+                remaining.set(count.saturating_sub(1));
+                count > 0
+            })
+            .unwrap_or(false)
+        {
+            mpv.child
+                .kill()
+                .await
+                .expect("kill test-owned spawning mpv");
+            (&mut mpv.reader).await.expect("test mpv reader EOF");
+        }
         for (index, property) in [
             "time-pos",
             "duration",
@@ -212,6 +248,11 @@ impl Mpv {
                 .await?;
         }
         Ok(mpv)
+    }
+
+    // Snapshot in wire order, even when a failed command overtakes queued events.
+    pub fn playback(&self) -> (Option<i64>, Option<f64>) {
+        *self.playback.lock().expect("mpv playback poisoned")
     }
 
     fn disconnected(&self) -> anyhow::Error {

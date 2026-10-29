@@ -273,6 +273,19 @@ impl Engine {
         {
             return Ok(());
         }
+        // The reader may already have seen B start while the engine is still
+        // waiting for A's EOF/playlist handshake (or handling a failed command).
+        if let Some(mpv) = &self.active
+            && let (Some(entry), position) = mpv.playback()
+            && Some(entry) == self.pending_entry
+            && let Some(index) = self.pending.and_then(|key| self.queue.index_of(key))
+        {
+            self.queue.current = Some(index);
+            self.announce();
+            self.pos = position.unwrap_or(0.0);
+        }
+        let position = self.start_at.take().unwrap_or(self.pos);
+        let paused = self.paused;
         // Abandon both sides of a fade and all gapless handshakes before dropping
         // children. No stale event may advance the queue during recovery.
         self.fade = None;
@@ -286,39 +299,55 @@ impl Engine {
         let Some(track) = self.queue.track() else {
             return Ok(());
         };
-        let now = Instant::now();
-        self.restarts
-            .retain(|time| now.duration_since(*time) < Duration::from_secs(60));
-        if self.restarts.len() >= 3 {
-            self.stop_playback().await?;
-            self.emit(PlayerEvent::Error("mpv keeps crashing".into()));
-            return Ok(());
+        loop {
+            let now = Instant::now();
+            self.restarts
+                .retain(|time| now.duration_since(*time) < Duration::from_secs(60));
+            if self.restarts.len() >= 3 {
+                self.stop_playback().await?;
+                self.emit(PlayerEvent::Error("mpv keeps crashing".into()));
+                return Ok(());
+            }
+            self.restarts.push(now);
+            self.cache_paused = false;
+            self.core_idle = true;
+            self.update_buffering();
+            let result: Result<()> = async {
+                self.active = Some(
+                    Mpv::spawn(
+                        self.ipc_tx.clone(),
+                        self.config.volume,
+                        self.config.normalize,
+                    )
+                    .await?,
+                );
+                self.active_send(json!(["set_property", "pause", paused]))
+                    .await?;
+                self.active
+                    .as_mut()
+                    .expect("replacement mpv")
+                    .load(&track.play_url, Some(position))
+                    .await?;
+                self.last_playhead = None;
+                self.sync_prefetch().await
+            }
+            .await;
+            match result {
+                Ok(()) => {
+                    self.emit(PlayerEvent::Error("Playback engine restarted".into()));
+                    return Ok(());
+                }
+                // This attempt owns even a child that died before spawn returned.
+                // Do not route it through the stale-instance guard in restart.
+                Err(error) if error.is::<Disconnected>() => {
+                    self.active = None;
+                    self.standby = None;
+                    self.pending = None;
+                    self.pending_entry = None;
+                }
+                Err(error) => return Err(error),
+            }
         }
-        self.restarts.push(now);
-        let position = self.pos;
-        let paused = self.paused;
-        self.cache_paused = false;
-        self.core_idle = true;
-        self.update_buffering();
-        self.active = Some(
-            Mpv::spawn(
-                self.ipc_tx.clone(),
-                self.config.volume,
-                self.config.normalize,
-            )
-            .await?,
-        );
-        self.active_send(json!(["set_property", "pause", paused]))
-            .await?;
-        self.active
-            .as_mut()
-            .expect("replacement mpv")
-            .load(&track.play_url, Some(position))
-            .await?;
-        self.last_playhead = None;
-        self.sync_prefetch().await?;
-        self.emit(PlayerEvent::Error("Playback engine restarted".into()));
-        Ok(())
     }
 
     fn emit(&self, event: PlayerEvent) {
@@ -372,6 +401,10 @@ impl Engine {
         Ok(())
     }
     async fn start_current(&mut self) -> Result<()> {
+        // Commit the target track/position before any transport operation, so a
+        // failed cancellation, spawn, pause or load recovers the requested track.
+        self.announce();
+        self.pos = self.start_at.unwrap_or(0.0);
         self.cancel_fade().await?;
         self.pending = None;
         self.gapless_eof = false;
@@ -391,7 +424,6 @@ impl Engine {
             );
         }
         self.cache_paused = false;
-        self.announce();
         self.emit(PlayerEvent::Paused(self.paused));
         // Apply pause before loading: a paused replacement must never start audibly.
         self.active_send(json!(["set_property", "pause", self.paused]))
@@ -448,6 +480,29 @@ impl Engine {
         }
         Ok(())
     }
+    async fn seek(&mut self, secs: f64, relative: bool) -> Result<()> {
+        let secs = finite(secs);
+        let target = if relative { self.pos + secs } else { secs }.max(0.0);
+        let mode = if relative {
+            "relative+exact"
+        } else {
+            "absolute+exact"
+        };
+        let result = async {
+            self.cancel_fade().await?;
+            self.active_send(json!(["seek", if relative { secs } else { target }, mode]))
+                .await
+        }
+        .await;
+        if result
+            .as_ref()
+            .is_err_and(|error| error.is::<Disconnected>())
+        {
+            self.pos = target;
+        }
+        result
+    }
+
     async fn pause(&mut self, paused: bool) -> Result<()> {
         self.paused = paused;
         if let Some(fade) = &mut self.fade {
@@ -528,10 +583,8 @@ impl Engine {
                 self.start_current().await?;
             }
             Cmd::Prev => {
-                self.cancel_fade().await?;
                 if self.pos > 3.0 {
-                    self.active_send(json!(["seek", 0, "absolute+exact"]))
-                        .await?;
+                    self.seek(0.0, false).await?;
                 } else {
                     self.queue.current = self.queue.previous(self.config.repeat);
                     self.start_current().await?;
@@ -540,20 +593,7 @@ impl Engine {
             Cmd::TogglePause => self.pause(!self.paused).await?,
             Cmd::Pause(paused) => self.pause(paused).await?,
             Cmd::Stop => self.stop_playback().await?,
-            Cmd::Seek(secs, relative) => {
-                self.cancel_fade().await?;
-                let mode = if relative {
-                    "relative+exact"
-                } else {
-                    "absolute+exact"
-                };
-                let secs = if relative {
-                    finite(secs)
-                } else {
-                    finite(secs).max(0.0)
-                };
-                self.active_send(json!(["seek", secs, mode])).await?;
-            }
+            Cmd::Seek(secs, relative) => self.seek(secs, relative).await?,
             Cmd::Volume(volume) => {
                 self.config.volume = finite(volume).clamp(0.0, 100.0);
                 if self.fade.is_some() {

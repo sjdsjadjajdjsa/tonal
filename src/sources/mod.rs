@@ -63,12 +63,9 @@ pub fn ytdl_raw_options() -> String {
 }
 
 pub fn js_runtime() -> Option<&'static str> {
-    static RUNTIME: OnceLock<Option<&'static str>> = OnceLock::new();
-    *RUNTIME.get_or_init(|| {
-        ["deno", "node", "bun"]
-            .into_iter()
-            .find(|name| on_path(name))
-    })
+    ["deno", "node", "bun"]
+        .into_iter()
+        .find(|name| on_path(name))
 }
 
 /// Updates yt-dlp in place when it is the standalone build (bundled or downloaded).

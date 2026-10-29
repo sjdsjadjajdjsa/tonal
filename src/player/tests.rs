@@ -220,6 +220,143 @@ async fn real_mpv_crash_command_error_restarts_without_reading_eof() {
 }
 
 #[tokio::test]
+async fn real_mpv_crash_failed_seek_preserves_intent() {
+    let tone = Tone::new();
+    for relative in [false, true] {
+        let (mut engine, _) = tone_engine(&tone).await;
+        engine.command(Cmd::Pause(true)).await.unwrap();
+        let target = if relative { engine.pos + 4.0 } else { 4.0 };
+        engine.active.as_mut().unwrap().kill_for_test().await;
+        let result = engine.command(Cmd::Seek(4.0, relative)).await;
+        assert!(result.as_ref().unwrap_err().is::<Disconnected>());
+        engine.handle_result(result).await.unwrap();
+        pump_until(&mut engine, |e| e.last_playhead.is_some()).await;
+        let actual = engine
+            .active
+            .as_mut()
+            .unwrap()
+            .request(json!(["get_property", "time-pos"]))
+            .await
+            .unwrap()
+            .as_f64()
+            .unwrap();
+        assert!(
+            (actual - target).abs() < 0.3,
+            "failed seek lost: relative={relative}, target={target}, actual={actual}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn real_mpv_crash_during_replacement_spawn_uses_budget() {
+    let tone = Tone::new();
+    for failures in [1, 3] {
+        let (mut engine, mut rx) = tone_engine(&tone).await;
+        while rx.try_recv().is_ok() {}
+        let instance = engine.active.as_ref().unwrap().id;
+        engine.active.as_mut().unwrap().kill_for_test().await;
+        mpv::SPAWN_FAILURES
+            .scope(std::cell::Cell::new(failures), async {
+                engine
+                    .handle_result(Err(Disconnected { instance }.into()))
+                    .await
+                    .unwrap();
+            })
+            .await;
+        let errors: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok())
+            .filter_map(|event| match event {
+                PlayerEvent::Error(error) => Some(error),
+                _ => None,
+            })
+            .collect();
+        if failures == 1 {
+            assert!(
+                engine.active.is_some(),
+                "replacement spawn failure swallowed"
+            );
+            assert_eq!(engine.restarts.len(), 2);
+            assert_eq!(errors, ["Playback engine restarted"]);
+            pump_until(&mut engine, |e| e.pos > 0.1).await;
+            engine
+                .active
+                .as_mut()
+                .unwrap()
+                .request(json!(["get_property", "path"]))
+                .await
+                .unwrap();
+        } else {
+            assert!(engine.active.is_none());
+            assert!(
+                engine.queue.current.is_none(),
+                "budget exhaustion must stop playback"
+            );
+            assert_eq!(engine.restarts.len(), 3);
+            assert_eq!(errors, ["mpv keeps crashing"]);
+        }
+    }
+}
+
+#[tokio::test]
+async fn real_mpv_crash_mid_gapless_handshake_recovers_playing_entry() {
+    let tone = Tone::new();
+    for deliver_eof in [false, true] {
+        let (mut engine, _) = tone_engine(&tone).await;
+        engine.command(Cmd::Seek(7.8, false)).await.unwrap();
+        let pending_entry = engine.pending_entry.unwrap();
+        // Withhold one half of the handshake while real mpv starts track B.
+        tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                let message = engine.ipc_rx.recv().await.unwrap();
+                let eof = message.value["event"] == "end-file" && message.value["reason"] == "eof";
+                let playlist = message.value["name"] == "playlist"
+                    && message.value["data"].as_array().is_some_and(|entries| {
+                        entries.iter().any(|entry| {
+                            entry["current"] == true && entry["id"].as_i64() == Some(pending_entry)
+                        })
+                    });
+                let started = message.value["name"] == "time-pos"
+                    && message.value["playback_entry_id"].as_i64() == Some(pending_entry)
+                    && message.value["data"].as_f64().is_some_and(|pos| pos > 0.1);
+                if (eof && deliver_eof) || (playlist && !deliver_eof) {
+                    engine.message(message).await.unwrap();
+                }
+                if started {
+                    break;
+                }
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(engine.queue.current, Some(0));
+        let instance = engine.active.as_ref().unwrap().id;
+        engine.active.as_mut().unwrap().kill_for_test().await;
+        engine
+            .handle_result(Err(Disconnected { instance }.into()))
+            .await
+            .unwrap();
+        assert_eq!(
+            engine.queue.current,
+            Some(1),
+            "reloaded previous gapless track"
+        );
+        pump_until(&mut engine, |e| e.last_playhead.is_some()).await;
+        let actual = engine
+            .active
+            .as_mut()
+            .unwrap()
+            .request(json!(["get_property", "time-pos"]))
+            .await
+            .unwrap()
+            .as_f64()
+            .unwrap();
+        assert!(
+            actual < 2.0,
+            "must not reuse previous track's end position: {actual}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn real_mpv_crash_standby_clears_crossfade() {
     let tone = Tone::new();
     let (mut engine, mut rx) = tone_engine(&tone).await;
