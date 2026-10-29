@@ -20,6 +20,7 @@ Most music apps are a web browser in disguise. Tonal draws its own window with [
 
 ## What you get
 
+- **Artists and albums:** click any artist or album name to open its page: photo, popular songs, albums, singles and similar artists, or an album with every track. Back and forward work with the arrows, Alt+←/→ and the mouse side buttons.
 - **One search, four sources:** YouTube Music, SoundCloud, Audius and your local files. YouTube results come straight from YouTube Music, in under a second.
 - **Your library:** liked songs, playlists, play history, most played, and a queue you can reorder. The queue and position come back when you reopen the app.
 - **Spotify import:** paste a public playlist or album link and Tonal finds every song on YouTube Music (up to 100 songs). Log in with a free Spotify developer app for bigger playlists and your liked songs. Spotify audio itself is never used.
@@ -36,6 +37,10 @@ Most music apps are a web browser in disguise. Tonal draws its own window with [
 | Home | Search |
 | --- | --- |
 | ![Home with recently played songs and the playlists in the sidebar](docs/images/home.webp) | ![Search results from Audius for "lofi house"](docs/images/search.webp) |
+
+| Artist | Album |
+| --- | --- |
+| ![An artist page with the photo, popular songs and album covers](docs/images/artist.webp) | ![An album page with the cover, year, length and every track](docs/images/album.webp) |
 
 | Queue | Settings |
 | --- | --- |
@@ -81,6 +86,7 @@ cargo run --release
 | `Ctrl` `↑` `↓` | Volume |
 | `Ctrl` `L` | Like the current song |
 | `Ctrl` `M` | Mini player |
+| `Alt` `←` `→` | Back, forward |
 
 Right-click a song for play next, add to queue, start radio, download and add to playlist.
 
