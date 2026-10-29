@@ -233,16 +233,19 @@ impl Mpv {
         // URLs are JSON arguments, never command-line options (including leading '-').
         match start {
             Some(secs) => {
-                self.request(json!([
-                    "loadfile",
-                    url,
-                    "replace",
-                    -1,
-                    format!("start={secs:.3}")
-                ]))
-                .await?
+                let start = format!("start={secs:.3}");
+                if self
+                    .request(json!(["loadfile", url, "replace", -1, start.clone()]))
+                    .await
+                    .is_err()
+                {
+                    self.request(json!(["loadfile", url, "replace", start]))
+                        .await?;
+                }
             }
-            None => self.request(json!(["loadfile", url, "replace"])).await?,
+            None => {
+                self.request(json!(["loadfile", url, "replace"])).await?;
+            }
         };
         let playlist = self.request(json!(["get_property", "playlist"])).await?;
         self.entry_id = playlist
