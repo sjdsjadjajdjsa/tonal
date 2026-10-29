@@ -30,7 +30,7 @@ impl SourceKind {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Track {
     pub id: String,
     pub source: SourceKind,
@@ -41,11 +41,89 @@ pub struct Track {
     pub duration_secs: Option<f64>,
     pub artwork_url: Option<String>,
     pub play_url: String,
+    /// Each credited artist, linkable when the source knows the artist's page.
+    #[serde(default)]
+    pub artist_refs: Vec<ArtistRef>,
+    /// The source's id of the album page, when known.
+    #[serde(default)]
+    pub album_id: Option<String>,
+}
+
+/// An artist as a link: YouTube channel id, SoundCloud profile URL, Audius user id,
+/// or just a name for local files.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ArtistRef {
+    pub source: SourceKind,
+    pub name: String,
+    pub id: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct AlbumRef {
+    pub source: SourceKind,
+    pub title: String,
+    pub id: Option<String>,
+    pub artist: String,
+    pub year: Option<String>,
+    pub artwork_url: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ArtistCard {
+    pub artist: ArtistRef,
+    pub image_url: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ArtistPage {
+    pub artist: ArtistRef,
+    pub image_url: Option<String>,
+    pub top: Vec<Track>,
+    pub albums: Vec<AlbumRef>,
+    pub singles: Vec<AlbumRef>,
+    pub similar: Vec<ArtistCard>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct AlbumPage {
+    pub album: AlbumRef,
+    /// "Album", "Single", "EP" or similar, as the source labels it.
+    pub kind: String,
+    pub artists: Vec<ArtistRef>,
+    pub tracks: Vec<Track>,
 }
 
 impl Track {
     pub fn make_id(source: SourceKind, source_id: &str) -> String {
         format!("{}:{}", source.prefix(), source_id)
+    }
+
+    /// Linkable artists, falling back to the display string when the source gave none.
+    pub fn artists(&self) -> Vec<ArtistRef> {
+        if !self.artist_refs.is_empty() {
+            return self.artist_refs.clone();
+        }
+        vec![ArtistRef {
+            source: self.source,
+            name: self.artist.clone(),
+            id: None,
+        }]
+    }
+
+    pub fn album_ref(&self) -> Option<AlbumRef> {
+        let title = self.album.clone().filter(|a| !a.trim().is_empty())?;
+        Some(AlbumRef {
+            source: self.source,
+            title,
+            id: self.album_id.clone(),
+            artist: self
+                .artists()
+                .first()
+                .map(|a| a.name.clone())
+                .unwrap_or_default(),
+            year: None,
+            artwork_url: self.artwork_url.clone(),
+        })
     }
 }
 

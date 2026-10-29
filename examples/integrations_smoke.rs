@@ -44,6 +44,7 @@ async fn main() -> anyhow::Result<()> {
         duration_secs: Some(320.0),
         artwork_url: None,
         play_url: "https://music.youtube.com/watch?v=FGBhQbmPwH8".into(),
+        ..Default::default()
     };
     let started = std::time::Instant::now();
     match integrations::lyrics::fetch(&track).await? {

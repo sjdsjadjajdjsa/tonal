@@ -14,7 +14,7 @@ pub enum ShellRequest {
 }
 
 enum Update {
-    Track(Option<Track>),
+    Track(Option<Box<Track>>),
     Playback { playing: bool, position: f64 },
     Volume(f64),
 }
@@ -26,7 +26,7 @@ pub struct MediaControlsHandle {
 
 impl MediaControlsHandle {
     pub fn set_track(&self, track: Option<&Track>) {
-        let _ = self.tx.send(Update::Track(track.cloned()));
+        let _ = self.tx.send(Update::Track(track.cloned().map(Box::new)));
     }
 
     pub fn set_playback(&self, playing: bool, position: f64) {

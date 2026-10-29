@@ -13,6 +13,7 @@ fn track(name: &str, path: &str) -> Track {
         duration_secs: Some(8.0),
         artwork_url: None,
         play_url: path.into(),
+        ..Default::default()
     }
 }
 

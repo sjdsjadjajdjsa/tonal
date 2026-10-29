@@ -16,8 +16,15 @@ pub struct Session {
     pub position: f64,
 }
 
-const COLUMNS: &str =
-    "t.id,t.source,t.source_id,t.title,t.artist,t.album,t.duration_secs,t.artwork_url,t.play_url";
+const COLUMNS: &str = "t.id,t.source,t.source_id,t.title,t.artist,t.album,t.duration_secs,t.artwork_url,t.play_url,t.meta";
+
+#[derive(Default, Serialize, Deserialize)]
+struct Meta {
+    #[serde(default)]
+    artist_refs: Vec<crate::model::ArtistRef>,
+    #[serde(default)]
+    album_id: Option<String>,
+}
 
 fn now() -> i64 {
     std::time::SystemTime::now()
@@ -27,10 +34,11 @@ fn now() -> i64 {
 }
 
 fn upsert(conn: &Connection, tracks: &[Track]) -> anyhow::Result<()> {
-    let mut stmt = conn.prepare_cached("INSERT INTO tracks VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)
+    let mut stmt = conn.prepare_cached("INSERT INTO tracks VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)
         ON CONFLICT(id) DO UPDATE SET source=excluded.source,source_id=excluded.source_id,
         title=excluded.title,artist=excluded.artist,album=excluded.album,
-        duration_secs=excluded.duration_secs,artwork_url=excluded.artwork_url,play_url=excluded.play_url")?;
+        duration_secs=excluded.duration_secs,artwork_url=excluded.artwork_url,play_url=excluded.play_url,
+        meta=excluded.meta")?;
     for t in tracks {
         stmt.execute(params![
             t.id,
@@ -41,14 +49,51 @@ fn upsert(conn: &Connection, tracks: &[Track]) -> anyhow::Result<()> {
             t.album,
             t.duration_secs,
             t.artwork_url,
-            t.play_url
+            t.play_url,
+            meta_json(&merged_meta(conn, t)?)?
         ])?;
     }
     Ok(())
 }
 
+/// Keeps what is already known about a track's links when an update only knows part of it.
+fn merged_meta(conn: &Connection, t: &Track) -> anyhow::Result<Track> {
+    if !t.artist_refs.is_empty() && t.album_id.is_some() {
+        return Ok(t.clone());
+    }
+    let old: Option<String> = conn
+        .query_row("SELECT meta FROM tracks WHERE id=?1", [&t.id], |r| r.get(0))
+        .optional()?
+        .flatten();
+    let old: Meta = old
+        .and_then(|m| serde_json::from_str(&m).ok())
+        .unwrap_or_default();
+    let mut merged = t.clone();
+    if merged.artist_refs.is_empty() {
+        merged.artist_refs = old.artist_refs;
+    }
+    if merged.album_id.is_none() {
+        merged.album_id = old.album_id;
+    }
+    Ok(merged)
+}
+
+fn meta_json(t: &Track) -> anyhow::Result<Option<String>> {
+    if t.artist_refs.is_empty() && t.album_id.is_none() {
+        return Ok(None);
+    }
+    Ok(Some(serde_json::to_string(&Meta {
+        artist_refs: t.artist_refs.clone(),
+        album_id: t.album_id.clone(),
+    })?))
+}
+
 fn row_track(row: &rusqlite::Row<'_>) -> rusqlite::Result<Track> {
     let source: String = row.get(1)?;
+    let meta: Meta = row
+        .get::<_, Option<String>>(9)?
+        .and_then(|m| serde_json::from_str(&m).ok())
+        .unwrap_or_default();
     Ok(Track {
         id: row.get(0)?,
         source: serde_json::from_str(&source).map_err(|e| {
@@ -61,6 +106,8 @@ fn row_track(row: &rusqlite::Row<'_>) -> rusqlite::Result<Track> {
         duration_secs: row.get(6)?,
         artwork_url: row.get(7)?,
         play_url: row.get(8)?,
+        artist_refs: meta.artist_refs,
+        album_id: meta.album_id,
     })
 }
 
@@ -89,7 +136,7 @@ impl Library {
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
         anyhow::ensure!(
-            version <= 1,
+            version <= 2,
             "Library schema {version} is newer than this Tonal version"
         );
         if version == 0 {
@@ -108,6 +155,11 @@ impl Library {
                 CREATE TABLE local_tracks (track_id TEXT PRIMARY KEY REFERENCES tracks(id));
                 CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
                 PRAGMA user_version=1;")?;
+            tx.commit()?;
+        }
+        if version < 2 {
+            let tx = conn.transaction()?;
+            tx.execute_batch("ALTER TABLE tracks ADD COLUMN meta TEXT; PRAGMA user_version=2;")?;
             tx.commit()?;
         }
         Ok(Self {
@@ -421,6 +473,7 @@ mod tests {
             duration_secs: Some(120.0),
             artwork_url: None,
             play_url: format!("https://youtu.be/{id}"),
+            ..Default::default()
         }
     }
 
@@ -514,6 +567,32 @@ mod tests {
             .lock()
             .execute("UPDATE kv SET value='broken' WHERE key='settings'", [])?;
         assert_eq!(l.load_settings(), Settings::default());
+        Ok(())
+    }
+
+    #[test]
+    fn migrates_v1_and_keeps_links_on_partial_updates() -> anyhow::Result<()> {
+        let db = Db::new();
+        {
+            let conn = Connection::open(&db.path)?;
+            conn.execute_batch("ALTER TABLE tracks DROP COLUMN meta; PRAGMA user_version=1;")?;
+        }
+        let l = Library::open(&db.path)?;
+        let mut t = track("x");
+        t.artist_refs = vec![crate::model::ArtistRef {
+            source: SourceKind::YouTube,
+            name: "artist".into(),
+            id: Some("UC1".into()),
+        }];
+        t.album_id = Some("MPRE1".into());
+        l.upsert_tracks(&[t.clone()])?;
+        let mut partial = track("x");
+        partial.album_id = Some("MPRE2".into());
+        l.upsert_tracks(&[partial])?;
+        l.set_liked(&track("x"), true)?;
+        let saved = l.liked()?.remove(0);
+        assert_eq!(saved.artist_refs, t.artist_refs);
+        assert_eq!(saved.album_id.as_deref(), Some("MPRE2"));
         Ok(())
     }
 }
