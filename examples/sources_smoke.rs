@@ -1,3 +1,6 @@
+//! Manual check against the live services: searches every source, starts a radio and
+//! matches a song. Needs the network and yt-dlp. Run with `cargo run --example sources_smoke`.
+
 #![allow(dead_code)]
 
 #[path = "../src/model.rs"]

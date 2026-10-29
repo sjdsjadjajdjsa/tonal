@@ -1,3 +1,6 @@
+//! Manual check against the live services: imports a public Spotify playlist and fetches
+//! lyrics. Needs the network. Run with `cargo run --example integrations_smoke`.
+
 #![allow(dead_code)]
 
 #[path = "../src/integrations/mod.rs"]

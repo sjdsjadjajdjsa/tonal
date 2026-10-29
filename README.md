@@ -4,12 +4,13 @@
 
 [![ci](https://img.shields.io/github/actions/workflow/status/sjdsjadjajdjsa/tonal/ci.yml?branch=main&label=ci&logo=github&logoColor=white)](https://github.com/sjdsjadjajdjsa/tonal/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![platform](https://img.shields.io/badge/platform-Linux-lightgrey)](#install)
+[![platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-lightgrey)](#install)
 [![made with](https://img.shields.io/badge/made_with-Rust-orange?logo=rust)](https://www.rust-lang.org)
-[![ui](https://img.shields.io/badge/ui-Slint-2379f4)](https://slint.dev)
 [![playback](https://img.shields.io/badge/playback-mpv-690069)](https://mpv.io)
 
 A lightweight native music player. Search and stream from YouTube Music, SoundCloud and Audius, play your own files, and bring your Spotify playlists along. No browser inside, no Premium, near zero CPU when idle.
+
+<a href="https://slint.dev"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-dark.svg"><img src="https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-light.svg" height="32" alt="Made with Slint"></picture></a>
 
 ![A playlist playing, with the flowing wave visualizer along the bottom of the window](docs/images/hero.webp)
 
@@ -46,21 +47,20 @@ Most music apps are a web browser in disguise. Tonal draws its own window with [
 
 ## Install
 
-Tonal is Linux only for now (Wayland and X11). Windows is planned.
+Download the newest version from [Releases](https://github.com/sjdsjadjajdjsa/tonal/releases/latest).
 
-It needs these on your `PATH`:
+| | Download | Run |
+| --- | --- | --- |
+| **Linux** | `tonal-x86_64.AppImage` | Mark it executable (`chmod +x tonal-x86_64.AppImage`) and run it. yt-dlp is inside; install [mpv](https://mpv.io) from your package manager. Needs glibc 2.35 or newer (Ubuntu 22.04, Fedora 36, Arch and so on). `tonal-linux-x86_64.tar.gz` is the same as a plain folder. |
+| **Windows** | `tonal-setup-x86_64.exe` | Run it. Installs for your user only, with no admin rights, and adds a Start menu entry. mpv and yt-dlp are inside. `tonal-windows-x86_64.zip` is the same without an installer. |
 
-| Program | Why |
-| --- | --- |
-| [mpv](https://mpv.io) | Plays everything |
-| [yt-dlp](https://github.com/yt-dlp/yt-dlp) | YouTube and SoundCloud streams, downloads |
-| PipeWire (`pw-record`, `pw-dump`) | The visualizer (optional) |
+Windows will say the publisher is unknown, as the installer isn't signed: click "More info", then "Run anyway". The visualizer is Linux only for now.
 
-On Arch: `sudo pacman -S mpv yt-dlp pipewire sqlite`. On Debian or Ubuntu: `sudo apt install mpv yt-dlp pipewire-bin libsqlite3-0`.
+For full YouTube support yt-dlp needs a JavaScript runtime: install [Deno](https://deno.com) or Node.js. Tonal picks up whichever it finds. The visualizer on Linux needs PipeWire (`pw-record`, `pw-dump`).
 
 ## Build it yourself
 
-Needs [Rust](https://rustup.rs) 1.90 or newer. On Debian or Ubuntu you also need `libsqlite3-dev libdbus-1-dev libfontconfig-dev libxkbcommon-dev`.
+Needs [Rust](https://rustup.rs) 1.90 or newer, plus mpv and yt-dlp on your `PATH`. On Debian or Ubuntu you also need `libsqlite3-dev libdbus-1-dev libfontconfig-dev libxkbcommon-dev`.
 
 ```
 git clone https://github.com/sjdsjadjajdjsa/tonal
@@ -112,6 +112,6 @@ The binary is about 21 MB. The software renderer was picked over the GPU one bec
 
 ## License
 
-[MIT](LICENSE). The bundled [Inter](https://rsms.me/inter/) font is under the SIL Open Font License ([ui/fonts/Inter-LICENSE.txt](ui/fonts/Inter-LICENSE.txt)).
+[MIT](LICENSE). Bundled programs keep their own licenses, see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). The bundled [Inter](https://rsms.me/inter/) font is under the SIL Open Font License ([ui/fonts/Inter-LICENSE.txt](ui/fonts/Inter-LICENSE.txt)).
 
 Tonal plays streams from public services through mpv and yt-dlp. Use it in line with the terms of those services.
