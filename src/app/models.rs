@@ -58,27 +58,27 @@ pub fn lyrics(
             .synced
             .iter()
             .enumerate()
-            .map(|(i, (_, line))| LyricRow {
+            .map(|(i, (time, line))| LyricRow {
                 text: if line.trim().is_empty() {
                     "♪".into()
                 } else {
-                    line.clone().into()
+                    line.trim().into()
                 },
                 active: Some(i) == active,
+                time: *time as f32,
             })
             .collect(),
-        Some(l) => vec![LyricRow {
-            text: l
-                .plain
-                .clone()
-                .unwrap_or_else(|| "No lyrics found".into())
-                .into(),
-            active: false,
-        }],
-        None => vec![LyricRow {
-            text: "No lyrics found".into(),
-            active: false,
-        }],
+        Some(crate::integrations::lyrics::Lyrics {
+            plain: Some(plain), ..
+        }) if !plain.trim().is_empty() => plain
+            .lines()
+            .map(|line| LyricRow {
+                text: line.trim().into(),
+                active: false,
+                time: -1.0,
+            })
+            .collect(),
+        _ => Vec::new(),
     }
 }
 type Field<'a> = (&'a str, &'a str, String, &'a str, &'a str, bool);
@@ -293,7 +293,7 @@ mod tests {
     fn formats_times_and_fallback_lyrics() {
         assert_eq!(time(369.5), "6:09");
         assert_eq!(time(-1.0), "0:00");
-        assert_eq!(lyrics(None, None)[0].text, "No lyrics found");
+        assert!(lyrics(None, None).is_empty());
     }
     #[test]
     fn settings_exposes_playback_and_credentials() {

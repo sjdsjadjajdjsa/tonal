@@ -1,5 +1,5 @@
 import { ScrollView } from "std-widgets.slint";
-import { Theme, Label, Button, Switch, TextField } from "theme.slint";
+import { Theme, Icons, Label, Icon, Button, Switch, TextField } from "theme.slint";
 
 export struct SettingRow {
     key: string,
@@ -16,6 +16,7 @@ export struct SettingRow {
 export struct LyricRow {
     text: string,
     active: bool,
+    time: float,
 }
 
 export component SettingsView inherits Rectangle {
@@ -107,34 +108,96 @@ export component SettingsView inherits Rectangle {
 export component LyricsView inherits Rectangle {
     in property <[LyricRow]> lines;
     in property <int> active: -1;
-    private property <length> line-height: 48px;
-    VerticalLayout {
-        padding-left: 8px;
-        padding-right: 8px;
-        if root.lines.length <= 1: Label {
-            vertical-stretch: 1;
-            text: root.lines.length == 1 ? root.lines[0].text : "No lyrics found";
-            wrap: word-wrap;
-            vertical-alignment: root.lines.length == 1 && root.lines[0].text != "No lyrics found" ? top : center;
-            horizontal-alignment: root.lines.length == 1 && root.lines[0].text != "No lyrics found" ? left : center;
-            font-size: 14px;
-            color: Theme.muted;
+    callback seek(float);
+    private property <length> line-height: 52px;
+    private property <bool> synced: root.lines.length > 0 && root.lines[0].time >= 0;
+    private property <bool> empty: root.lines.length == 0 || (root.lines.length == 1 && root.lines[0].text == "No lyrics found");
+    private property <bool> following: true;
+
+    function follow() {
+        if !root.synced || !root.following || root.active < 0 {
+            return;
         }
-        if root.lines.length > 1: scroller := ScrollView {
-            content-y: root.active > 2 ? -(root.active - 2) * root.line-height : 0px;
-            animate content-y { duration: 350ms; easing: ease-out; }
-            VerticalLayout {
-                width: scroller.visible-width;
-                padding-bottom: 240px;
-                for line[index] in root.lines: Label {
-                    height: root.line-height;
+        scroller.content-y = clamp(
+            scroller.visible-height / 2 - root.line-height / 2 - root.active * root.line-height,
+            min(0px, scroller.visible-height - list.preferred-height),
+            0px);
+    }
+
+    changed active => { root.follow(); }
+    changed lines => { root.follow(); }
+    changed height => { root.follow(); }
+    init => { root.follow(); }
+
+    resume := Timer {
+        interval: 4s;
+        running: false;
+        triggered => {
+            self.running = false;
+            root.following = true;
+            root.follow();
+        }
+    }
+
+    if root.empty: VerticalLayout {
+        alignment: center;
+        spacing: 10px;
+        HorizontalLayout {
+            alignment: center;
+            Icon { data: Icons.lyrics; width: 26px; height: 26px; tint: Theme.faint; }
+        }
+        Label {
+            text: "No lyrics";
+            horizontal-alignment: center;
+            font-size: 13px;
+            color: Theme.faint;
+        }
+    }
+
+    scroller := ScrollView {
+        visible: !root.empty;
+        width: root.width;
+        height: root.height;
+        animate content-y { duration: 420ms; easing: ease-in-out; }
+        scrolled => {
+            root.following = false;
+            resume.running = false;
+            resume.running = true;
+        }
+        list := VerticalLayout {
+            width: scroller.visible-width;
+            padding-left: 8px;
+            padding-right: 12px;
+            padding-bottom: root.synced ? scroller.visible-height / 2 : 24px;
+            if !root.synced: Label {
+                text: "Not synced";
+                height: 28px;
+                font-size: 11.5px;
+                color: Theme.faint;
+            }
+            for line[index] in root.lines: row := Rectangle {
+                height: root.synced ? root.line-height : max(24px, text.preferred-height + 4px);
+                border-radius: Theme.radius-m;
+                background: root.synced && tap.has-hover ? Theme.surface : transparent;
+                text := Label {
+                    x: 10px;
+                    width: parent.width - 20px;
                     text: line.text;
                     wrap: word-wrap;
-                    overflow: elide;
-                    font-size: 15.5px;
+                    overflow: root.synced ? elide : clip;
+                    font-size: root.synced ? 16px : 14px;
                     font-weight: line.active ? 700 : 500;
-                    color: line.active ? Theme.text : index < root.active ? Theme.faint : Theme.muted;
-                    animate color { duration: 200ms; }
+                    color: !root.synced ? Theme.muted : line.active ? Theme.text : index < root.active ? Theme.faint : Theme.muted;
+                    animate color { duration: 220ms; }
+                }
+                tap := TouchArea {
+                    enabled: root.synced;
+                    mouse-cursor: root.synced ? pointer : default;
+                    clicked => {
+                        root.following = true;
+                        resume.running = false;
+                        root.seek(line.time);
+                    }
                 }
             }
         }

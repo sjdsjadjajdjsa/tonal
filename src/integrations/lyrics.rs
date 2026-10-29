@@ -155,6 +155,31 @@ pub async fn fetch(track: &Track) -> anyhow::Result<Option<Lyrics>> {
         entries.sort_by(|a, b| score(b).total_cmp(&score(a)));
         found = entries.into_iter().find_map(lyrics);
     }
+    let clean = clean_title(&track.title);
+    if found.as_ref().is_none_or(|l| l.synced.is_empty()) && clean != track.title.trim() {
+        let mut url = url::Url::parse("https://lrclib.net/api/search")?;
+        url.query_pairs_mut()
+            .append_pair("track_name", &clean)
+            .append_pair("artist_name", &track.artist);
+        let entries: Vec<Entry> = super::client()
+            .get(url)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        let best = entries
+            .into_iter()
+            .filter(|e| e.synced_lyrics.is_some())
+            .min_by(|a, b| {
+                let gap = |e: &Entry| track.duration_secs.map_or(0.0, |d| (d - e.duration).abs());
+                gap(a).total_cmp(&gap(b))
+            })
+            .and_then(lyrics);
+        if best.is_some() {
+            found = best;
+        }
+    }
     let cached = Cached {
         expires_at: super::now() + 7 * 24 * 60 * 60,
         lyrics: found.clone(),
@@ -172,8 +197,41 @@ pub async fn fetch(track: &Track) -> anyhow::Result<Option<Lyrics>> {
     Ok(found)
 }
 
+fn clean_title(title: &str) -> String {
+    let mut out = String::with_capacity(title.len());
+    let mut depth = 0usize;
+    for ch in title.chars() {
+        match ch {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth = depth.saturating_sub(1),
+            _ if depth == 0 => out.push(ch),
+            _ => {}
+        }
+    }
+    let lower = out.to_ascii_lowercase();
+    let cut = [" - ", " feat.", " ft.", " featuring "]
+        .iter()
+        .filter_map(|marker| lower.find(marker))
+        .min()
+        .unwrap_or(out.len());
+    out[..cut].split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn cleans_titles_for_search() {
+        assert_eq!(
+            super::clean_title("One More Time (Radio Edit)"),
+            "One More Time"
+        );
+        assert_eq!(super::clean_title("Ribs - Remastered 2023"), "Ribs");
+        assert_eq!(
+            super::clean_title("Get Lucky [feat. Pharrell] ft. Nile"),
+            "Get Lucky"
+        );
+        assert_eq!(super::clean_title("HUMBLE."), "HUMBLE.");
+    }
     use super::*;
     #[test]
     fn parses_multiple_timestamps_and_sorts() {

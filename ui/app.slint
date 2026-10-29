@@ -327,6 +327,7 @@ export component AppWindow inherits Window {
                             min-height: 80px;
                             lines: root.lyrics;
                             active: root.lyric-index;
+                            seek(t) => { root.seek(t); }
                         }
                     }
                 }

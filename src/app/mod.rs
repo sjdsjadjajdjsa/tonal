@@ -255,7 +255,11 @@ pub fn run() -> anyhow::Result<()> {
     }
     if let Ok(path) = std::env::var("TONAL_DEBUG_SNAPSHOT") {
         let weak = window.as_weak();
-        slint::Timer::single_shot(std::time::Duration::from_secs(12), move || {
+        let delay = std::env::var("TONAL_DEBUG_SNAPSHOT_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(12);
+        slint::Timer::single_shot(std::time::Duration::from_secs(delay), move || {
             if let Some(w) = weak.upgrade() {
                 match w.window().take_snapshot() {
                     Ok(pixels) => {
