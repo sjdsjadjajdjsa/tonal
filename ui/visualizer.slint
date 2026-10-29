@@ -1,0 +1,59 @@
+export component Waves inherits Rectangle {
+    in property <string> back;
+    in property <string> front;
+    in property <string> line;
+    in property <bool> resting: true;
+    in property <length> baseline: 14px;
+    in property <color> accent: #ffffff;
+    clip: true;
+    opacity: root.resting ? 0.5 : 1;
+    animate opacity { duration: 700ms; easing: ease-out; }
+
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: root.width / 1px;
+        viewbox-height: root.height / 1px;
+        commands: root.back;
+        fill: @linear-gradient(180deg, root.accent.with-alpha(0.06) 0%, root.accent.with-alpha(0.015) 100%);
+        stroke-width: 0px;
+    }
+
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: root.width / 1px;
+        viewbox-height: root.height / 1px;
+        commands: root.front;
+        fill: @linear-gradient(180deg, root.accent.with-alpha(0.10) 0%, root.accent.with-alpha(0.02) 100%);
+        stroke-width: 0px;
+    }
+
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: root.width / 1px;
+        viewbox-height: root.height / 1px;
+        commands: root.line;
+        stroke: root.accent.with-alpha(0.06);
+        stroke-width: 7px;
+        stroke-line-cap: round;
+    }
+
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: root.width / 1px;
+        viewbox-height: root.height / 1px;
+        commands: root.line;
+        stroke: root.accent.with-alpha(0.32);
+        stroke-width: 1.25px;
+        stroke-line-cap: round;
+    }
+
+    if root.line == "": Rectangle {
+        y: root.height - root.baseline;
+        height: 1px;
+        background: root.accent.with-alpha(0.10);
+    }
+}
