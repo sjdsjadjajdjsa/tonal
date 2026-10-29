@@ -281,7 +281,7 @@ async fn real_mpv_crash_during_replacement_spawn_uses_budget() {
                 .active
                 .as_mut()
                 .unwrap()
-                .request(json!(["get_property", "path"]))
+                .request(json!(["get_property", "pid"]))
                 .await
                 .unwrap();
         } else {
