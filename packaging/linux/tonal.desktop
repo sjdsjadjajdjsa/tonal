@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Tonal
+GenericName=Music Player
+Comment=A lightweight music player
+Exec=tonal
+Icon=tonal
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+Keywords=music;player;youtube;soundcloud;spotify;
