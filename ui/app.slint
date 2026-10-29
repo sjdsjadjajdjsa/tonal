@@ -1,0 +1,401 @@
+import { Theme, Icons, Label, Icon, IconButton, Button, Segmented, TextField } from "theme.slint";
+import { Sidebar, PlaylistRow } from "sidebar.slint";
+import { TrackList, TrackRow } from "track-list.slint";
+import { PlayerBar } from "player-bar.slint";
+import { SettingsView, SettingRow, LyricsView, LyricRow } from "views.slint";
+import { Dialog } from "dialogs.slint";
+
+export { TrackRow, PlaylistRow, SettingRow, LyricRow, Theme }
+
+export component AppWindow inherits Window {
+    in property <string> window-title: "Tonal";
+    title: root.window-title;
+    icon: @image-url("icon.png");
+    preferred-width: 1240px;
+    preferred-height: 780px;
+    min-width: root.mini ? 340px : 860px;
+    min-height: root.mini ? 150px : 520px;
+    background: Theme.background;
+    default-font-family: "Inter";
+
+    in property <[TrackRow]> tracks;
+    in property <[TrackRow]> queue;
+    in property <[PlaylistRow]> playlists;
+    in property <[SettingRow]> settings;
+    in property <[LyricRow]> lyrics;
+    in property <int> lyric-index: -1;
+    in property <int> queue-current: -1;
+    in-out property <string> query;
+    in-out property <string> page: "Home";
+    in property <string> heading: "Home";
+    in-out property <string> status;
+    in property <bool> loading;
+    in property <bool> playlist-view;
+    in property <int> active-playlist: -1;
+    in property <string> now-id;
+    in property <string> now-title;
+    in property <string> now-artist;
+    in property <image> now-art;
+    in property <bool> now-liked;
+    in property <bool> paused: true;
+    in property <bool> shuffle;
+    in property <string> repeat: "Off";
+    in property <float> position;
+    in property <float> duration: 1;
+    in property <float> volume: 80;
+    in property <string> elapsed: "0:00";
+    in property <string> total: "0:00";
+    in property <bool> waves;
+    in property <string> wave-back;
+    in property <string> wave-front;
+    in property <string> wave-line;
+    in property <bool> wave-resting: true;
+    out property <length> wave-width: bar.width;
+    out property <length> wave-height: bar.wave-height;
+    in-out property <bool> mini;
+    in-out property <string> panel;
+    in-out property <string> dialog;
+    in-out property <string> dialog-heading;
+    in-out property <string> dialog-value;
+    in-out property <int> source;
+    in-out property <int> home-tab;
+    in-out property <int> search-focus;
+    in-out property <bool> typing;
+    private property <bool> wide-list: true;
+    private property <bool> slim: false;
+    private property <bool> narrow: false;
+    in property <bool> buffering;
+
+    function update-wide() {
+        root.slim = root.width - (root.panel != "" ? 320px : 0px) < 900px;
+        root.narrow = root.width - (root.slim ? 128px : 292px) - (root.panel != "" ? 320px : 0px) < 600px;
+        root.wide-list = root.width - (root.slim ? 128px : 292px) - (root.panel != "" ? 320px : 0px) > 760px;
+    }
+    changed width => { root.update-wide(); }
+    changed panel => { root.update-wide(); }
+    init => { root.update-wide(); }
+
+    callback search(string);
+    callback navigate(string);
+    callback playlist(int);
+    callback play(int);
+    callback track-action(int, string);
+    callback menu(int);
+    callback command(string);
+    callback seek(float);
+    callback volume-change(float);
+    callback setting-change(string, string);
+    callback dialog-submit(string);
+    callback menu-action(string);
+    callback add-playlist(int);
+    callback queue-action(int, string);
+    callback queue-move(int, int);
+    callback shortcut(string, bool, bool);
+
+    public function focus-search() {
+        root.search-focus += 1;
+    }
+
+    private property <string> empty-text: root.page == "Home" ? "Play something and it shows up here"
+        : root.page == "Search" ? (root.query == "" ? "Find any song" : root.loading ? "" : "No results")
+        : root.page == "Liked songs" ? "No liked songs yet"
+        : root.page == "Local files" ? "Add a music folder in Settings"
+        : root.page == "Downloads" ? "No downloads yet"
+        : root.page == "Playlist" ? "Empty playlist"
+        : "";
+
+    debounce := Timer {
+        interval: 450ms;
+        running: false;
+        triggered => {
+            self.running = false;
+            if root.query != "" { root.search(root.query); }
+        }
+    }
+
+    forward-focus: keys;
+    keys := FocusScope {
+        key-pressed(event) => {
+            if (event.modifiers.control) {
+                if (event.text == "f") {
+                    root.page = "Search";
+                    root.navigate("Search");
+                    root.focus-search();
+                    return accept;
+                }
+                root.shortcut(event.text, true, root.typing);
+                return accept;
+            }
+            if (event.text == Key.Escape && root.dialog != "") {
+                root.dialog = "";
+                return accept;
+            }
+            if (!root.typing) {
+                root.shortcut(event.text, false, false);
+            }
+            return reject;
+        }
+
+        VerticalLayout {
+            spacing: 0px;
+            if !root.mini: HorizontalLayout {
+                spacing: 0px;
+                Sidebar {
+                    compact: root.slim;
+                    page: root.page;
+                    playlists: root.playlists;
+                    active-playlist: root.active-playlist;
+                    navigate(p) => {
+                        debounce.running = false;
+                        root.page = p;
+                        root.navigate(p);
+                    }
+                    playlist(id) => { root.playlist(id); }
+                    create => {
+                        root.dialog-heading = "New playlist";
+                        root.dialog-value = "";
+                        root.dialog = "create";
+                    }
+                }
+                VerticalLayout {
+                    horizontal-stretch: 1;
+                    padding-left: root.slim ? 22px : 32px;
+                    padding-right: root.slim ? 18px : 28px;
+                    padding-top: 24px;
+                    padding-bottom: 8px;
+                    spacing: 16px;
+                    if root.page != "Search" && root.page != "Home": HorizontalLayout {
+                        height: 38px;
+                        spacing: 8px;
+                        Label {
+                            horizontal-stretch: 1;
+                            text: root.heading;
+                            font-size: 20px;
+                            font-weight: 650;
+                            letter-spacing: -0.2px;
+                        }
+                        if root.playlist-view: VerticalLayout { alignment: center; Button { text: "Play"; icon: Icons.play; primary: true; clicked => { root.play(0); } } }
+                        if root.playlist-view: VerticalLayout { alignment: center; IconButton { icon: Icons.shuffle; clicked => { root.command("shuffle-play"); } } }
+                        if root.playlist-view: VerticalLayout {
+                            alignment: center;
+                            IconButton {
+                                icon: Icons.pencil;
+                                clicked => {
+                                    root.dialog-heading = "Rename playlist";
+                                    root.dialog-value = root.heading;
+                                    root.dialog = "rename";
+                                }
+                            }
+                        }
+                        if root.playlist-view: VerticalLayout {
+                            alignment: center;
+                            IconButton {
+                                icon: Icons.trash;
+                                clicked => {
+                                    root.dialog-heading = "Delete \"" + root.heading + "\"?";
+                                    root.dialog-value = "";
+                                    root.dialog = "delete";
+                                }
+                            }
+                        }
+                    }
+                    if root.page == "Search": HorizontalLayout {
+                        spacing: 12px;
+                        TextField {
+                            in property <int> request: root.search-focus;
+                            changed request => { self.focus(); }
+                            changed focused => { root.typing = self.focused; }
+                            init => { self.focus(); }
+                            max-width: 560px;
+                            min-width: 160px;
+                            height: 44px;
+                            radius: 22px;
+                            icon: Icons.search;
+                            placeholder: "Songs, artists, albums";
+                            text <=> root.query;
+                            edited => {
+                                debounce.running = false;
+                                debounce.running = true;
+                            }
+                            accepted(text) => {
+                                debounce.running = false;
+                                root.search(text);
+                            }
+                        }
+                        if !root.narrow: VerticalLayout {
+                            alignment: center;
+                            Segmented {
+                                options: ["YouTube", "SoundCloud", "Audius", "Local"];
+                                selected <=> root.source;
+                                picked => {
+                                    if root.query != "" { root.search(root.query); }
+                                }
+                            }
+                        }
+                        Rectangle { horizontal-stretch: 1; }
+                    }
+                    if root.page == "Search" && root.narrow: HorizontalLayout {
+                        alignment: start;
+                        Segmented {
+                            options: ["YouTube", "SoundCloud", "Audius", "Local"];
+                            selected <=> root.source;
+                            picked => {
+                                if root.query != "" { root.search(root.query); }
+                            }
+                        }
+                    }
+                    if root.page == "Home": HorizontalLayout {
+                        spacing: 12px;
+                        Segmented {
+                            options: ["Recent", "Most played"];
+                            selected <=> root.home-tab;
+                            picked(i) => { root.command(i == 0 ? "recent" : "most-played"); }
+                        }
+                        Rectangle { horizontal-stretch: 1; }
+                        Button {
+                            text: "Import playlist";
+                            icon: Icons.import;
+                            clicked => {
+                                root.dialog-heading = "Import from Spotify";
+                                root.dialog-value = "";
+                                root.dialog = "import";
+                            }
+                        }
+                    }
+                    if root.page != "Settings": TrackList {
+                        vertical-stretch: 1;
+                        min-height: 120px;
+                        tracks: root.tracks;
+                        playlists: root.playlists;
+                        now-id: root.now-id;
+                        wide: root.wide-list;
+                        playlist-view: root.playlist-view;
+                        download-view: root.page == "Downloads";
+                        empty-text: root.empty-text;
+                        play(i) => { root.play(i); }
+                        like(i) => { root.track-action(i, "Like / Unlike"); }
+                        open-menu(i) => { root.menu(i); }
+                        menu-action(a) => { root.menu-action(a); }
+                        add-playlist(id) => { root.add-playlist(id); }
+                    }
+                    if root.page == "Settings": SettingsView {
+                        vertical-stretch: 1;
+                        min-height: 120px;
+                        fields: root.settings;
+                        change(k, v) => { root.setting-change(k, v); }
+                        command(c) => { root.command(c); }
+                    }
+                }
+                if root.panel != "": Rectangle {
+                    width: 320px;
+                    background: Theme.panel;
+                    Rectangle { x: 0; width: 1px; background: Theme.border; }
+                    VerticalLayout {
+                        padding-top: 20px;
+                        padding-left: 14px;
+                        padding-right: 10px;
+                        spacing: 12px;
+                        HorizontalLayout {
+                            padding-left: 8px;
+                            Label {
+                                text: root.panel == "queue" ? "Queue" : "Lyrics";
+                                font-size: 17px;
+                                font-weight: 700;
+                            }
+                            if root.panel == "queue" && root.queue.length > 0: VerticalLayout {
+                                alignment: center;
+                                IconButton { icon: Icons.trash; size: 30px; icon-size: 16px; clicked => { root.command("clear-queue"); } }
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                IconButton { icon: Icons.close; size: 30px; icon-size: 16px; clicked => { root.panel = ""; } }
+                            }
+                        }
+                        if root.panel == "queue": TrackList {
+                            vertical-stretch: 1;
+                            min-height: 80px;
+                            compact: true;
+                            tracks: root.queue;
+                            current: root.queue-current;
+                            empty-text: "Queue is empty";
+                            play(i) => { root.queue-action(i, "jump"); }
+                            remove(i) => { root.queue-action(i, "remove"); }
+                            reorder(i, d) => { root.queue-move(i, d); }
+                        }
+                        if root.panel == "lyrics": LyricsView {
+                            vertical-stretch: 1;
+                            min-height: 80px;
+                            lines: root.lyrics;
+                            active: root.lyric-index;
+                        }
+                    }
+                }
+            }
+            bar := PlayerBar {
+                vertical-stretch: root.mini ? 1 : 0;
+                title: root.now-title;
+                artist: root.now-artist;
+                art: root.now-art;
+                has-track: root.now-id != "";
+                liked: root.now-liked;
+                paused: root.paused;
+                shuffle: root.shuffle;
+                repeat: root.repeat;
+                position: root.position;
+                duration: root.duration;
+                volume: root.volume;
+                elapsed: root.elapsed;
+                total: root.total;
+                mini: root.mini;
+                panel: root.panel;
+                waves: root.waves;
+                wave-back: root.wave-back;
+                wave-front: root.wave-front;
+                wave-line: root.wave-line;
+                wave-resting: root.wave-resting;
+                command(c) => { root.command(c); }
+                seek(v) => { root.seek(v); }
+                volume-change(v) => { root.volume-change(v); }
+            }
+        }
+    }
+
+    if root.loading || root.buffering: Rectangle {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: 2px;
+        clip: true;
+        Rectangle {
+            width: parent.width * 0.3;
+            x: parent.width * (mod(animation-tick() / 1ms, 1400) / 1400 * 1.3 - 0.3);
+            background: @linear-gradient(90deg, #ffffff00 0%, Theme.text.with-alpha(0.7) 50%, #ffffff00 100%);
+        }
+    }
+
+    if root.status != "" && !root.mini: Rectangle {
+        y: root.height - 96px - self.height - 16px;
+        x: (root.width - self.width) / 2;
+        height: 36px;
+        width: min(toast.preferred-width + 36px, root.width - 48px);
+        border-radius: 18px;
+        background: Theme.popup;
+        drop-shadow-blur: 18px;
+        drop-shadow-offset-y: 6px;
+        drop-shadow-color: #00000070;
+        toast := Label {
+            text: root.status;
+            font-size: 12.5px;
+            font-weight: 500;
+            horizontal-alignment: center;
+        }
+    }
+
+    if root.dialog != "": Dialog {
+        kind: root.dialog;
+        heading: root.dialog-heading;
+        value <=> root.dialog-value;
+        dismiss => { root.dialog = ""; }
+        submit(v) => { root.dialog-submit(v); }
+    }
+}

@@ -1,0 +1,282 @@
+mod controller;
+mod models;
+mod state;
+mod waves;
+
+use crate::{
+    AppWindow, LyricRow, PlaylistRow, SettingRow, TrackRow,
+    library::Library,
+    media_controls::ShellRequest,
+    player::{self, PlayerConfig},
+};
+use controller::Controller;
+use slint::{ComponentHandle, ModelRc, VecModel};
+use std::sync::{Arc, Mutex};
+
+pub fn run() -> anyhow::Result<()> {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()?;
+    let _guard = runtime.enter();
+    let library = Library::open_default()?;
+    let settings = library.load_settings();
+    crate::sources::set_cookies_browser(&settings.youtube_cookies);
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let player = player::spawn(
+        PlayerConfig {
+            volume: settings.volume,
+            crossfade_secs: settings.crossfade_secs,
+            normalize: settings.normalize,
+            gapless: settings.gapless,
+            shuffle: settings.shuffle,
+            repeat: settings.repeat,
+        },
+        tx,
+    )?;
+    log::info!("Creating Tonal window");
+    let window = AppWindow::new()?;
+    log::info!("Window created");
+    window.set_tracks(ModelRc::new(VecModel::<TrackRow>::default()));
+    window.set_queue(ModelRc::new(VecModel::<TrackRow>::default()));
+    window.set_playlists(ModelRc::new(VecModel::<PlaylistRow>::default()));
+    window.set_settings(ModelRc::new(VecModel::<SettingRow>::from(
+        models::settings(&settings),
+    )));
+    window.set_lyrics(ModelRc::new(VecModel::<LyricRow>::from(models::lyrics(
+        None, None,
+    ))));
+    window.set_volume(settings.volume as f32);
+    window.set_waves(settings.visualizer && crate::visualizer::available());
+    window.set_shuffle(settings.shuffle);
+    window.set_repeat(format!("{:?}", settings.repeat).into());
+    window.set_source(match settings.default_source {
+        crate::model::SourceKind::YouTube => 0,
+        crate::model::SourceKind::SoundCloud => 1,
+        crate::model::SourceKind::Audius => 2,
+        crate::model::SourceKind::Local => 3,
+    });
+    if let Some(color) = controller::parse_color(&settings.accent) {
+        window.global::<crate::Theme>().set_accent(color);
+    }
+    let weak = window.as_weak();
+    #[cfg(windows)]
+    let hwnd = {
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        window.show()?;
+        match window.window().window_handle()?.as_raw() {
+            RawWindowHandle::Win32(handle) => Some(handle.hwnd.get() as *mut std::ffi::c_void),
+            _ => None,
+        }
+    };
+    #[cfg(not(windows))]
+    let hwnd = None;
+    let media = crate::media_controls::spawn(player.clone(), hwnd, move |request| {
+        let _ = weak.upgrade_in_event_loop(move |w| match request {
+            ShellRequest::Raise => {
+                let _ = w.show();
+                w.window().request_redraw();
+            }
+            ShellRequest::Quit => {
+                let _ = slint::quit_event_loop();
+            }
+        });
+    });
+    let scrobbler = Arc::new(Mutex::new(crate::integrations::scrobble::Scrobbler::new(
+        &settings,
+    )));
+    let app = Controller {
+        scrobbler,
+        state: Arc::new(Mutex::new(state::State::new(settings))),
+        library: library.clone(),
+        player: player.clone(),
+        window: window.as_weak(),
+        media,
+    };
+    let c = app.clone();
+    let weak = window.as_weak();
+    window.on_search(move |query| {
+        if let Some(w) = weak.upgrade() {
+            c.search(query.to_string(), w.get_source(), false);
+        }
+    });
+    let c = app.clone();
+    window.on_navigate(move |page| c.load_page(&page));
+    let c = app.clone();
+    window.on_playlist(move |id| c.playlist(id as i64));
+    let c = app.clone();
+    window.on_play(move |index| {
+        if index >= 0 {
+            c.play(index as usize);
+        }
+    });
+    let c = app.clone();
+    window.on_track_action(move |index, action| {
+        if index >= 0 {
+            c.track_action(index as usize, &action);
+        }
+    });
+    let c = app.clone();
+    window.on_menu(move |index| {
+        c.state.lock().unwrap().selected = usize::try_from(index).ok();
+    });
+    let c = app.clone();
+    window.on_menu_action(move |action| {
+        let index = c.state.lock().unwrap().selected;
+        if let Some(i) = index {
+            c.track_action(i, &action);
+        }
+    });
+    let c = app.clone();
+    window.on_add_playlist(move |id| c.add_playlist(id as i64));
+    let c = app.clone();
+    window.on_command(move |command| c.command(&command));
+    let c = app.clone();
+    window.on_seek(move |position| c.seek(position as f64));
+    let c = app.clone();
+    window.on_volume_change(move |v| c.player.set_volume(v as f64));
+    let c = app.clone();
+    window.on_setting_change(move |key, value| c.setting(&key, &value));
+    let c = app.clone();
+    let weak = window.as_weak();
+    window.on_dialog_submit(move |value| {
+        if let Some(w) = weak.upgrade() {
+            c.dialog(&w.get_dialog(), &value);
+        }
+    });
+    let c = app.clone();
+    window.on_queue_action(move |i, action| {
+        if i >= 0 {
+            if action == "jump" {
+                c.player.jump(i as usize);
+            } else {
+                c.player.remove(i as usize);
+            }
+        }
+    });
+    let c = app.clone();
+    window.on_queue_move(move |i, d| {
+        let len = c.state.lock().unwrap().queue.len();
+        let target = (i + d).max(0) as usize;
+        if i >= 0 && target < len {
+            c.player.move_track(i as usize, target);
+        }
+    });
+    let c = app.clone();
+    window.on_shortcut(move |key, ctrl, typing| {
+        if typing && !ctrl {
+            return;
+        }
+        match key.as_str() {
+            " " if !typing => c.player.toggle_pause(),
+            "l" if ctrl => c.command("like"),
+            "m" if ctrl => c.command("mini"),
+            k if k == slint::SharedString::from(slint::platform::Key::LeftArrow).as_str()
+                && ctrl =>
+            {
+                c.player.prev()
+            }
+            k if k == slint::SharedString::from(slint::platform::Key::RightArrow).as_str()
+                && ctrl =>
+            {
+                c.player.next()
+            }
+            k if k == slint::SharedString::from(slint::platform::Key::LeftArrow).as_str()
+                && !typing =>
+            {
+                c.player.seek_relative(-5.0)
+            }
+            k if k == slint::SharedString::from(slint::platform::Key::RightArrow).as_str()
+                && !typing =>
+            {
+                c.player.seek_relative(5.0)
+            }
+            k if k == slint::SharedString::from(slint::platform::Key::UpArrow).as_str() && ctrl => {
+                let volume = c.state.lock().unwrap().settings.volume;
+                c.player.set_volume((volume + 5.0).min(100.0));
+            }
+            k if k == slint::SharedString::from(slint::platform::Key::DownArrow).as_str()
+                && ctrl =>
+            {
+                let volume = c.state.lock().unwrap().settings.volume;
+                c.player.set_volume((volume - 5.0).max(0.0));
+            }
+            _ => {}
+        }
+    });
+    log::info!("Loading library");
+    app.refresh_playlists();
+    app.load_page("Home");
+    let missing = crate::sources::missing_tools();
+    if !missing.is_empty() {
+        app.status(format!(
+            "Missing tools: {} · Install these to play online music",
+            missing.join(", ")
+        ));
+    }
+    if let Some(session) = library.load_session().filter(|s| !s.tracks.is_empty()) {
+        let mut tracks = session.tracks;
+        app.playable(&mut tracks);
+        app.state.lock().unwrap().restore_position = Some(session.position);
+        player.restore_tracks(tracks, session.current.unwrap_or(0), session.position);
+    }
+    let c = app.clone();
+    tokio::spawn(async move {
+        while let Some(event) = rx.recv().await {
+            c.event(event);
+        }
+    });
+    if let Ok(query) = std::env::var("TONAL_DEBUG_QUERY") {
+        let source = std::env::var("TONAL_DEBUG_SOURCE")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+        window.set_query(query.clone().into());
+        window.set_source(source);
+        app.search(query, source, true);
+    }
+    if let Ok(view) = std::env::var("TONAL_DEBUG_VIEW") {
+        match view.as_str() {
+            "mini" | "queue" | "lyrics" => app.command(&view),
+            "settings" => app.load_page("Settings"),
+            _ => {}
+        }
+    }
+    if let Some(id) = std::env::var("TONAL_DEBUG_PLAYLIST")
+        .ok()
+        .and_then(|v| v.parse().ok())
+    {
+        app.playlist(id);
+        app.play(0);
+    }
+    if let Ok(title) = std::env::var("TONAL_DEBUG_TITLE") {
+        window.set_window_title(title.into());
+    }
+    if let Ok(path) = std::env::var("TONAL_DEBUG_SNAPSHOT") {
+        let weak = window.as_weak();
+        slint::Timer::single_shot(std::time::Duration::from_secs(12), move || {
+            if let Some(w) = weak.upgrade() {
+                match w.window().take_snapshot() {
+                    Ok(pixels) => {
+                        if let Err(e) = image::save_buffer(
+                            &path,
+                            pixels.as_bytes(),
+                            pixels.width(),
+                            pixels.height(),
+                            image::ColorType::Rgba8,
+                        ) {
+                            log::error!("Snapshot: {e}");
+                        }
+                    }
+                    Err(e) => log::error!("Snapshot: {e}"),
+                }
+            }
+        });
+    }
+    log::info!("Starting Tonal event loop");
+    window.run()?;
+    app.save_session();
+    player.shutdown();
+    runtime.block_on(tokio::time::sleep(std::time::Duration::from_millis(100)));
+    Ok(())
+}

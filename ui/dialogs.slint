@@ -1,0 +1,60 @@
+import { Theme, Icons, Label, Button, TextField, IconButton } from "theme.slint";
+
+export component Dialog inherits Rectangle {
+    in property <string> kind;
+    in property <string> heading;
+    in-out property <string> value;
+    callback submit(string);
+    callback dismiss;
+    background: #000000a8;
+    TouchArea { clicked => { root.dismiss(); } }
+    card := Rectangle {
+        width: min(440px, root.width - 48px);
+        height: body.preferred-height;
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        background: Theme.popup;
+        border-radius: Theme.radius-l;
+        drop-shadow-blur: 40px;
+        drop-shadow-offset-y: 12px;
+        drop-shadow-color: #000000a0;
+        TouchArea { }
+        body := VerticalLayout {
+            padding: 24px;
+            spacing: 16px;
+            HorizontalLayout {
+                Label { text: root.heading; font-size: 18px; font-weight: 700; }
+                IconButton { icon: Icons.close; size: 30px; icon-size: 16px; clicked => { root.dismiss(); } }
+            }
+            if root.kind == "import": Label {
+                text: "Paste a public Spotify playlist or album link. Tonal finds each song on YouTube Music and saves it as a playlist here. Up to 100 songs without logging in.";
+                wrap: word-wrap;
+                font-size: 12.5px;
+                color: Theme.muted;
+            }
+            if root.kind == "delete": Label {
+                text: "This removes the playlist from Tonal. The songs stay in your library.";
+                wrap: word-wrap;
+                font-size: 12.5px;
+                color: Theme.muted;
+            }
+            if root.kind != "delete": field := TextField {
+                text <=> root.value;
+                placeholder: root.kind == "import" ? "https://open.spotify.com/playlist/..." : "Playlist name";
+                accepted(text) => { root.submit(text); }
+                init => { self.focus(); }
+            }
+            HorizontalLayout {
+                alignment: end;
+                spacing: 8px;
+                Button { text: "Cancel"; clicked => { root.dismiss(); } }
+                if root.kind == "delete": Button { text: "Delete"; danger: true; clicked => { root.submit("DELETE"); } }
+                if root.kind != "delete": Button {
+                    text: root.kind == "import" ? "Import" : root.kind == "create" ? "Create" : "Save";
+                    primary: true;
+                    clicked => { root.submit(root.value); }
+                }
+            }
+        }
+    }
+}

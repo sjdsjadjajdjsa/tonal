@@ -1,0 +1,331 @@
+import "fonts/Inter-Regular.ttf";
+import "fonts/Inter-Medium.ttf";
+import "fonts/Inter-SemiBold.ttf";
+import "fonts/Inter-Bold.ttf";
+
+export global Theme {
+    in-out property <color> accent: #ececee;
+    out property <color> background: #141416c8;
+    out property <color> sidebar: #0000002e;
+    out property <color> bar: #0000003d;
+    out property <color> panel: #00000024;
+    out property <color> surface: #ffffff0b;
+    out property <color> raised: #ffffff13;
+    out property <color> hover: #ffffff17;
+    out property <color> border: #ffffff14;
+    out property <color> text: #f3f3f5;
+    out property <color> muted: #a2a2a8;
+    out property <color> faint: #6e6e74;
+    out property <color> on-accent: #111113;
+    out property <color> popup: #1c1c1f;
+    out property <length> radius-s: 6px;
+    out property <length> radius-m: 10px;
+    out property <length> radius-l: 14px;
+}
+
+export global Icons {
+    out property <string> home: "M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z";
+    out property <string> search: "M18 11a7 7 0 1 1-14 0a7 7 0 1 1 14 0z M21 21l-4.35-4.35";
+    out property <string> heart: "M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7z";
+    out property <string> folder: "M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2z";
+    out property <string> download: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3";
+    out property <string> settings: "M21 4h-7 M10 4H3 M21 12h-9 M8 12H3 M21 20h-5 M12 20H3 M14 2v4 M8 10v4 M16 18v4";
+    out property <string> plus: "M12 5v14 M5 12h14";
+    out property <string> play: "M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z";
+    out property <string> pause: "M7 5h3.2v14H7z M13.8 5H17v14h-3.2z";
+    out property <string> previous: "M18.5 5.1v13.8a1 1 0 0 1-1.6.8L8 13a1.2 1.2 0 0 1 0-2l8.9-6.7a1 1 0 0 1 1.6.8z M5 5h2v14H5z";
+    out property <string> next: "M5.5 5.1v13.8a1 1 0 0 0 1.6.8L16 13a1.2 1.2 0 0 0 0-2L7.1 4.3a1 1 0 0 0-1.6.8z M17 5h2v14h-2z";
+    out property <string> shuffle: "M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22 M18 2l4 4-4 4 M2 6h1.9c1.5 0 2.9.9 3.6 2.2 M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8 M18 14l4 4-4 4";
+    out property <string> repeat: "M17 2l4 4-4 4 M3 11v-1a4 4 0 0 1 4-4h14 M7 22l-4-4 4-4 M21 13v1a4 4 0 0 1-4 4H3";
+    out property <string> repeat-one: "M17 2l4 4-4 4 M3 11v-1a4 4 0 0 1 4-4h14 M7 22l-4-4 4-4 M21 13v1a4 4 0 0 1-4 4H3 M11 10h1v4";
+    out property <string> queue: "M21 15V6 M18.5 18a2.5 2.5 0 1 0 0-5a2.5 2.5 0 0 0 0 5z M12 12H3 M16 6H3 M12 18H3";
+    out property <string> lyrics: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z M7 8h10 M7 12h6";
+    out property <string> mini: "M21 9V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10c0 1.1.9 2 2 2h4 M12 13h8a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1h-8a1 1 0 0 1-1-1v-5a1 1 0 0 1 1-1z";
+    out property <string> expand: "M15 3h6v6 M9 21H3v-6 M21 3l-7 7 M3 21l7-7";
+    out property <string> more: "M13 12a1 1 0 1 1-2 0a1 1 0 1 1 2 0z M20 12a1 1 0 1 1-2 0a1 1 0 1 1 2 0z M6 12a1 1 0 1 1-2 0a1 1 0 1 1 2 0z";
+    out property <string> volume: "M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z M16 9a5 5 0 0 1 0 6 M19.4 18.4a9 9 0 0 0 0-12.8";
+    out property <string> volume-low: "M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z M16 9a5 5 0 0 1 0 6";
+    out property <string> volume-off: "M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z M22 9l-6 6 M16 9l6 6";
+    out property <string> close: "M18 6 6 18 M6 6l12 12";
+    out property <string> up: "m18 15-6-6-6 6";
+    out property <string> down: "m6 9 6 6 6-6";
+    out property <string> music: "M9 18V5l12-2v13 M9 18a3 3 0 1 1-6 0a3 3 0 1 1 6 0z M21 16a3 3 0 1 1-6 0a3 3 0 1 1 6 0z";
+    out property <string> trash: "M3 6h18 M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6 M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2";
+    out property <string> pencil: "M21.2 6.8a2.8 2.8 0 0 0-4-4L3.8 16.2a2 2 0 0 0-.5.8l-1.3 4.4a.5.5 0 0 0 .6.6l4.4-1.3a2 2 0 0 0 .8-.5z";
+    out property <string> radio: "M4.9 19.1C1 15.2 1 8.8 4.9 4.9 M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5 M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5 M19.1 4.9C23 8.8 23 15.1 19.1 19 M14 12a2 2 0 1 1-4 0a2 2 0 1 1 4 0z";
+    out property <string> list-plus: "M11 12H3 M16 6H3 M16 18H3 M18 9v6 M21 12h-6";
+    out property <string> next-up: "M3 12h12 M3 6h18 M3 18h8 M19 14v6 M16 17h6";
+    out property <string> import: "M12 3v12 M7 10l5 5 5-5 M5 21h14";
+}
+
+export component Label inherits Text {
+    color: Theme.text;
+    font-family: "Inter";
+    font-size: 13px;
+    overflow: elide;
+    vertical-alignment: center;
+}
+
+export component Icon inherits Path {
+    in property <string> data;
+    in property <color> tint: Theme.text;
+    in property <bool> filled;
+    width: 18px;
+    height: 18px;
+    viewbox-width: 24;
+    viewbox-height: 24;
+    commands: root.data;
+    fill: root.filled ? root.tint : transparent;
+    stroke: root.filled ? transparent : root.tint;
+    stroke-width: root.filled ? 0px : 1.8px;
+    stroke-line-cap: round;
+}
+
+export component IconButton inherits Rectangle {
+    in property <string> icon;
+    in property <bool> active;
+    in property <bool> filled;
+    in property <length> size: 34px;
+    in property <length> icon-size: 18px;
+    in property <color> tint: Theme.muted;
+    callback clicked;
+    width: root.size;
+    height: root.size;
+    border-radius: root.size / 2;
+    background: touch.pressed ? Theme.raised : touch.has-hover ? Theme.hover : transparent;
+    animate background { duration: 120ms; }
+    Icon {
+        data: root.icon;
+        width: root.icon-size;
+        height: root.icon-size;
+        filled: root.filled;
+        tint: root.active ? Theme.accent : touch.has-hover ? Theme.text : root.tint;
+    }
+    if root.active: Rectangle {
+        y: root.height - 5px;
+        width: 4px;
+        height: 4px;
+        border-radius: 2px;
+        background: Theme.accent;
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component Button inherits Rectangle {
+    in property <string> text;
+    in property <string> icon;
+    in property <bool> primary;
+    in property <bool> danger;
+    callback clicked;
+    height: 34px;
+    width: content.preferred-width;
+    border-radius: 17px;
+    background: root.primary ? (touch.has-hover ? Theme.accent.brighter(0.12) : Theme.accent)
+        : root.danger ? (touch.has-hover ? #e5484d : #c6383d)
+        : touch.has-hover ? Theme.hover : Theme.surface;
+    animate background { duration: 120ms; }
+    content := HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        spacing: 8px;
+        alignment: center;
+        if root.icon != "": VerticalLayout {
+            alignment: center;
+            Icon {
+                data: root.icon;
+                width: 15px;
+                height: 15px;
+                tint: root.primary ? Theme.on-accent : Theme.text;
+            }
+        }
+        Label {
+            text: root.text;
+            font-size: 12.5px;
+            font-weight: 600;
+            color: root.primary ? Theme.on-accent : Theme.text;
+        }
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component Scrubber inherits Rectangle {
+    in property <float> value;
+    in property <float> maximum: 1;
+    in property <bool> live;
+    in property <length> bar: 4px;
+    callback changed(float);
+    private property <float> drag;
+    private property <float> shown: touch.pressed ? root.drag : root.value;
+    private property <float> ratio: root.maximum > 0 ? clamp(root.shown / root.maximum, 0, 1) : 0;
+    private property <bool> engaged: touch.has-hover || touch.pressed;
+    height: 16px;
+    Rectangle {
+        y: (root.height - root.bar) / 2;
+        height: root.bar;
+        border-radius: root.bar / 2;
+        background: Theme.border;
+    }
+    Rectangle {
+        x: 0;
+        y: (root.height - root.bar) / 2;
+        width: root.width * root.ratio;
+        height: root.bar;
+        border-radius: root.bar / 2;
+        background: root.engaged ? Theme.accent : Theme.text;
+    }
+    if root.engaged: Rectangle {
+        x: root.width * root.ratio - 6px;
+        y: (root.height - 12px) / 2;
+        width: 12px;
+        height: 12px;
+        border-radius: 6px;
+        background: Theme.text;
+        drop-shadow-blur: 4px;
+        drop-shadow-color: #0008;
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down && event.button == PointerEventButton.left {
+                root.drag = clamp(self.mouse-x / max(1px, self.width), 0, 1) * root.maximum;
+                if root.live { root.changed(root.drag); }
+            }
+            if event.kind == PointerEventKind.up && event.button == PointerEventButton.left {
+                root.changed(root.drag);
+            }
+        }
+        moved => {
+            if self.pressed {
+                root.drag = clamp(self.mouse-x / max(1px, self.width), 0, 1) * root.maximum;
+                if root.live { root.changed(root.drag); }
+            }
+        }
+    }
+}
+
+export component Switch inherits Rectangle {
+    in-out property <bool> checked;
+    callback toggled(bool);
+    width: 38px;
+    height: 22px;
+    border-radius: 11px;
+    background: root.checked ? Theme.accent : Theme.raised;
+    animate background { duration: 150ms; }
+    Rectangle {
+        x: root.checked ? root.width - self.width - 3px : 3px;
+        y: 3px;
+        width: 16px;
+        height: 16px;
+        border-radius: 8px;
+        background: root.checked ? Theme.on-accent : Theme.muted;
+        animate x { duration: 150ms; easing: ease-out; }
+    }
+    TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.checked = !root.checked;
+            root.toggled(root.checked);
+        }
+    }
+}
+
+export component Segmented inherits Rectangle {
+    in property <[string]> options;
+    in-out property <int> selected;
+    callback picked(int);
+    height: 34px;
+    border-radius: self.height / 2;
+    background: Theme.surface;
+    min-width: row.preferred-width;
+    row := HorizontalLayout {
+        padding: 4px;
+        spacing: 2px;
+        for option[index] in root.options: Rectangle {
+            border-radius: self.height / 2;
+            min-width: label.preferred-width + 28px;
+            background: index == root.selected ? Theme.hover : tap.has-hover ? Theme.raised : transparent;
+            animate background { duration: 120ms; }
+            label := Label {
+                text: option;
+                font-size: 12.5px;
+                font-weight: 600;
+                horizontal-alignment: center;
+                color: index == root.selected ? Theme.text : Theme.muted;
+            }
+            tap := TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    root.selected = index;
+                    root.picked(index);
+                }
+            }
+        }
+    }
+}
+
+export component TextField inherits Rectangle {
+    in-out property <string> text;
+    in property <string> placeholder;
+    in property <string> icon;
+    in property <bool> secret;
+    in property <length> radius: Theme.radius-m;
+    out property <bool> focused: input.has-focus;
+    callback accepted(string);
+    callback edited(string);
+    callback committed(string);
+    forward-focus: input;
+    height: 40px;
+    border-radius: root.radius;
+    background: Theme.surface;
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.text;
+        clicked => { input.focus(); }
+    }
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        spacing: 10px;
+        if root.icon != "": VerticalLayout {
+            alignment: center;
+            Icon {
+                data: root.icon;
+                width: 17px;
+                height: 17px;
+                tint: input.has-focus ? Theme.text : Theme.muted;
+            }
+        }
+        Rectangle {
+            clip: true;
+            input := TextInput {
+                text <=> root.text;
+                font-family: "Inter";
+                font-size: 13.5px;
+                color: Theme.text;
+                selection-background-color: Theme.accent.with-alpha(0.35);
+                selection-foreground-color: Theme.text;
+                vertical-alignment: center;
+                single-line: true;
+                input-type: root.secret ? InputType.password : InputType.text;
+                accepted => {
+                    root.accepted(self.text);
+                    root.committed(self.text);
+                }
+                edited => { root.edited(self.text); }
+                changed has-focus => {
+                    if !self.has-focus { root.committed(self.text); }
+                }
+            }
+            if root.text == "": Label {
+                text: root.placeholder;
+                color: Theme.faint;
+                font-size: 13.5px;
+            }
+        }
+    }
+}

@@ -1,0 +1,182 @@
+import { Theme, Icons, Label, Icon, IconButton, Scrubber } from "theme.slint";
+import { Artwork } from "track-list.slint";
+import { Waves } from "visualizer.slint";
+
+component PlayButton inherits Rectangle {
+    in property <bool> paused: true;
+    in property <length> size: 40px;
+    callback clicked;
+    width: root.size;
+    height: root.size;
+    border-radius: root.size / 2;
+    background: touch.pressed ? Theme.text.darker(0.2) : touch.has-hover ? #ffffff : Theme.text;
+    drop-shadow-blur: touch.has-hover ? 14px : 0px;
+    drop-shadow-color: #ffffff22;
+    animate drop-shadow-blur { duration: 150ms; }
+    Icon {
+        data: root.paused ? Icons.play : Icons.pause;
+        filled: true;
+        width: root.size * 0.42;
+        height: root.size * 0.42;
+        x: (root.width - self.width) / 2 + (root.paused ? 1.5px : 0px);
+        tint: Theme.on-accent;
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component PlayerBar inherits Rectangle {
+    in property <string> title;
+    in property <string> artist;
+    in property <image> art;
+    in property <bool> has-track;
+    in property <bool> paused: true;
+    in property <bool> liked;
+    in property <bool> shuffle;
+    in property <string> repeat: "Off";
+    in property <float> position;
+    in property <float> duration: 1;
+    in property <float> volume: 80;
+    in property <string> elapsed: "0:00";
+    in property <string> total: "0:00";
+    in property <bool> mini;
+    in property <string> panel;
+    in property <bool> waves;
+    in property <string> wave-back;
+    in property <string> wave-front;
+    in property <string> wave-line;
+    in property <bool> wave-resting: true;
+    out property <length> wave-height: root.mini ? root.height * 0.5 : 64px;
+    callback command(string);
+    callback seek(float);
+    callback volume-change(float);
+    background: Theme.bar;
+    min-height: root.mini ? 150px : 96px;
+    preferred-height: root.mini ? 170px : 96px;
+
+    Rectangle {
+        y: 0;
+        height: 1px;
+        background: Theme.border;
+        visible: !root.mini;
+    }
+
+    if root.waves: Waves {
+        x: 0;
+        width: root.width;
+        y: root.height - self.height;
+        height: root.wave-height;
+        back: root.wave-back;
+        front: root.wave-front;
+        line: root.wave-line;
+        resting: root.wave-resting;
+        baseline: min(14px, self.height * 0.22);
+        accent: Theme.text;
+    }
+
+    if !root.mini: HorizontalLayout {
+        padding-left: 20px;
+        padding-right: 20px;
+        spacing: 16px;
+        HorizontalLayout {
+            horizontal-stretch: 1;
+            min-width: 200px;
+            spacing: 14px;
+            VerticalLayout {
+                alignment: center;
+                Artwork { source: root.art; size: 56px; }
+            }
+            VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 0;
+                spacing: 4px;
+                Label { text: root.title; font-size: 14px; font-weight: 600; }
+                Label { text: root.artist; font-size: 12px; color: Theme.muted; }
+            }
+            if root.has-track: VerticalLayout {
+                alignment: center;
+                IconButton {
+                    icon: Icons.heart;
+                    filled: root.liked;
+                    tint: root.liked ? Theme.accent : Theme.muted;
+                    size: 32px;
+                    icon-size: 17px;
+                    clicked => { root.command("like"); }
+                }
+            }
+            Rectangle { horizontal-stretch: 1; }
+        }
+        VerticalLayout {
+            max-width: 620px;
+            min-width: 300px;
+            horizontal-stretch: 2;
+            alignment: center;
+            spacing: 6px;
+            HorizontalLayout {
+                alignment: center;
+                spacing: 14px;
+                VerticalLayout { alignment: center; IconButton { icon: Icons.shuffle; active: root.shuffle; icon-size: 17px; clicked => { root.command("shuffle"); } } }
+                VerticalLayout { alignment: center; IconButton { icon: Icons.previous; filled: true; tint: Theme.text; icon-size: 17px; clicked => { root.command("previous"); } } }
+                PlayButton { paused: root.paused; clicked => { root.command("toggle"); } }
+                VerticalLayout { alignment: center; IconButton { icon: Icons.next; filled: true; tint: Theme.text; icon-size: 17px; clicked => { root.command("next"); } } }
+                VerticalLayout { alignment: center; IconButton { icon: root.repeat == "One" ? Icons.repeat-one : Icons.repeat; active: root.repeat != "Off"; icon-size: 17px; clicked => { root.command("repeat"); } } }
+            }
+            HorizontalLayout {
+                spacing: 10px;
+                Label { text: root.elapsed; width: 40px; horizontal-alignment: right; font-size: 11px; color: Theme.muted; }
+                Scrubber { value: root.position; maximum: root.duration; changed(v) => { root.seek(v); } }
+                Label { text: root.total; width: 40px; font-size: 11px; color: Theme.muted; }
+            }
+        }
+        HorizontalLayout {
+            horizontal-stretch: 1;
+            min-width: 256px;
+            alignment: end;
+            spacing: 4px;
+            VerticalLayout { alignment: center; IconButton { icon: Icons.lyrics; active: root.panel == "lyrics"; icon-size: 17px; clicked => { root.command("lyrics"); } } }
+            VerticalLayout { alignment: center; IconButton { icon: Icons.queue; active: root.panel == "queue"; icon-size: 17px; clicked => { root.command("queue"); } } }
+            VerticalLayout {
+                alignment: center;
+                IconButton {
+                    icon: root.volume <= 0 ? Icons.volume-off : root.volume < 50 ? Icons.volume-low : Icons.volume;
+                    icon-size: 17px;
+                    clicked => { root.command("mute"); }
+                }
+            }
+            VerticalLayout {
+                alignment: center;
+                Scrubber { width: 84px; live: true; value: root.volume; maximum: 100; changed(v) => { root.volume-change(v); } }
+            }
+            Rectangle { width: 6px; }
+            VerticalLayout { alignment: center; IconButton { icon: Icons.mini; icon-size: 17px; clicked => { root.command("mini"); } } }
+        }
+    }
+
+    if root.mini: VerticalLayout {
+        padding: 14px;
+        spacing: 10px;
+        HorizontalLayout {
+            spacing: 12px;
+            Artwork { source: root.art; size: 56px; }
+            VerticalLayout {
+                alignment: center;
+                spacing: 3px;
+                Label { text: root.title; font-size: 13.5px; font-weight: 600; }
+                Label { text: root.artist; font-size: 11.5px; color: Theme.muted; }
+            }
+            VerticalLayout { alignment: start; IconButton { icon: Icons.expand; size: 28px; icon-size: 15px; clicked => { root.command("mini"); } } }
+        }
+        HorizontalLayout {
+            alignment: center;
+            spacing: 12px;
+            VerticalLayout { alignment: center; IconButton { icon: Icons.heart; filled: root.liked; tint: root.liked ? Theme.accent : Theme.muted; size: 30px; icon-size: 15px; clicked => { root.command("like"); } } }
+            VerticalLayout { alignment: center; IconButton { icon: Icons.previous; filled: true; tint: Theme.text; size: 30px; icon-size: 15px; clicked => { root.command("previous"); } } }
+            PlayButton { size: 36px; paused: root.paused; clicked => { root.command("toggle"); } }
+            VerticalLayout { alignment: center; IconButton { icon: Icons.next; filled: true; tint: Theme.text; size: 30px; icon-size: 15px; clicked => { root.command("next"); } } }
+            VerticalLayout { alignment: center; IconButton { icon: root.repeat == "One" ? Icons.repeat-one : Icons.repeat; active: root.repeat != "Off"; size: 30px; icon-size: 15px; clicked => { root.command("repeat"); } } }
+        }
+        Scrubber { value: root.position; maximum: root.duration; bar: 3px; changed(v) => { root.seek(v); } }
+    }
+}

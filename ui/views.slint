@@ -1,0 +1,142 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme, Label, Button, Switch, TextField } from "theme.slint";
+
+export struct SettingRow {
+    key: string,
+    label: string,
+    value: string,
+    hint: string,
+    kind: string,
+    secret: bool,
+    header: string,
+    first: bool,
+    last: bool,
+}
+
+export struct LyricRow {
+    text: string,
+    active: bool,
+}
+
+export component SettingsView inherits Rectangle {
+    in property <[SettingRow]> fields;
+    callback change(string, string);
+    callback command(string);
+    ScrollView {
+        VerticalLayout {
+            alignment: start;
+            padding-bottom: 32px;
+            for field in root.fields: VerticalLayout {
+                if field.header != "": Label {
+                    text: field.header;
+                    height: 48px;
+                    vertical-alignment: bottom;
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: Theme.text;
+                }
+                if field.header != "": Rectangle { height: 10px; }
+                row := TouchArea {
+                    max-width: 760px;
+                    height: 58px;
+                    Rectangle {
+                        background: Theme.surface;
+                        border-top-left-radius: field.first ? Theme.radius-l : 0px;
+                        border-top-right-radius: field.first ? Theme.radius-l : 0px;
+                        border-bottom-left-radius: field.last ? Theme.radius-l : 0px;
+                        border-bottom-right-radius: field.last ? Theme.radius-l : 0px;
+                    }
+                    HorizontalLayout {
+                        padding-left: 18px;
+                        padding-right: 14px;
+                        spacing: 20px;
+                        Label {
+                            text: field.label;
+                            font-weight: 500;
+                            min-width: 140px;
+                        }
+                        Label {
+                            text: field.hint;
+                            horizontal-stretch: 1;
+                            horizontal-alignment: right;
+                            font-size: 11.5px;
+                            color: Theme.faint;
+                            opacity: row.has-hover ? 1 : 0;
+                            animate opacity { duration: 140ms; easing: ease-out; }
+                        }
+                        if field.kind == "toggle": VerticalLayout {
+                            alignment: center;
+                            Switch {
+                                checked: field.value == "true";
+                                toggled(on) => { root.change(field.key, on ? "true" : "false"); }
+                            }
+                        }
+                        if field.kind == "text": VerticalLayout {
+                            alignment: center;
+                            TextField {
+                                width: 280px;
+                                height: 36px;
+                                text: field.value;
+                                secret: field.secret;
+                                committed(value) => {
+                                    if value != field.value { root.change(field.key, value); }
+                                }
+                            }
+                        }
+                        if field.kind == "action": VerticalLayout {
+                            alignment: center;
+                            Button {
+                                text: field.value;
+                                clicked => { root.command(field.key); }
+                            }
+                        }
+                    }
+                    if !field.last: Rectangle {
+                        x: 18px;
+                        y: parent.height - 1px;
+                        width: parent.width - 36px;
+                        height: 1px;
+                        background: Theme.border;
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component LyricsView inherits Rectangle {
+    in property <[LyricRow]> lines;
+    in property <int> active: -1;
+    private property <length> line-height: 48px;
+    VerticalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        if root.lines.length <= 1: Label {
+            vertical-stretch: 1;
+            text: root.lines.length == 1 ? root.lines[0].text : "No lyrics found";
+            wrap: word-wrap;
+            vertical-alignment: root.lines.length == 1 && root.lines[0].text != "No lyrics found" ? top : center;
+            horizontal-alignment: root.lines.length == 1 && root.lines[0].text != "No lyrics found" ? left : center;
+            font-size: 14px;
+            color: Theme.muted;
+        }
+        if root.lines.length > 1: scroller := ScrollView {
+            content-y: root.active > 2 ? -(root.active - 2) * root.line-height : 0px;
+            animate content-y { duration: 350ms; easing: ease-out; }
+            VerticalLayout {
+                width: scroller.visible-width;
+                padding-bottom: 240px;
+                for line[index] in root.lines: Label {
+                    height: root.line-height;
+                    text: line.text;
+                    wrap: word-wrap;
+                    overflow: elide;
+                    font-size: 15.5px;
+                    font-weight: line.active ? 700 : 500;
+                    color: line.active ? Theme.text : index < root.active ? Theme.faint : Theme.muted;
+                    animate color { duration: 200ms; }
+                }
+            }
+        }
+    }
+}
