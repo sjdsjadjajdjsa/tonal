@@ -3,8 +3,9 @@ pub mod download;
 pub mod local;
 mod soundcloud;
 mod youtube;
+mod youtube_browse;
 
-use crate::model::{SourceKind, Track};
+use crate::model::{AlbumPage, AlbumRef, ArtistPage, ArtistRef, SourceKind, Track};
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -116,6 +117,101 @@ pub async fn search(kind: SourceKind, query: &str, limit: usize) -> anyhow::Resu
     }
 }
 
+/// Fetch a source artist, resolving legacy name-only references first.
+pub async fn artist(r: &ArtistRef) -> anyhow::Result<ArtistPage> {
+    anyhow::ensure!(
+        r.source != SourceKind::Local,
+        "local artists are built by the app"
+    );
+    let resolved;
+    let r = if r.id.as_deref().is_none_or(|id| id.trim().is_empty()) {
+        resolved = find_artist(r.source, &r.name)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("{} artist not found: {}", r.source.label(), r.name))?;
+        &resolved
+    } else {
+        r
+    };
+    match r.source {
+        SourceKind::YouTube => youtube_browse::artist(r).await,
+        SourceKind::SoundCloud => soundcloud::artist(r).await,
+        SourceKind::Audius => audius::artist(r).await,
+        SourceKind::Local => anyhow::bail!("local artists are built by the app"),
+    }
+}
+
+/// YouTube Music album metadata and ordered playable tracks.
+pub async fn album(r: &AlbumRef) -> anyhow::Result<AlbumPage> {
+    anyhow::ensure!(
+        r.source == SourceKind::YouTube,
+        "{} album browsing is not supported; only YouTube Music albums are available",
+        r.source.label()
+    );
+    let resolved;
+    let r = if r.id.as_deref().is_none_or(|id| id.trim().is_empty()) {
+        resolved = find_album(r.source, &r.title, &r.artist)
+            .await?
+            .ok_or_else(|| {
+                anyhow::anyhow!("YouTube album not found: {} — {}", r.artist, r.title)
+            })?;
+        &resolved
+    } else {
+        r
+    };
+    youtube_browse::album(r).await
+}
+
+pub async fn find_artist(source: SourceKind, name: &str) -> anyhow::Result<Option<ArtistRef>> {
+    if source == SourceKind::Local {
+        anyhow::bail!("local artists are built by the app");
+    }
+    if name.trim().is_empty() {
+        return Ok(None);
+    }
+    match source {
+        SourceKind::YouTube => youtube_browse::find_artist(name).await,
+        SourceKind::SoundCloud => soundcloud::find_artist(name).await,
+        SourceKind::Audius => audius::find_artist(name).await,
+        SourceKind::Local => anyhow::bail!("local artists are built by the app"),
+    }
+}
+
+pub async fn find_album(
+    source: SourceKind,
+    title: &str,
+    artist: &str,
+) -> anyhow::Result<Option<AlbumRef>> {
+    anyhow::ensure!(
+        source == SourceKind::YouTube,
+        "{} album lookup is not supported; only YouTube Music albums are available",
+        source.label()
+    );
+    if title.trim().is_empty() {
+        return Ok(None);
+    }
+    youtube_browse::find_album(title, artist).await
+}
+
+fn name_score(actual: &str, expected: &str) -> usize {
+    fn normalized(name: &str) -> String {
+        name.chars()
+            .filter(|c| c.is_alphanumeric())
+            .flat_map(char::to_lowercase)
+            .collect()
+    }
+    if normalized(actual) == normalized(expected) {
+        return 1000;
+    }
+    let actual = actual.to_lowercase();
+    let expected = expected.to_lowercase();
+    let words: std::collections::HashSet<_> = expected.split_whitespace().collect();
+    let overlap = actual
+        .split_whitespace()
+        .filter(|word| words.contains(word))
+        .count();
+    overlap * 100 / actual.split_whitespace().count().max(words.len()).max(1)
+}
+
 pub async fn radio(seed: &Track, limit: usize) -> anyhow::Result<Vec<Track>> {
     if limit == 0 {
         return Ok(Vec::new());
@@ -196,4 +292,31 @@ fn on_path(name: &str) -> bool {
             }
         })
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn public_futures_are_send() {
+        fn assert_send<T: Send>(_: T) {}
+        let artist_ref = ArtistRef::default();
+        let album_ref = AlbumRef::default();
+        let track = Track::default();
+        assert_send(artist(&artist_ref));
+        assert_send(album(&album_ref));
+        for source in [
+            SourceKind::YouTube,
+            SourceKind::SoundCloud,
+            SourceKind::Audius,
+            SourceKind::Local,
+        ] {
+            assert_send(find_artist(source, "Artist"));
+            assert_send(find_album(source, "Album", "Artist"));
+            assert_send(search(source, "Song", 5));
+        }
+        assert_send(radio(&track, 5));
+        assert_send(match_track("Song", "Artist", None));
+    }
 }

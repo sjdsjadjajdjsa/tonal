@@ -1,4 +1,4 @@
-use crate::model::{SourceKind, Track};
+use crate::model::{ArtistRef, SourceKind, Track};
 use anyhow::{Context, Result};
 use serde_json::{Value, json};
 use std::process::Stdio;
@@ -8,11 +8,11 @@ const VERSION: &str = "1.20261025.12.00";
 // The WEB_REMIX search filter for the Songs tab (not the general/top-results page).
 const SONGS: &str = "EgWKAQIIAWoKEAMQBBAJEAoQBQ%3D%3D";
 
-fn context() -> Value {
+pub(super) fn context() -> Value {
     json!({"client": {"clientName": "WEB_REMIX", "clientVersion": VERSION, "hl": "en", "gl": "US"}})
 }
 
-async fn post(endpoint: &str, body: Value) -> Result<Value> {
+pub(super) async fn post(endpoint: &str, body: Value) -> Result<Value> {
     Ok(super::client()
         .post(format!(
             "https://music.youtube.com/youtubei/v1/{endpoint}?prettyPrint=false"
@@ -26,7 +26,7 @@ async fn post(endpoint: &str, body: Value) -> Result<Value> {
         .await?)
 }
 
-fn runs(value: &Value) -> String {
+pub(super) fn runs(value: &Value) -> String {
     value
         .get("runs")
         .and_then(Value::as_array)
@@ -59,7 +59,7 @@ fn duration(text: &str) -> Option<f64> {
     Some(secs as f64)
 }
 
-fn thumbnail(value: &Value) -> Option<String> {
+pub(super) fn thumbnail(value: &Value) -> Option<String> {
     let thumbnails = value.get("thumbnails")?.as_array()?;
     let chosen = thumbnails
         .iter()
@@ -77,7 +77,7 @@ fn thumbnail(value: &Value) -> Option<String> {
     Some(url)
 }
 
-fn collect<'a>(node: &'a Value, key: &str, out: &mut Vec<&'a Value>) {
+pub(super) fn collect<'a>(node: &'a Value, key: &str, out: &mut Vec<&'a Value>) {
     match node {
         Value::Object(map) => {
             for (name, child) in map {
@@ -101,11 +101,64 @@ fn page_type(run: &Value) -> &str {
         ["browseEndpointContextMusicConfig"]["pageType"].as_str().unwrap_or("")
 }
 
+pub(super) fn browse_id(value: &Value) -> Option<&str> {
+    value["navigationEndpoint"]["browseEndpoint"]["browseId"].as_str()
+}
+
 fn album_run(run: &Value) -> bool {
-    page_type(run) == "MUSIC_PAGE_TYPE_ALBUM"
-        && run["navigationEndpoint"]["browseEndpoint"]["browseId"]
-            .as_str()
-            .is_some_and(|id| id.starts_with("MPRE"))
+    browse_id(run).is_some_and(|id| id.starts_with("MPRE"))
+}
+
+/// Artist credits are individual runs; punctuation and later metadata groups
+/// must not turn into anonymous artist links.
+pub(super) fn artists(text: &Value) -> Vec<ArtistRef> {
+    let mut result = Vec::new();
+    for run in text["runs"].as_array().into_iter().flatten() {
+        let name = run["text"].as_str().unwrap_or("").trim();
+        if name.contains('•') {
+            if !result.is_empty() {
+                break;
+            }
+            continue;
+        }
+        if name.is_empty()
+            || matches!(
+                name,
+                "&" | ","
+                    | "and"
+                    | "Song"
+                    | "Video"
+                    | "Podcast"
+                    | "Album"
+                    | "Single"
+                    | "EP"
+                    | "Artist"
+            )
+            || duration(name).is_some()
+            || name.ends_with(" views")
+            || name.ends_with(" view")
+            || name.ends_with(" plays")
+            || name.ends_with(" subscribers")
+            || (name.len() == 4 && name.parse::<u16>().is_ok())
+        {
+            continue;
+        }
+        let id = browse_id(run);
+        if id.is_some_and(|id| !id.starts_with("UC")) {
+            continue;
+        }
+        if page_type(run).is_empty() || page_type(run) == "MUSIC_PAGE_TYPE_ARTIST" {
+            let credit = ArtistRef {
+                source: SourceKind::YouTube,
+                name: name.to_owned(),
+                id: id.map(str::to_owned),
+            };
+            if !result.contains(&credit) {
+                result.push(credit);
+            }
+        }
+    }
+    result
 }
 
 fn clean_artist(text: &str) -> String {
@@ -121,52 +174,54 @@ fn clean_artist(text: &str) -> String {
         .to_owned()
 }
 
-fn song(item: &Value) -> Option<Track> {
+pub(super) fn song(item: &Value) -> Option<Track> {
     let columns = item["flexColumns"].as_array()?;
-    let title = runs(&columns.first()?["musicResponsiveListItemFlexColumnRenderer"]["text"]);
+    let title_text = &columns.first()?["musicResponsiveListItemFlexColumnRenderer"]["text"];
+    let title = runs(title_text);
     let video_id = item["playlistItemData"]["videoId"].as_str()
+        .or_else(|| title_text["runs"].as_array()?.first()?["navigationEndpoint"]["watchEndpoint"]["videoId"].as_str())
         .or_else(|| item["overlay"]["musicItemThumbnailOverlayRenderer"]["content"]["musicPlayButtonRenderer"]["playNavigationEndpoint"]["watchEndpoint"]["videoId"].as_str())?;
     if title.is_empty() {
         return None;
     }
-    let metadata =
-        columns.get(1)?["musicResponsiveListItemFlexColumnRenderer"]["text"]["runs"].as_array()?;
-    let fields: Vec<&Value> = metadata
+    let artist_refs = columns
+        .get(1)
+        .map(|column| artists(&column["musicResponsiveListItemFlexColumnRenderer"]["text"]))
+        .unwrap_or_default();
+    let artist = artist_refs
         .iter()
-        .filter(|run| {
-            let text = run["text"].as_str().unwrap_or("").trim();
-            !text.is_empty() && text != "•"
-        })
-        .collect();
-    let mut artist = String::new();
-    let mut fallback_artist = None;
+        .map(|a| a.name.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
     let mut album = None;
+    let mut album_id = None;
     let mut length = None;
-    for field in fields {
-        let name = field["text"].as_str().unwrap_or("").trim();
-        let kind = page_type(field);
-        if kind == "MUSIC_PAGE_TYPE_ARTIST" {
-            if !artist.is_empty() {
-                artist.push_str(", ");
-            }
-            artist.push_str(name);
-        } else if album_run(field) {
-            album = Some(name.to_owned());
-        } else if let Some(secs) = duration(name) {
-            length = Some(secs);
-        } else if fallback_artist.is_none()
-            && !matches!(name, "Song" | "Video" | "Podcast")
-            && !name.ends_with(" views")
-            && !name.ends_with(" view")
+    for column in columns.iter().skip(1) {
+        for field in column["musicResponsiveListItemFlexColumnRenderer"]["text"]["runs"]
+            .as_array()
+            .into_iter()
+            .flatten()
         {
-            fallback_artist = Some(name.to_owned());
+            let name = field["text"].as_str().unwrap_or("").trim();
+            if album_run(field) {
+                album = Some(name.to_owned());
+                album_id = browse_id(field).map(str::to_owned);
+            } else if let Some(secs) = duration(name) {
+                length = Some(secs);
+            }
         }
     }
-    if artist.is_empty() {
-        artist = fallback_artist.unwrap_or_default();
+    if length.is_none() {
+        length = item["fixedColumns"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find_map(|column| {
+                duration(&runs(
+                    &column["musicResponsiveListItemFixedColumnRenderer"]["text"],
+                ))
+            });
     }
-    artist = clean_artist(&artist);
-    let artwork_url = thumbnail(&item["thumbnail"]["musicThumbnailRenderer"]["thumbnail"]);
     Some(Track {
         id: Track::make_id(SourceKind::YouTube, video_id),
         source: SourceKind::YouTube,
@@ -174,8 +229,10 @@ fn song(item: &Value) -> Option<Track> {
         title,
         artist,
         album,
+        album_id,
+        artist_refs,
         duration_secs: length,
-        artwork_url,
+        artwork_url: thumbnail(&item["thumbnail"]["musicThumbnailRenderer"]["thumbnail"]),
         play_url: format!("https://music.youtube.com/watch?v={video_id}"),
     })
 }
@@ -187,6 +244,26 @@ fn playlist_song(item: &Value) -> Option<Track> {
         return None;
     }
     let artist = clean_artist(&runs(&item["shortBylineText"]));
+    let mut artist_refs = artists(&item["longBylineText"]);
+    for credit in artists(&item["shortBylineText"]) {
+        if !artist_refs.iter().any(|known| known.name == credit.name) {
+            artist_refs.push(credit);
+        }
+    }
+    if artist_refs.is_empty() {
+        artist_refs.push(ArtistRef {
+            source: SourceKind::YouTube,
+            name: artist.clone(),
+            id: None,
+        });
+    }
+    let album_id = item["longBylineText"]["runs"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|run| album_run(run))
+        .and_then(browse_id)
+        .map(str::to_owned);
     let album = item["longBylineText"]["runs"]
         .as_array()
         .into_iter()
@@ -206,6 +283,8 @@ fn playlist_song(item: &Value) -> Option<Track> {
         duration_secs: duration(&runs(&item["lengthText"])),
         artwork_url: thumbnail(&item["thumbnail"]),
         play_url: format!("https://music.youtube.com/watch?v={id}"),
+        artist_refs,
+        album_id,
     })
 }
 
@@ -305,11 +384,23 @@ async fn fallback(query: &str, limit: usize) -> Result<Vec<Track>> {
                 source: SourceKind::YouTube,
                 source_id: id.clone(),
                 title: title.trim().to_owned(),
+                artist_refs: vec![ArtistRef {
+                    source: SourceKind::YouTube,
+                    name: artist.clone(),
+                    id: entry["channel_id"]
+                        .as_str()
+                        .filter(|id| id.starts_with("UC"))
+                        .map(str::to_owned),
+                }],
                 artist,
-                album: None,
+                album: entry["album"].as_str().map(str::to_owned),
                 duration_secs: entry["duration"].as_f64(),
                 artwork_url: Some(format!("https://i.ytimg.com/vi/{id}/hqdefault.jpg")),
                 play_url: format!("https://music.youtube.com/watch?v={id}"),
+                album_id: entry["album_id"]
+                    .as_str()
+                    .filter(|id| id.starts_with("MPRE"))
+                    .map(str::to_owned),
             })
         })
         .take(limit)

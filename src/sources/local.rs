@@ -1,4 +1,4 @@
-use crate::model::{SourceKind, Track, paths::cache_dir};
+use crate::model::{ArtistRef, SourceKind, Track, paths::cache_dir};
 use lofty::{
     prelude::{Accessor, AudioFile, TaggedFileExt},
     probe::Probe,
@@ -72,11 +72,17 @@ pub fn scan(dirs: &[PathBuf]) -> Vec<Track> {
                 source: SourceKind::Local,
                 source_id: source_id.clone(),
                 title,
+                artist_refs: vec![ArtistRef {
+                    source: SourceKind::Local,
+                    name: artist.clone(),
+                    id: None,
+                }],
                 artist,
                 album,
                 duration_secs: Some(tagged.properties().duration().as_secs_f64()),
                 artwork_url,
                 play_url: source_id,
+                album_id: None,
             });
         }
     }
