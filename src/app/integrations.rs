@@ -42,7 +42,7 @@ impl Controller {
         let id = self.library.create_playlist(&name, origin.as_deref())?;
         self.library.add_to_playlist(id, &tracks)?;
         self.refresh_playlists();
-        self.playlist(id);
+        self.go(super::browse::Nav::Playlist(id));
         self.status(format!(
             "Imported {} tracks · {failures} unmatched",
             tracks.len()

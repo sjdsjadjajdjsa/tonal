@@ -4,8 +4,9 @@ import { TrackList, TrackRow } from "track-list.slint";
 import { PlayerBar } from "player-bar.slint";
 import { SettingsView, SettingRow, LyricsView, LyricRow } from "views.slint";
 import { Dialog } from "dialogs.slint";
+import { ArtistView, AlbumView, CardRow } from "browse.slint";
 
-export { TrackRow, PlaylistRow, SettingRow, LyricRow, Theme }
+export { TrackRow, PlaylistRow, SettingRow, LyricRow, CardRow, Theme }
 
 export component AppWindow inherits Window {
     in property <string> window-title: "Tonal";
@@ -65,6 +66,22 @@ export component AppWindow inherits Window {
     private property <bool> slim: false;
     private property <bool> narrow: false;
     in property <bool> buffering;
+    in property <bool> can-back;
+    in property <bool> can-forward;
+    in property <[string]> now-artists;
+    in property <bool> now-album;
+    in property <string> artist-name;
+    in property <image> artist-image;
+    in property <string> artist-source;
+    in property <bool> browse-loading;
+    in property <[CardRow]> albums;
+    in property <[CardRow]> singles;
+    in property <[CardRow]> similar;
+    in property <string> album-title;
+    in property <string> album-kind;
+    in property <string> album-meta;
+    in property <[string]> album-artists;
+    in property <image> album-cover;
 
     function update-wide() {
         root.slim = root.width - (root.panel != "" ? 320px : 0px) < 900px;
@@ -91,6 +108,12 @@ export component AppWindow inherits Window {
     callback queue-action(int, string);
     callback queue-move(int, int);
     callback shortcut(string, bool, bool);
+    callback open-artist(string, int, int);
+    callback open-album(string, int);
+    callback open-card(string, int);
+    callback artist-action(string);
+    callback album-action(string);
+    callback nav(int);
 
     public function focus-search() {
         root.search-focus += 1;
@@ -126,6 +149,14 @@ export component AppWindow inherits Window {
                 root.shortcut(event.text, true, root.typing);
                 return accept;
             }
+            if (event.modifiers.alt && event.text == Key.LeftArrow) {
+                root.nav(-1);
+                return accept;
+            }
+            if (event.modifiers.alt && event.text == Key.RightArrow) {
+                root.nav(1);
+                return accept;
+            }
             if (event.text == Key.Escape && root.dialog != "") {
                 root.dialog = "";
                 return accept;
@@ -145,6 +176,9 @@ export component AppWindow inherits Window {
                     page: root.page;
                     playlists: root.playlists;
                     active-playlist: root.active-playlist;
+                    can-back: root.can-back;
+                    can-forward: root.can-forward;
+                    nav(d) => { root.nav(d); }
                     navigate(p) => {
                         debounce.running = false;
                         root.page = p;
@@ -164,7 +198,7 @@ export component AppWindow inherits Window {
                     padding-top: 24px;
                     padding-bottom: 8px;
                     spacing: 16px;
-                    if root.page != "Search" && root.page != "Home": HorizontalLayout {
+                    if root.page != "Search" && root.page != "Home" && root.page != "Artist" && root.page != "Album": HorizontalLayout {
                         height: 38px;
                         spacing: 8px;
                         Label {
@@ -262,7 +296,52 @@ export component AppWindow inherits Window {
                             }
                         }
                     }
-                    if root.page != "Settings": TrackList {
+                    if root.page == "Artist": ArtistView {
+                        vertical-stretch: 1;
+                        min-height: 120px;
+                        name: root.artist-name;
+                        image: root.artist-image;
+                        source: root.artist-source;
+                        loading: root.browse-loading;
+                        tracks: root.tracks;
+                        playlists: root.playlists;
+                        now-id: root.now-id;
+                        wide: root.wide-list;
+                        albums: root.albums;
+                        singles: root.singles;
+                        similar: root.similar;
+                        action(a) => { root.artist-action(a); }
+                        play(i) => { root.play(i); }
+                        like(i) => { root.track-action(i, "Like / Unlike"); }
+                        open-menu(i) => { root.menu(i); }
+                        menu-action(a) => { root.menu-action(a); }
+                        add-playlist(id) => { root.add-playlist(id); }
+                        artist(i, w) => { root.open-artist("tracks", i, w); }
+                        album(i) => { root.open-album("tracks", i); }
+                        open-card(k, i) => { root.open-card(k, i); }
+                    }
+                    if root.page == "Album": AlbumView {
+                        vertical-stretch: 1;
+                        title: root.album-title;
+                        kind: root.album-kind;
+                        meta: root.album-meta;
+                        artists: root.album-artists;
+                        cover: root.album-cover;
+                        loading: root.browse-loading;
+                        tracks: root.tracks;
+                        playlists: root.playlists;
+                        now-id: root.now-id;
+                        wide: root.wide-list;
+                        action(a) => { root.album-action(a); }
+                        open-artist(i) => { root.open-artist("album", -1, i); }
+                        play(i) => { root.play(i); }
+                        like(i) => { root.track-action(i, "Like / Unlike"); }
+                        open-menu(i) => { root.menu(i); }
+                        menu-action(a) => { root.menu-action(a); }
+                        add-playlist(id) => { root.add-playlist(id); }
+                        artist(i, w) => { root.open-artist("tracks", i, w); }
+                    }
+                    if root.page != "Settings" && root.page != "Artist" && root.page != "Album": TrackList {
                         vertical-stretch: 1;
                         min-height: 120px;
                         tracks: root.tracks;
@@ -277,6 +356,8 @@ export component AppWindow inherits Window {
                         open-menu(i) => { root.menu(i); }
                         menu-action(a) => { root.menu-action(a); }
                         add-playlist(id) => { root.add-playlist(id); }
+                        artist(i, w) => { root.open-artist("tracks", i, w); }
+                        album(i) => { root.open-album("tracks", i); }
                     }
                     if root.page == "Settings": SettingsView {
                         vertical-stretch: 1;
@@ -321,6 +402,7 @@ export component AppWindow inherits Window {
                             play(i) => { root.queue-action(i, "jump"); }
                             remove(i) => { root.queue-action(i, "remove"); }
                             reorder(i, d) => { root.queue-move(i, d); }
+                            artist(i, w) => { root.open-artist("queue", i, w); }
                         }
                         if root.panel == "lyrics": LyricsView {
                             vertical-stretch: 1;
@@ -354,6 +436,10 @@ export component AppWindow inherits Window {
                 wave-front: root.wave-front;
                 wave-line: root.wave-line;
                 wave-resting: root.wave-resting;
+                artists: root.now-artists;
+                has-album: root.now-album;
+                open-artist(i) => { root.open-artist("now", 0, i); }
+                open-album => { root.open-album("now", 0); }
                 command(c) => { root.command(c); }
                 seek(v) => { root.seek(v); }
                 volume-change(v) => { root.volume-change(v); }

@@ -1,0 +1,311 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme, Icons, Label, Icon, IconButton, Button } from "theme.slint";
+import { TrackList, TrackRow, LinkText, ArtistChooser } from "track-list.slint";
+import { PlaylistRow } from "sidebar.slint";
+
+export struct CardRow {
+    title: string,
+    subtitle: string,
+    art: image,
+}
+
+component Card inherits Rectangle {
+    in property <CardRow> card;
+    in property <bool> round;
+    callback clicked;
+    border-radius: Theme.radius-l;
+    background: tap.has-hover ? Theme.surface : transparent;
+    animate background { duration: 120ms; }
+    VerticalLayout {
+        padding: 10px;
+        spacing: 8px;
+        Rectangle {
+            height: self.width;
+            border-radius: root.round ? self.width / 2 : Theme.radius-m;
+            background: Theme.raised;
+            clip: true;
+            if root.card.art.width == 0: Icon {
+                data: root.round ? Icons.artist : Icons.album;
+                width: parent.width * 0.3;
+                height: parent.width * 0.3;
+                tint: Theme.faint;
+            }
+            Image {
+                width: 100%;
+                height: 100%;
+                source: root.card.art;
+                image-fit: cover;
+            }
+        }
+        VerticalLayout {
+            spacing: 2px;
+            Label {
+                text: root.card.title;
+                font-size: 13px;
+                font-weight: 600;
+                horizontal-alignment: root.round ? center : left;
+            }
+            Label {
+                text: root.card.subtitle;
+                font-size: 11.5px;
+                color: Theme.muted;
+                horizontal-alignment: root.round ? center : left;
+            }
+        }
+    }
+    tap := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+/// Covers in rows that wrap to the available width.
+component CardGrid inherits VerticalLayout {
+    in property <[CardRow]> cards;
+    in property <bool> round;
+    in property <string> heading;
+    callback open(int);
+    private property <int> columns: max(2, floor((root.width + 4px) / 172px));
+    private property <length> card-width: (root.width - (root.columns - 1) * 4px) / root.columns;
+    private property <int> rows: ceil(root.cards.length / root.columns);
+    spacing: 4px;
+    if root.cards.length > 0: Label {
+        text: root.heading;
+        height: 40px;
+        font-size: 16px;
+        font-weight: 650;
+    }
+    for r in root.rows: HorizontalLayout {
+        spacing: 4px;
+        alignment: start;
+        for c in root.columns: Rectangle {
+            width: root.card-width;
+            height: root.card-width + 34px;
+            if r * root.columns + c < root.cards.length: Card {
+                width: parent.width;
+                height: parent.height;
+                card: root.cards[r * root.columns + c];
+                round: root.round;
+                clicked => { root.open(r * root.columns + c); }
+            }
+        }
+    }
+}
+
+component Header inherits HorizontalLayout {
+    in property <image> art;
+    in property <bool> round;
+    in property <string> kind;
+    in property <string> title;
+    in property <string> meta;
+    in property <[string]> links;
+    in property <bool> loading;
+    callback link(int);
+    spacing: 24px;
+    height: 168px;
+    Rectangle {
+        width: 168px;
+        border-radius: root.round ? self.width / 2 : Theme.radius-l;
+        background: Theme.raised;
+        clip: true;
+        drop-shadow-blur: 24px;
+        drop-shadow-color: #00000060;
+        if root.art.width == 0: Icon {
+            data: root.round ? Icons.artist : Icons.album;
+            width: 48px;
+            height: 48px;
+            tint: Theme.faint;
+        }
+        Image {
+            width: 100%;
+            height: 100%;
+            source: root.art;
+            image-fit: cover;
+        }
+    }
+    VerticalLayout {
+        alignment: end;
+        spacing: 6px;
+        Label { text: root.kind; font-size: 12px; font-weight: 600; color: Theme.muted; }
+        Label {
+            text: root.title;
+            font-size: root.title.character-count > 28 ? 26px : 36px;
+            font-weight: 750;
+            letter-spacing: -0.6px;
+        }
+        HorizontalLayout {
+            spacing: 6px;
+            height: 20px;
+            for name[i] in root.links: HorizontalLayout {
+                spacing: 6px;
+                if i > 0: Label { text: "·"; font-size: 13px; color: Theme.faint; }
+                LinkText {
+                    grow: false;
+                    text: name;
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: Theme.text;
+                    clicked => { root.link(i); }
+                }
+            }
+            if root.meta != "": HorizontalLayout {
+                spacing: 6px;
+                if root.links.length > 0: Label { text: "·"; font-size: 13px; color: Theme.faint; }
+                Label { text: root.meta; font-size: 13px; color: Theme.muted; }
+            }
+            Rectangle { horizontal-stretch: 1; }
+        }
+    }
+}
+
+component Actions inherits HorizontalLayout {
+    in property <bool> enabled;
+    in property <string> extra-icon;
+    callback action(string);
+    spacing: 10px;
+    alignment: start;
+    height: 44px;
+    Rectangle {
+        width: 44px;
+        height: 44px;
+        border-radius: 22px;
+        background: !root.enabled ? Theme.raised : play.pressed ? Theme.text.darker(0.2) : play.has-hover ? #ffffff : Theme.text;
+        Icon {
+            data: Icons.play;
+            filled: true;
+            width: 18px;
+            height: 18px;
+            x: (parent.width - self.width) / 2 + 1.5px;
+            tint: root.enabled ? Theme.on-accent : Theme.faint;
+        }
+        play := TouchArea {
+            enabled: root.enabled;
+            mouse-cursor: pointer;
+            clicked => { root.action("play"); }
+        }
+    }
+    VerticalLayout { alignment: center; IconButton { icon: Icons.shuffle; size: 38px; icon-size: 19px; clicked => { root.action("shuffle"); } } }
+    VerticalLayout { alignment: center; IconButton { icon: root.extra-icon; size: 38px; icon-size: 19px; clicked => { root.action("extra"); } } }
+}
+
+export component ArtistView inherits Rectangle {
+    in property <string> name;
+    in property <image> image;
+    in property <string> source;
+    in property <bool> loading;
+    in property <[TrackRow]> tracks;
+    in property <[PlaylistRow]> playlists;
+    in property <string> now-id;
+    in property <bool> wide;
+    in property <[CardRow]> albums;
+    in property <[CardRow]> singles;
+    in property <[CardRow]> similar;
+    callback action(string);
+    callback play(int);
+    callback like(int);
+    callback open-menu(int);
+    callback menu-action(string);
+    callback add-playlist(int);
+    callback artist(int, int);
+    callback album(int);
+    callback open-card(string, int);
+    scroller := ScrollView {
+        VerticalLayout {
+            width: scroller.visible-width;
+            padding-bottom: 24px;
+            spacing: 22px;
+            Header {
+                art: root.image;
+                round: true;
+                kind: "Artist";
+                title: root.name;
+                meta: root.source;
+                loading: root.loading;
+            }
+            Actions {
+                enabled: root.tracks.length > 0;
+                extra-icon: Icons.radio;
+                action(a) => { root.action(a); }
+            }
+            if root.tracks.length > 0: VerticalLayout {
+                Label { text: "Popular"; height: 40px; font-size: 16px; font-weight: 650; }
+                TrackList {
+                    fixed: true;
+                    height: root.tracks.length * 56px;
+                    tracks: root.tracks;
+                    playlists: root.playlists;
+                    now-id: root.now-id;
+                    wide: root.wide;
+                    play(i) => { root.play(i); }
+                    like(i) => { root.like(i); }
+                    open-menu(i) => { root.open-menu(i); }
+                    menu-action(a) => { root.menu-action(a); }
+                    add-playlist(id) => { root.add-playlist(id); }
+                    artist(i, w) => { root.artist(i, w); }
+                    album(i) => { root.album(i); }
+                }
+            }
+            CardGrid { heading: "Albums"; cards: root.albums; open(i) => { root.open-card("album", i); } }
+            CardGrid { heading: "Singles and EPs"; cards: root.singles; open(i) => { root.open-card("single", i); } }
+            CardGrid { heading: "Fans also like"; cards: root.similar; round: true; open(i) => { root.open-card("artist", i); } }
+            if !root.loading && root.tracks.length == 0 && root.albums.length == 0 && root.singles.length == 0: Label {
+                text: "No songs found";
+                height: 40px;
+                color: Theme.faint;
+            }
+        }
+    }
+}
+
+export component AlbumView inherits VerticalLayout {
+    in property <string> title;
+    in property <string> kind;
+    in property <string> meta;
+    in property <[string]> artists;
+    in property <image> cover;
+    in property <bool> loading;
+    in property <bool> local;
+    in property <[TrackRow]> tracks;
+    in property <[PlaylistRow]> playlists;
+    in property <string> now-id;
+    in property <bool> wide;
+    callback action(string);
+    callback open-artist(int);
+    callback play(int);
+    callback like(int);
+    callback open-menu(int);
+    callback menu-action(string);
+    callback add-playlist(int);
+    callback artist(int, int);
+    spacing: 22px;
+    Header {
+        art: root.cover;
+        kind: root.kind;
+        title: root.title;
+        meta: root.meta;
+        links: root.artists;
+        loading: root.loading;
+        link(i) => { root.open-artist(i); }
+    }
+    Actions {
+        enabled: root.tracks.length > 0;
+        extra-icon: Icons.list-plus;
+        action(a) => { root.action(a); }
+    }
+    TrackList {
+        vertical-stretch: 1;
+        min-height: 120px;
+        album-view: true;
+        tracks: root.tracks;
+        playlists: root.playlists;
+        now-id: root.now-id;
+        wide: root.wide;
+        empty-text: root.loading ? "" : "No songs";
+        play(i) => { root.play(i); }
+        like(i) => { root.like(i); }
+        open-menu(i) => { root.open-menu(i); }
+        menu-action(a) => { root.menu-action(a); }
+        add-playlist(id) => { root.add-playlist(id); }
+        artist(i, w) => { root.artist(i, w); }
+    }
+}

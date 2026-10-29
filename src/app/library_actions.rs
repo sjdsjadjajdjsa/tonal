@@ -117,7 +117,7 @@ impl Controller {
                                 .result(this.library.remove_download(&track.id))
                                 .is_some()
                         {
-                            this.load_page("Downloads");
+                            this.refresh_page("Downloads");
                             this.status("Download removed");
                         }
                     });
@@ -165,7 +165,8 @@ impl Controller {
                         .result(this.library.replace_local_tracks(&tracks))
                         .is_some()
                     {
-                        this.load_page("Local files");
+                        this.forget_local_pages();
+                        this.go(super::browse::Nav::Page("Local files".into()));
                         this.status(format!("Scanned {} tracks", tracks.len()));
                     }
                 }
@@ -179,7 +180,7 @@ impl Controller {
             "create" if !value.trim().is_empty() => {
                 if let Some(id) = self.result(self.library.create_playlist(value.trim(), None)) {
                     self.refresh_playlists();
-                    self.playlist(id);
+                    self.go(super::browse::Nav::Playlist(id));
                 }
             }
             "rename" if !value.trim().is_empty() => {
@@ -197,7 +198,8 @@ impl Controller {
                     && self.result(self.library.delete_playlist(id)).is_some()
                 {
                     self.refresh_playlists();
-                    self.load_page("Home");
+                    self.forget_playlist(id);
+                    self.go(super::browse::Nav::Page("Home".into()));
                 }
             }
             "import" => self.import_public(value.to_owned()),

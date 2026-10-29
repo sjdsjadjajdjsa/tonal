@@ -11,6 +11,7 @@ export struct TrackRow {
     source: string,
     liked: bool,
     art: image,
+    artists: [string],
 }
 
 export component Artwork inherits Rectangle {
@@ -35,7 +36,7 @@ export component Artwork inherits Rectangle {
     }
 }
 
-component MenuItem inherits Rectangle {
+export component MenuItem inherits Rectangle {
     in property <string> icon;
     in property <string> text;
     in property <bool> danger;
@@ -68,12 +69,200 @@ component MenuItem inherits Rectangle {
     }
 }
 
-component MenuDivider inherits Rectangle {
+export component MenuDivider inherits Rectangle {
     height: 9px;
     Rectangle {
         y: 4px;
         height: 1px;
         background: Theme.border;
+    }
+}
+
+/// Text that acts like a link: brighter on hover, pointer cursor, only as wide as its text.
+export component LinkText inherits HorizontalLayout {
+    in property <string> text;
+    in property <length> font-size: 12px;
+    in property <int> font-weight: 400;
+    in property <color> color: Theme.muted;
+    in property <bool> enabled: true;
+    in property <bool> grow: true;
+    callback clicked;
+    label := Label {
+        horizontal-stretch: 0;
+        text: root.text;
+        font-size: root.font-size;
+        font-weight: root.font-weight;
+        color: root.enabled && tap.has-hover ? Theme.text : root.color;
+        tap := TouchArea {
+            enabled: root.enabled;
+            mouse-cursor: root.enabled ? pointer : default;
+            clicked => { root.clicked(); }
+        }
+    }
+    if root.grow: Rectangle { horizontal-stretch: 1; }
+}
+
+component TrackItem inherits Rectangle {
+    in property <TrackRow> track;
+    in property <int> index;
+    in property <bool> compact;
+    in property <bool> wide: true;
+    in property <bool> playing;
+    in property <bool> album-view;
+    callback play();
+    callback like();
+    callback menu(length, length);
+    callback artist(length, length);
+    callback album();
+    callback reorder(int);
+    callback remove();
+    height: root.compact ? 54px : 56px;
+    border-radius: Theme.radius-l;
+    background: row.has-hover ? Theme.surface : root.playing && root.compact ? Theme.raised : transparent;
+    animate background { duration: 100ms; }
+    row := TouchArea {
+        double-clicked => { root.play(); }
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down && event.button == PointerEventButton.right && !root.compact {
+                root.menu(self.absolute-position.x + self.mouse-x, self.absolute-position.y + self.mouse-y);
+            }
+        }
+        HorizontalLayout {
+            padding-left: root.compact ? 8px : 10px;
+            padding-right: root.compact ? 4px : 10px;
+            spacing: root.compact ? 10px : 14px;
+            if !root.compact: Rectangle {
+                width: 28px;
+                if row.has-hover: IconButton {
+                    icon: Icons.play;
+                    filled: true;
+                    size: 28px;
+                    icon-size: 14px;
+                    tint: Theme.text;
+                    clicked => { root.play(); }
+                }
+                if !row.has-hover && root.playing: Icon {
+                    data: Icons.music;
+                    width: 15px;
+                    height: 15px;
+                    tint: Theme.accent;
+                }
+                if !row.has-hover && !root.playing: Label {
+                    text: root.index + 1;
+                    color: Theme.faint;
+                    font-size: 12px;
+                    horizontal-alignment: center;
+                }
+            }
+            if !root.album-view: VerticalLayout {
+                alignment: center;
+                Artwork { source: root.track.art; size: root.compact ? 38px : 40px; }
+            }
+            VerticalLayout {
+                horizontal-stretch: 3;
+                preferred-width: 0px;
+                alignment: center;
+                spacing: 3px;
+                Label {
+                    text: root.track.title;
+                    font-size: 13.5px;
+                    font-weight: 600;
+                    color: root.playing ? Theme.accent : Theme.text;
+                }
+                artist-link := LinkText {
+                    text: root.track.artist;
+                    clicked => { root.artist(self.absolute-position.x, self.absolute-position.y + self.height + 4px); }
+                }
+            }
+            if !root.compact && root.wide && !root.album-view: VerticalLayout {
+                horizontal-stretch: 2;
+                preferred-width: 0px;
+                alignment: center;
+                LinkText {
+                    text: root.track.album;
+                    font-size: 12.5px;
+                    enabled: root.track.album != "";
+                    clicked => { root.album(); }
+                }
+            }
+            if !root.compact && root.wide: VerticalLayout {
+                width: 84px;
+                alignment: center;
+                HorizontalLayout {
+                    alignment: start;
+                    Rectangle {
+                        height: 20px;
+                        border-radius: 10px;
+                        background: Theme.surface;
+                        min-width: tag.preferred-width + 16px;
+                        tag := Label {
+                            text: root.track.source;
+                            font-size: 10.5px;
+                            font-weight: 500;
+                            color: Theme.muted;
+                            horizontal-alignment: center;
+                        }
+                    }
+                }
+            }
+            if !root.compact: VerticalLayout {
+                alignment: center;
+                IconButton {
+                    icon: Icons.heart;
+                    size: 30px;
+                    icon-size: 16px;
+                    filled: root.track.liked;
+                    tint: root.track.liked ? Theme.accent : Theme.muted;
+                    opacity: root.track.liked || row.has-hover ? 1 : 0;
+                    clicked => { root.like(); }
+                }
+            }
+            if !root.compact: Label {
+                text: root.track.duration;
+                width: 44px;
+                horizontal-alignment: right;
+                color: Theme.muted;
+                font-size: 12.5px;
+            }
+            if !root.compact: VerticalLayout {
+                alignment: center;
+                IconButton {
+                    icon: Icons.more;
+                    size: 30px;
+                    opacity: row.has-hover ? 1 : 0;
+                    clicked => { root.menu(self.absolute-position.x - 190px, self.absolute-position.y + 30px); }
+                }
+            }
+            if root.compact: HorizontalLayout {
+                alignment: end;
+                opacity: row.has-hover ? 1 : 0;
+                VerticalLayout { alignment: center; IconButton { icon: Icons.up; size: 26px; icon-size: 15px; clicked => { root.reorder(-1); } } }
+                VerticalLayout { alignment: center; IconButton { icon: Icons.down; size: 26px; icon-size: 15px; clicked => { root.reorder(1); } } }
+                VerticalLayout { alignment: center; IconButton { icon: Icons.close; size: 26px; icon-size: 15px; clicked => { root.remove(); } } }
+            }
+        }
+    }
+}
+
+/// Lets the user pick one of several credited artists.
+export component ArtistChooser inherits PopupWindow {
+    in property <[string]> names;
+    callback picked(int);
+    width: 220px;
+    Rectangle {
+        background: Theme.popup;
+        border-radius: Theme.radius-l;
+        drop-shadow-blur: 24px;
+        drop-shadow-offset-y: 8px;
+        drop-shadow-color: #00000090;
+        VerticalLayout {
+            padding: 4px;
+            for name[i] in root.names: MenuItem {
+                icon: Icons.artist;
+                text: name;
+                clicked => { root.picked(i); }
+            }
+        }
     }
 }
 
@@ -85,7 +274,11 @@ export component TrackList inherits Rectangle {
     in property <bool> compact;
     in property <bool> playlist-view;
     in property <bool> download-view;
+    in property <bool> album-view;
+    /// Lay the rows out without their own scrolling, for pages that scroll as a whole.
+    in property <bool> fixed;
     in property <string> empty-text: "Nothing here yet";
+    in property <bool> wide: true;
     callback play(int);
     callback like(int);
     callback open-menu(int);
@@ -93,171 +286,94 @@ export component TrackList inherits Rectangle {
     callback add-playlist(int);
     callback reorder(int, int);
     callback remove(int);
+    callback artist(int, int);
+    callback album(int);
     private property <length> menu-x;
     private property <length> menu-y;
     private property <int> menu-index: -1;
-    in property <bool> wide: true;
+    private property <int> chooser-index: -1;
+    private property <string> chooser-id;
+    private property <[string]> chooser-names;
+    private property <length> chooser-x;
+    private property <length> chooser-y;
 
     function show-menu(index: int, x: length, y: length) {
         root.menu-index = index;
-        root.menu-x = min(x, root.width - 232px);
-        root.menu-y = min(y, max(0px, root.height - 420px));
+        root.menu-x = min(x - root.absolute-position.x, root.width - 232px);
+        root.menu-y = y - root.absolute-position.y;
         root.open-menu(index);
         menu.show();
     }
 
-    Rectangle {
-        VerticalLayout {
-            spacing: 4px;
-            if root.tracks.length == 0: Rectangle {
-                VerticalLayout {
-                    alignment: center;
-                    spacing: 10px;
-                    HorizontalLayout {
-                        alignment: center;
-                        Icon { data: Icons.music; width: 28px; height: 28px; tint: Theme.faint; }
-                    }
-                    Label {
-                        text: root.empty-text;
-                        color: Theme.faint;
-                        font-size: 13px;
-                        horizontal-alignment: center;
-                        wrap: word-wrap;
-                    }
-                }
-            }
-            if root.tracks.length > 0: ListView {
-                vertical-stretch: 1;
-                for track[index] in root.tracks: item := Rectangle {
-                    private property <bool> playing: root.compact ? index == root.current : track.id == root.now-id && track.id != "";
-                    height: root.compact ? 54px : 56px;
-                    border-radius: Theme.radius-l;
-                animate background { duration: 100ms; }
-                    background: row.has-hover ? Theme.surface : self.playing && root.compact ? Theme.raised : transparent;
-                    row := TouchArea {
-                        double-clicked => { root.play(index); }
-                        pointer-event(event) => {
-                            if event.kind == PointerEventKind.down && event.button == PointerEventButton.right && !root.compact {
-                                root.show-menu(index, self.absolute-position.x - root.absolute-position.x + self.mouse-x, self.absolute-position.y - root.absolute-position.y + self.mouse-y);
-                            }
-                        }
-                        HorizontalLayout {
-                            padding-left: root.compact ? 8px : 10px;
-                            padding-right: root.compact ? 4px : 10px;
-                            spacing: root.compact ? 10px : 14px;
-                            if !root.compact: Rectangle {
-                                width: 28px;
-                                if row.has-hover: IconButton {
-                                    icon: Icons.play;
-                                    filled: true;
-                                    size: 28px;
-                                    icon-size: 14px;
-                                    tint: Theme.text;
-                                    clicked => { root.play(index); }
-                                }
-                                if !row.has-hover && item.playing: Icon {
-                                    data: Icons.music;
-                                    width: 15px;
-                                    height: 15px;
-                                    tint: Theme.accent;
-                                }
-                                if !row.has-hover && !item.playing: Label {
-                                    text: index + 1;
-                                    color: Theme.faint;
-                                    font-size: 12px;
-                                    horizontal-alignment: center;
-                                }
-                            }
-                            VerticalLayout {
-                                alignment: center;
-                                Artwork { source: track.art; size: root.compact ? 38px : 40px; }
-                            }
-                            VerticalLayout {
-                                horizontal-stretch: 3;
-                                alignment: center;
-                                spacing: 3px;
-                                Label {
-                                    text: track.title;
-                                    font-size: 13.5px;
-                                    font-weight: 600;
-                                    color: item.playing ? Theme.accent : Theme.text;
-                                }
-                                Label {
-                                    text: track.artist;
-                                    font-size: 12px;
-                                    color: Theme.muted;
-                                }
-                            }
-                            if !root.compact && root.wide: VerticalLayout {
-                                horizontal-stretch: 2;
-                                alignment: center;
-                                Label {
-                                    text: track.album;
-                                    horizontal-alignment: left;
-                                    color: Theme.muted;
-                                    font-size: 12.5px;
-                                }
-                            }
-                            if !root.compact && root.wide: VerticalLayout {
-                                width: 84px;
-                                alignment: center;
-                                HorizontalLayout {
-                                    alignment: start;
-                                    Rectangle {
-                                        height: 20px;
-                                        border-radius: 10px;
-                                        background: Theme.surface;
-                                        min-width: tag.preferred-width + 16px;
-                                        tag := Label {
-                                            text: track.source;
-                                            font-size: 10.5px;
-                                            font-weight: 500;
-                                            color: Theme.muted;
-                                            horizontal-alignment: center;
-                                        }
-                                    }
-                                }
-                            }
-                            if !root.compact: VerticalLayout {
-                                alignment: center;
-                                IconButton {
-                                    icon: Icons.heart;
-                                    size: 30px;
-                                    icon-size: 16px;
-                                    filled: track.liked;
-                                    tint: track.liked ? Theme.accent : Theme.muted;
-                                    opacity: track.liked || row.has-hover ? 1 : 0;
-                                    clicked => { root.like(index); }
-                                }
-                            }
-                            if !root.compact: Label {
-                                text: track.duration;
-                                width: 44px;
-                                horizontal-alignment: right;
-                                color: Theme.muted;
-                                font-size: 12.5px;
-                            }
-                            if !root.compact: VerticalLayout {
-                                alignment: center;
-                                more := IconButton {
-                                    icon: Icons.more;
-                                    size: 30px;
-                                    opacity: row.has-hover ? 1 : 0;
-                                    clicked => {
-                                        root.show-menu(index, self.absolute-position.x - root.absolute-position.x - 190px, self.absolute-position.y - root.absolute-position.y + 30px);
-                                    }
-                                }
-                            }
-                            if root.compact: HorizontalLayout {
-                                alignment: end;
-                                opacity: row.has-hover ? 1 : 0;
-                                VerticalLayout { alignment: center; IconButton { icon: Icons.up; size: 26px; icon-size: 15px; clicked => { root.reorder(index, -1); } } }
-                                VerticalLayout { alignment: center; IconButton { icon: Icons.down; size: 26px; icon-size: 15px; clicked => { root.reorder(index, 1); } } }
-                                VerticalLayout { alignment: center; IconButton { icon: Icons.close; size: 26px; icon-size: 15px; clicked => { root.remove(index); } } }
-                            }
-                        }
-                    }
-                }
+    function show-artist(index: int, x: length, y: length) {
+        if root.tracks[index].artists.length <= 1 {
+            root.artist(index, 0);
+            return;
+        }
+        root.chooser-index = index;
+        root.chooser-id = root.tracks[index].id;
+        root.chooser-names = root.tracks[index].artists;
+        root.chooser-x = min(x - root.absolute-position.x, root.width - 222px);
+        root.chooser-y = y - root.absolute-position.y;
+        chooser.show();
+    }
+
+    if root.tracks.length == 0: VerticalLayout {
+        alignment: center;
+        spacing: 10px;
+        HorizontalLayout {
+            alignment: center;
+            Icon { data: Icons.music; width: 28px; height: 28px; tint: Theme.faint; }
+        }
+        Label {
+            text: root.empty-text;
+            color: Theme.faint;
+            font-size: 13px;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+    }
+    if root.tracks.length > 0 && !root.fixed: ListView {
+        width: root.width;
+        height: root.height;
+        for track[index] in root.tracks: TrackItem {
+            track: track;
+            index: index;
+            compact: root.compact;
+            wide: root.wide;
+            album-view: root.album-view;
+            playing: root.compact ? index == root.current : track.id == root.now-id && track.id != "";
+            play => { root.play(index); }
+            like => { root.like(index); }
+            menu(x, y) => { root.show-menu(index, x, y); }
+            artist(x, y) => { root.show-artist(index, x, y); }
+            album => { root.album(index); }
+            reorder(d) => { root.reorder(index, d); }
+            remove => { root.remove(index); }
+        }
+    }
+    if root.tracks.length > 0 && root.fixed: VerticalLayout {
+        for track[index] in root.tracks: TrackItem {
+            track: track;
+            index: index;
+            wide: root.wide;
+            album-view: root.album-view;
+            playing: track.id == root.now-id && track.id != "";
+            play => { root.play(index); }
+            like => { root.like(index); }
+            menu(x, y) => { root.show-menu(index, x, y); }
+            artist(x, y) => { root.show-artist(index, x, y); }
+            album => { root.album(index); }
+        }
+    }
+
+    chooser := ArtistChooser {
+        x: root.chooser-x;
+        y: root.chooser-y;
+        names: root.chooser-names;
+        picked(i) => {
+            if root.chooser-index < root.tracks.length && root.tracks[root.chooser-index].id == root.chooser-id {
+                root.artist(root.chooser-index, i);
             }
         }
     }
@@ -278,6 +394,9 @@ export component TrackList inherits Rectangle {
                 MenuItem { icon: Icons.next-up; text: "Play next"; clicked => { root.menu-action("Play next"); } }
                 MenuItem { icon: Icons.queue; text: "Add to queue"; clicked => { root.menu-action("Add to queue"); } }
                 MenuItem { icon: Icons.radio; text: "Start radio"; clicked => { root.menu-action("Start radio"); } }
+                MenuDivider { }
+                MenuItem { icon: Icons.artist; text: "Go to artist"; clicked => { root.show-artist(root.menu-index, root.absolute-position.x + root.menu-x, root.absolute-position.y + root.menu-y); } }
+                if !root.album-view && root.menu-index >= 0 && root.menu-index < root.tracks.length && root.tracks[root.menu-index].album != "": MenuItem { icon: Icons.album; text: "Go to album"; clicked => { root.album(root.menu-index); } }
                 MenuDivider { }
                 MenuItem {
                     icon: Icons.heart;

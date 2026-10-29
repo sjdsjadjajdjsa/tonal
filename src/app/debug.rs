@@ -26,6 +26,28 @@ pub(super) fn debug_hooks(app: &Controller, window: &AppWindow) {
         app.playlist(id);
         app.play(0);
     }
+    let source = match std::env::var("TONAL_DEBUG_SOURCE").as_deref() {
+        Ok("1") => crate::model::SourceKind::SoundCloud,
+        Ok("2") => crate::model::SourceKind::Audius,
+        Ok("3") => crate::model::SourceKind::Local,
+        _ => crate::model::SourceKind::YouTube,
+    };
+    if let Ok(name) = std::env::var("TONAL_DEBUG_ARTIST") {
+        app.go(super::browse::Nav::Artist(crate::model::ArtistRef {
+            source,
+            name,
+            id: None,
+        }));
+    }
+    if let Ok(spec) = std::env::var("TONAL_DEBUG_ALBUM") {
+        let (title, artist) = spec.split_once('|').unwrap_or((spec.as_str(), ""));
+        app.go(super::browse::Nav::Album(crate::model::AlbumRef {
+            source,
+            title: title.into(),
+            artist: artist.into(),
+            ..Default::default()
+        }));
+    }
     if let Ok(title) = std::env::var("TONAL_DEBUG_TITLE") {
         window.set_window_title(title.into());
     }

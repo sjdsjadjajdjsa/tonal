@@ -88,6 +88,11 @@ impl Controller {
                 let artist = track.as_ref().map(|t| t.artist.clone()).unwrap_or_default();
                 let now_id = track.as_ref().map(|t| t.id.clone()).unwrap_or_default();
                 let has_track = track.is_some();
+                let now_artists: Vec<slint::SharedString> = track
+                    .as_ref()
+                    .map(|t| t.artists().into_iter().map(|a| a.name.into()).collect())
+                    .unwrap_or_default();
+                let has_album = track.as_ref().is_some_and(|t| t.album_ref().is_some());
                 self.ui(move |w| {
                     w.set_now_id(now_id.into());
                     if !has_track {
@@ -99,6 +104,8 @@ impl Controller {
                     w.set_total(models::time(initial_duration).into());
                     w.set_now_title(title.into());
                     w.set_now_artist(artist.into());
+                    w.set_now_artists(slint::ModelRc::new(slint::VecModel::from(now_artists)));
+                    w.set_now_album(has_album);
                     w.set_now_liked(liked);
                     w.set_now_art(slint::Image::default());
                     w.set_lyric_index(-1);

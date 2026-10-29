@@ -27,6 +27,11 @@ pub struct State {
     pub muted_from: Option<f64>,
     pub toast: u64,
     pub warned_youtube_runtime: bool,
+    pub nav: Vec<super::browse::Nav>,
+    pub nav_at: usize,
+    pub artist_page: Option<crate::model::ArtistPage>,
+    pub album_page: Option<crate::model::AlbumPage>,
+    pub browse_cache: Vec<(String, Instant, super::browse::Cached)>,
 }
 impl State {
     pub fn new(settings: Settings) -> Self {
@@ -52,6 +57,11 @@ impl State {
             muted_from: None,
             toast: 0,
             warned_youtube_runtime: false,
+            nav: Vec::new(),
+            nav_at: 0,
+            artist_page: None,
+            album_page: None,
+            browse_cache: Vec::new(),
         }
     }
     pub fn session(&self) -> Session {

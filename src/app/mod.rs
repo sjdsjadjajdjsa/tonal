@@ -1,3 +1,4 @@
+mod browse;
 mod controller;
 #[cfg(feature = "debug-hooks")]
 mod debug;
@@ -47,6 +48,9 @@ pub fn run() -> anyhow::Result<()> {
     log::info!("Window created");
     window.set_tracks(ModelRc::new(VecModel::<TrackRow>::default()));
     window.set_queue(ModelRc::new(VecModel::<TrackRow>::default()));
+    window.set_albums(ModelRc::new(VecModel::<crate::CardRow>::default()));
+    window.set_singles(ModelRc::new(VecModel::<crate::CardRow>::default()));
+    window.set_similar(ModelRc::new(VecModel::<crate::CardRow>::default()));
     window.set_playlists(ModelRc::new(VecModel::<PlaylistRow>::default()));
     window.set_settings(ModelRc::new(VecModel::<SettingRow>::from(
         models::settings(&settings),
@@ -106,13 +110,40 @@ pub fn run() -> anyhow::Result<()> {
     let weak = window.as_weak();
     window.on_search(move |query| {
         if let Some(w) = weak.upgrade() {
-            c.search(query.to_string(), w.get_source(), false);
+            c.replace_nav(browse::Nav::Search(query.to_string(), w.get_source()));
         }
     });
     let c = app.clone();
-    window.on_navigate(move |page| c.load_page(&page));
+    window.on_navigate(move |page| c.go(browse::Nav::Page(page.to_string())));
     let c = app.clone();
-    window.on_playlist(move |id| c.playlist(id as i64));
+    window.on_playlist(move |id| c.go(browse::Nav::Playlist(id as i64)));
+    let c = app.clone();
+    window.on_open_artist(move |list, index, which| c.open_artist(&list, index, which));
+    let c = app.clone();
+    window.on_open_album(move |list, index| c.open_album(&list, index));
+    let c = app.clone();
+    window.on_open_card(move |kind, index| c.open_card(&kind, index));
+    let c = app.clone();
+    window.on_artist_action(move |action| c.artist_action(&action));
+    let c = app.clone();
+    window.on_album_action(move |action| c.album_action(&action));
+    let c = app.clone();
+    window.on_nav(move |step| c.nav(step));
+    {
+        use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
+        let c = app.clone();
+        window.window().on_winit_window_event(move |_, event| match event {
+            winit::event::WindowEvent::MouseInput {
+                state: winit::event::ElementState::Pressed,
+                button: button @ (winit::event::MouseButton::Back | winit::event::MouseButton::Forward),
+                ..
+            } => {
+                c.nav(if *button == winit::event::MouseButton::Back { -1 } else { 1 });
+                EventResult::PreventDefault
+            }
+            _ => EventResult::Propagate,
+        });
+    }
     let c = app.clone();
     window.on_play(move |index| {
         if index >= 0 {
@@ -215,7 +246,7 @@ pub fn run() -> anyhow::Result<()> {
     });
     log::info!("Loading library");
     app.refresh_playlists();
-    app.load_page("Home");
+    app.go(browse::Nav::Page("Home".into()));
     let missing = crate::sources::missing_tools();
     if !missing.is_empty() {
         app.status(format!(

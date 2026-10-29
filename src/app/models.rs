@@ -17,9 +17,20 @@ pub fn rows(library: &Library, tracks: &[Track]) -> Vec<TrackRow> {
             title: t.title.clone().into(),
             artist: t.artist.clone().into(),
             album: t.album.clone().unwrap_or_default().into(),
-            duration: time(t.duration_secs.unwrap_or_default()).into(),
+            duration: t
+                .duration_secs
+                .filter(|d| *d > 0.0)
+                .map(time)
+                .unwrap_or_default()
+                .into(),
             source: t.source.label().into(),
             liked: library.is_liked(&t.id),
+            artists: ModelRc::new(VecModel::from(
+                t.artists()
+                    .into_iter()
+                    .map(|a| slint::SharedString::from(a.name))
+                    .collect::<Vec<_>>(),
+            )),
             ..Default::default()
         })
         .collect()

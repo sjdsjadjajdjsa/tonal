@@ -77,12 +77,12 @@ async fn fetch_bytes(url: &str) -> anyhow::Result<Vec<u8>> {
     }
 }
 
-fn decode(bytes: &[u8], size: u32) -> anyhow::Result<Pixels> {
+fn decode(bytes: &[u8], size: u32, radius: f32) -> anyhow::Result<Pixels> {
     let image = image::load_from_memory(bytes)?;
     let mut image = image
         .resize_to_fill(size, size, image::imageops::FilterType::Triangle)
         .to_rgba8();
-    round_corners(&mut image, size as f32 * 0.15);
+    round_corners(&mut image, size as f32 * radius);
     Ok(SharedPixelBuffer::clone_from_slice(
         image.as_raw(),
         image.width(),
@@ -106,12 +106,17 @@ fn round_corners(image: &mut image::RgbaImage, radius: f32) {
 }
 
 pub async fn load(url: &str, size: u32) -> anyhow::Result<Pixels> {
-    let key = format!("{size}:{url}");
+    load_shaped(url, size, 0.15).await
+}
+
+/// Square artwork with corners rounded to `radius` times the size; 0.5 gives a circle.
+pub async fn load_shaped(url: &str, size: u32, radius: f32) -> anyhow::Result<Pixels> {
+    let key = format!("{size}:{radius}:{url}");
     if let Some(pixels) = recall(&key) {
         return Ok(pixels);
     }
     let bytes = fetch_bytes(url).await?;
-    let pixels = tokio::task::spawn_blocking(move || decode(&bytes, size)).await??;
+    let pixels = tokio::task::spawn_blocking(move || decode(&bytes, size, radius)).await??;
     remember(key, pixels.clone());
     Ok(pixels)
 }

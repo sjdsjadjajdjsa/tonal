@@ -55,6 +55,9 @@ export component Sidebar inherits Rectangle {
     in property <string> page;
     in property <int> active-playlist: -1;
     in property <bool> compact;
+    in property <bool> can-back;
+    in property <bool> can-forward;
+    callback nav(int);
     callback navigate(string);
     callback playlist(int);
     callback create;
@@ -85,6 +88,20 @@ export component Sidebar inherits Rectangle {
                 font-weight: 700;
                 letter-spacing: -0.3px;
             }
+            if !root.compact: Rectangle { horizontal-stretch: 1; }
+            if !root.compact: VerticalLayout {
+                alignment: center;
+                IconButton { icon: Icons.back; size: 28px; icon-size: 16px; tint: root.can-back ? Theme.muted : Theme.faint.with-alpha(0.5); clicked => { if root.can-back { root.nav(-1); } } }
+            }
+            if !root.compact: VerticalLayout {
+                alignment: center;
+                IconButton { icon: Icons.forward; size: 28px; icon-size: 16px; tint: root.can-forward ? Theme.muted : Theme.faint.with-alpha(0.5); clicked => { if root.can-forward { root.nav(1); } } }
+            }
+        }
+        if root.compact && root.can-back: HorizontalLayout {
+            alignment: center;
+            height: 36px;
+            IconButton { icon: Icons.back; size: 30px; icon-size: 16px; clicked => { root.nav(-1); } }
         }
         NavItem { compact: root.compact; icon: Icons.home; text: "Home"; active: root.page == "Home"; clicked => { root.navigate("Home"); } }
         NavItem { compact: root.compact; icon: Icons.search; text: "Search"; active: root.page == "Search"; clicked => { root.navigate("Search"); } }

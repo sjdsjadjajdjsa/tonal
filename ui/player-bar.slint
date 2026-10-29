@@ -1,5 +1,5 @@
 import { Theme, Icons, Label, Icon, IconButton, Scrubber } from "theme.slint";
-import { Artwork } from "track-list.slint";
+import { Artwork, LinkText, ArtistChooser } from "track-list.slint";
 import { Waves } from "visualizer.slint";
 
 component PlayButton inherits Rectangle {
@@ -49,7 +49,23 @@ export component PlayerBar inherits Rectangle {
     in property <string> wave-line;
     in property <bool> wave-resting: true;
     out property <length> wave-height: root.mini ? root.height * 0.5 : 64px;
+    in property <[string]> artists;
+    in property <bool> has-album;
     callback command(string);
+    callback open-artist(int);
+    callback open-album();
+    private property <length> chooser-x;
+    private property <length> chooser-y;
+
+    function show-artists(x: length, y: length) {
+        if root.artists.length <= 1 {
+            root.open-artist(0);
+            return;
+        }
+        root.chooser-x = x - root.absolute-position.x;
+        root.chooser-y = y - root.absolute-position.y - root.artists.length * 34px - 12px;
+        chooser.show();
+    }
     callback seek(float);
     callback volume-change(float);
     background: Theme.bar;
@@ -92,8 +108,8 @@ export component PlayerBar inherits Rectangle {
                 alignment: center;
                 horizontal-stretch: 0;
                 spacing: 4px;
-                Label { text: root.title; font-size: 14px; font-weight: 600; }
-                Label { text: root.artist; font-size: 12px; color: Theme.muted; }
+                LinkText { text: root.title; font-size: 14px; font-weight: 600; color: Theme.text; enabled: root.has-album; clicked => { root.open-album(); } }
+                LinkText { text: root.artist; font-size: 12px; enabled: root.has-track; clicked => { root.show-artists(self.absolute-position.x, self.absolute-position.y); } }
             }
             if root.has-track: VerticalLayout {
                 alignment: center;
@@ -178,5 +194,12 @@ export component PlayerBar inherits Rectangle {
             VerticalLayout { alignment: center; IconButton { icon: root.repeat == "One" ? Icons.repeat-one : Icons.repeat; active: root.repeat != "Off"; size: 30px; icon-size: 15px; clicked => { root.command("repeat"); } } }
         }
         Scrubber { value: root.position; maximum: root.duration; bar: 3px; changed(v) => { root.seek(v); } }
+    }
+
+    chooser := ArtistChooser {
+        x: root.chooser-x;
+        y: root.chooser-y;
+        names: root.artists;
+        picked(i) => { root.open-artist(i); }
     }
 }

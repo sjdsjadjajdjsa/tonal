@@ -55,11 +55,18 @@ impl Controller {
         }
     }
     pub fn display(&self, tracks: Vec<Track>, heading: String) {
-        let generation = {
+        let generation = self.state.lock().generation;
+        self.display_for(generation, tracks, heading);
+    }
+    /// Shows `tracks` if the page for `generation` is still the current one.
+    pub fn display_for(&self, generation: u64, tracks: Vec<Track>, heading: String) -> bool {
+        {
             let mut s = self.state.lock();
+            if s.generation != generation {
+                return false;
+            }
             s.display = tracks.clone();
-            s.generation
-        };
+        }
         let state = self.state.clone();
         let library = self.library.clone();
         let display = tracks.clone();
@@ -72,6 +79,7 @@ impl Controller {
             w.set_loading(false);
         });
         self.artwork(tracks, false);
+        true
     }
     pub(super) fn artwork(&self, tracks: Vec<Track>, queue: bool) {
         let this = self.clone();
