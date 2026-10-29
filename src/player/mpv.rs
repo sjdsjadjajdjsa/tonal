@@ -6,7 +6,7 @@ use std::{
     process::Stdio,
     sync::{
         Arc, Mutex,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
 use tokio::{
@@ -18,6 +18,19 @@ use tokio::{
 };
 
 static NEXT_SOCKET: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Debug)]
+pub(super) struct Disconnected {
+    pub instance: u64,
+}
+
+impl std::fmt::Display for Disconnected {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("mpv IPC disconnected")
+    }
+}
+
+impl std::error::Error for Disconnected {}
 
 pub(super) struct Message {
     pub instance: u64,
@@ -33,6 +46,7 @@ pub(super) struct Mpv {
     requests: Arc<Mutex<HashMap<u64, oneshot::Sender<Value>>>>,
     request_id: u64,
     pub entry_id: Option<i64>,
+    alive: Arc<AtomicBool>,
 }
 
 impl Mpv {
@@ -58,9 +72,10 @@ impl Mpv {
         ]);
         command.arg(format!("--input-ipc-server={}", endpoint.display()));
         command.arg(format!("--volume={volume}"));
-        if let Some(browser) = crate::sources::cookies_browser() {
-            command.arg(format!("--ytdl-raw-options=cookies-from-browser={browser}"));
-        }
+        command.arg(format!(
+            "--ytdl-raw-options={}",
+            crate::sources::ytdl_raw_options()
+        ));
         command.arg(format!(
             "--audio-client-name=tonal-{}-{id}",
             std::process::id()
@@ -109,6 +124,8 @@ impl Mpv {
         let (read, write) = tokio::io::split(stream);
         let requests = Arc::new(Mutex::new(HashMap::<u64, oneshot::Sender<Value>>::new()));
         let responses = requests.clone();
+        let alive = Arc::new(AtomicBool::new(true));
+        let reader_alive = alive.clone();
         let reader = tokio::spawn(async move {
             let mut lines = BufReader::new(read).lines();
             let mut entry_id = None;
@@ -149,6 +166,9 @@ impl Mpv {
                         }
                     }
                     result => {
+                        reader_alive.store(false, Ordering::Release);
+                        // Wake in-flight requests immediately, rather than waiting for timeout.
+                        responses.lock().expect("mpv requests poisoned").clear();
                         let error = match result {
                             Err(error) => error.to_string(),
                             _ => "mpv IPC disconnected".to_owned(),
@@ -170,6 +190,7 @@ impl Mpv {
             requests,
             request_id: 0,
             entry_id: None,
+            alive,
             #[cfg(unix)]
             socket: Some(endpoint),
             #[cfg(windows)]
@@ -193,16 +214,27 @@ impl Mpv {
         Ok(mpv)
     }
 
+    fn disconnected(&self) -> anyhow::Error {
+        self.alive.store(false, Ordering::Release);
+        Disconnected { instance: self.id }.into()
+    }
+
     pub async fn send(&mut self, command: Value) -> Result<()> {
+        if !self.alive.load(Ordering::Acquire) {
+            return Err(self.disconnected());
+        }
         let mut line = serde_json::to_vec(&json!({"command":command}))?;
         line.push(b'\n');
         self.writer
             .write_all(&line)
             .await
-            .context("writing mpv IPC")
+            .map_err(|_| self.disconnected())
     }
 
     pub async fn request(&mut self, command: Value) -> Result<Value> {
+        if !self.alive.load(Ordering::Acquire) {
+            return Err(self.disconnected());
+        }
         self.request_id += 1;
         let id = self.request_id;
         let (tx, rx) = oneshot::channel();
@@ -216,8 +248,10 @@ impl Mpv {
             self.writer
                 .write_all(&line)
                 .await
-                .context("writing mpv request")?;
-            let reply = tokio::time::timeout(Duration::from_secs(5), rx).await??;
+                .map_err(|_| self.disconnected())?;
+            let reply = tokio::time::timeout(Duration::from_secs(5), rx)
+                .await?
+                .map_err(|_| self.disconnected())?;
             if reply["error"] != "success" {
                 anyhow::bail!("mpv: {}", reply["error"]);
             }
@@ -255,6 +289,11 @@ impl Mpv {
             .and_then(|entries| entries.first())
             .and_then(|entry| entry["id"].as_i64());
         Ok(())
+    }
+
+    #[cfg(test)]
+    pub async fn kill_for_test(&mut self) {
+        self.child.kill().await.expect("kill test-owned mpv");
     }
 
     pub async fn shutdown(&mut self) {

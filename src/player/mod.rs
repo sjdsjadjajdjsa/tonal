@@ -38,7 +38,7 @@ mod queue;
 mod tests;
 
 use anyhow::Result;
-use mpv::{Message, Mpv};
+use mpv::{Disconnected, Message, Mpv};
 use queue::Queue;
 use serde_json::{Value, json};
 use tokio::{
@@ -189,6 +189,7 @@ struct Engine {
     buffering: bool,
     last_position: Instant,
     failures: usize,
+    restarts: Vec<Instant>,
 }
 
 impl Engine {
@@ -223,6 +224,7 @@ impl Engine {
             buffering: false,
             last_position: Instant::now() - Duration::from_secs(1),
             failures: 0,
+            restarts: Vec::new(),
         }
     }
 
@@ -240,7 +242,7 @@ impl Engine {
                 Some(message) = self.ipc_rx.recv() => self.message(message).await,
                 _ = tokio::time::sleep_until(deadline), if ticking => self.tick_fade().await,
             };
-            if let Err(error) = result {
+            if let Err(error) = self.handle_result(result).await {
                 self.emit(PlayerEvent::Error(format!("{error:#}")));
                 let _ = self.stop_playback().await;
             }
@@ -251,6 +253,72 @@ impl Engine {
         if let Some(mpv) = &mut self.standby {
             mpv.shutdown().await;
         }
+    }
+
+    // Both reader EOF and command transport errors converge here. Old instance
+    // messages are ignored after replacement, so each death is handled only once.
+    async fn handle_result(&mut self, mut result: Result<()>) -> Result<()> {
+        while let Err(error) = result {
+            let Some(disconnected) = error.downcast_ref::<Disconnected>() else {
+                return Err(error);
+            };
+            result = self.restart(disconnected.instance).await;
+        }
+        Ok(())
+    }
+
+    async fn restart(&mut self, instance: u64) -> Result<()> {
+        if !self.active.as_ref().is_some_and(|mpv| mpv.id == instance)
+            && !self.standby.as_ref().is_some_and(|mpv| mpv.id == instance)
+        {
+            return Ok(());
+        }
+        // Abandon both sides of a fade and all gapless handshakes before dropping
+        // children. No stale event may advance the queue during recovery.
+        self.fade = None;
+        self.pending = None;
+        self.pending_entry = None;
+        self.gapless_eof = false;
+        self.gapless_position = false;
+        self.start_at = None;
+        self.active = None;
+        self.standby = None;
+        let Some(track) = self.queue.track() else {
+            return Ok(());
+        };
+        let now = Instant::now();
+        self.restarts
+            .retain(|time| now.duration_since(*time) < Duration::from_secs(60));
+        if self.restarts.len() >= 3 {
+            self.stop_playback().await?;
+            self.emit(PlayerEvent::Error("mpv keeps crashing".into()));
+            return Ok(());
+        }
+        self.restarts.push(now);
+        let position = self.pos;
+        let paused = self.paused;
+        self.cache_paused = false;
+        self.core_idle = true;
+        self.update_buffering();
+        self.active = Some(
+            Mpv::spawn(
+                self.ipc_tx.clone(),
+                self.config.volume,
+                self.config.normalize,
+            )
+            .await?,
+        );
+        self.active_send(json!(["set_property", "pause", paused]))
+            .await?;
+        self.active
+            .as_mut()
+            .expect("replacement mpv")
+            .load(&track.play_url, Some(position))
+            .await?;
+        self.last_playhead = None;
+        self.sync_prefetch().await?;
+        self.emit(PlayerEvent::Error("Playback engine restarted".into()));
+        Ok(())
     }
 
     fn emit(&self, event: PlayerEvent) {
@@ -530,9 +598,7 @@ impl Engine {
                 self.sync_prefetch().await?;
             }
             Cmd::YtdlOptions => {
-                let options = crate::sources::cookies_browser()
-                    .map(|browser| format!("cookies-from-browser={browser}"))
-                    .unwrap_or_default();
+                let options = crate::sources::ytdl_raw_options();
                 self.active_send(json!(["set_property", "ytdl-raw-options", options.clone()]))
                     .await?;
                 if let Some(mpv) = &mut self.standby {
@@ -552,6 +618,9 @@ impl Engine {
             .as_ref()
             .is_some_and(|mpv| mpv.id == message.instance);
         let value = message.value;
+        if value["event"] == "ipc-error" {
+            return self.restart(message.instance).await;
+        }
         if !active {
             if self
                 .standby
@@ -587,11 +656,7 @@ impl Engine {
                         )));
                         self.cancel_fade().await?;
                     }
-                    Some("ipc-error") => {
-                        self.emit(PlayerEvent::Error(value["error"].to_string()));
-                        self.cancel_fade().await?;
-                        self.standby = None;
-                    }
+
                     _ => {}
                 }
             }
@@ -605,7 +670,10 @@ impl Engine {
         }
         if (value["event"] == "file-loaded"
             || (value["event"] == "property-change"
-                && matches!(value["name"].as_str(), Some("time-pos" | "duration"))))
+                && matches!(
+                    value["name"].as_str(),
+                    Some("time-pos" | "duration" | "pause")
+                )))
             && (entry.is_none() || value["playback_entry_id"].as_i64() != entry)
         {
             return Ok(());
@@ -720,11 +788,7 @@ impl Engine {
                     self.start_current().await?;
                 }
             }
-            Some("ipc-error") => {
-                self.emit(PlayerEvent::Error(value["error"].to_string()));
-                self.active = None;
-                self.stop_playback().await?;
-            }
+
             _ => {
                 if let Some(error) = value["error"].as_str()
                     && error != "success"

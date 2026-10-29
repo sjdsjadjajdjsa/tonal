@@ -79,6 +79,179 @@ async fn real_mpv_remove_tail_emits_near_end_once() {
 }
 
 #[tokio::test]
+async fn real_mpv_crash_restarts_same_track_position_and_pause() {
+    let tone = Tone::new();
+    for paused in [false, true] {
+        let (mut engine, mut rx) = tone_engine(&tone).await;
+        engine.command(Cmd::Seek(4.0, false)).await.unwrap();
+        pump_until(&mut engine, |e| e.pos >= 4.0).await;
+        engine.command(Cmd::Pause(paused)).await.unwrap();
+        let track_id = engine.queue.track().unwrap().id;
+        let position = engine.pos;
+        let instance = engine.active.as_ref().unwrap().id;
+        while rx.try_recv().is_ok() {}
+        engine.active.as_mut().unwrap().kill_for_test().await;
+        tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                let message = engine.ipc_rx.recv().await.unwrap();
+                let resumed_position = message.instance != instance
+                    && message.value["name"] == "time-pos"
+                    && message.value["data"].as_f64().is_some_and(|pos| pos > 2.5);
+                engine.message(message).await.unwrap();
+                if resumed_position {
+                    break;
+                }
+            }
+        })
+        .await
+        .expect("mpv must restart and resume within five seconds");
+        assert_eq!(engine.queue.track().unwrap().id, track_id);
+        assert!((engine.pos - position).abs() < 3.0);
+        assert_eq!(engine.paused, paused);
+        let mpv = engine.active.as_mut().unwrap();
+        assert_eq!(
+            mpv.request(json!(["get_property", "pause"])).await.unwrap(),
+            json!(paused)
+        );
+        let actual_position = mpv
+            .request(json!(["get_property", "time-pos"]))
+            .await
+            .unwrap()
+            .as_f64()
+            .unwrap();
+        assert!((actual_position - position).abs() < 3.0);
+        let events: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+        if paused {
+            assert!(
+                !events
+                    .iter()
+                    .any(|event| matches!(event, PlayerEvent::Paused(false))),
+                "recovery must not announce an unpause"
+            );
+        }
+        let errors: Vec<_> = events
+            .into_iter()
+            .filter_map(|event| match event {
+                PlayerEvent::Error(error) => Some(error),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(errors, ["Playback engine restarted"]);
+        println!("recovered same track at {actual_position:.2}s, paused={paused}");
+    }
+}
+
+#[tokio::test]
+async fn real_mpv_crash_restart_budget_stops_after_three() {
+    let tone = Tone::new();
+    let (mut engine, mut rx) = tone_engine(&tone).await;
+    // Expired attempts must not consume the rolling sixty-second budget.
+    engine.restarts = vec![Instant::now() - Duration::from_secs(61); 3];
+    while rx.try_recv().is_ok() {}
+    for attempt in 0..4 {
+        let instance = engine.active.as_ref().unwrap().id;
+        engine.active.as_mut().unwrap().kill_for_test().await;
+        pump_until(&mut engine, |e| {
+            e.active.as_ref().is_none_or(|mpv| mpv.id != instance)
+        })
+        .await;
+        if attempt < 3 {
+            assert_eq!(engine.queue.track().unwrap().title, "tone-one");
+        }
+        // A command failure and reader EOF can both report the same death.
+        engine
+            .message(Message {
+                instance,
+                value: json!({"event":"ipc-error"}),
+            })
+            .await
+            .unwrap();
+    }
+    assert!(engine.active.is_none());
+    assert!(engine.standby.is_none());
+    assert!(engine.queue.current.is_none());
+    assert!(engine.paused);
+    let errors: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok())
+        .filter_map(|event| match event {
+            PlayerEvent::Error(error) => Some(error),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        errors,
+        [
+            "Playback engine restarted",
+            "Playback engine restarted",
+            "Playback engine restarted",
+            "mpv keeps crashing",
+        ]
+    );
+}
+
+#[tokio::test]
+async fn real_mpv_crash_command_error_restarts_without_reading_eof() {
+    let tone = Tone::new();
+    let (mut engine, mut rx) = tone_engine(&tone).await;
+    let instance = engine.active.as_ref().unwrap().id;
+    engine.active.as_mut().unwrap().kill_for_test().await;
+    // Deliberately do not consume the EOF message: the failed write must suffice.
+    let result = engine.command(Cmd::Pause(true)).await;
+    assert!(result.as_ref().unwrap_err().is::<Disconnected>());
+    engine.handle_result(result).await.unwrap();
+    assert_ne!(engine.active.as_ref().unwrap().id, instance);
+    assert_eq!(engine.queue.track().unwrap().title, "tone-one");
+    assert!(engine.paused);
+    tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            let message = engine.ipc_rx.recv().await.unwrap();
+            let old_eof = message.instance == instance && message.value["event"] == "ipc-error";
+            engine.message(message).await.unwrap();
+            if old_eof {
+                break;
+            }
+        }
+    })
+    .await
+    .unwrap();
+    let errors = std::iter::from_fn(|| rx.try_recv().ok())
+        .filter(|event| matches!(event, PlayerEvent::Error(_)))
+        .count();
+    assert_eq!(errors, 1);
+}
+
+#[tokio::test]
+async fn real_mpv_crash_standby_clears_crossfade() {
+    let tone = Tone::new();
+    let (mut engine, mut rx) = tone_engine(&tone).await;
+    engine.command(Cmd::Crossfade(2.0)).await.unwrap();
+    engine.command(Cmd::Seek(6.2, false)).await.unwrap();
+    pump_until(&mut engine, |e| e.fade.as_ref().is_some_and(|f| f.ready)).await;
+    engine.command(Cmd::Pause(true)).await.unwrap();
+    let instance = engine.active.as_ref().unwrap().id;
+    while rx.try_recv().is_ok() {}
+    engine.standby.as_mut().unwrap().kill_for_test().await;
+    pump_until(&mut engine, |e| {
+        e.active.as_ref().is_some_and(|mpv| mpv.id != instance)
+    })
+    .await;
+    assert!(engine.standby.is_none());
+    assert!(engine.fade.is_none());
+    assert!(engine.pending.is_none());
+    assert!(engine.pending_entry.is_none());
+    assert!(!engine.gapless_eof && !engine.gapless_position);
+    assert_eq!(engine.queue.track().unwrap().title, "tone-one");
+    assert!(engine.paused);
+    assert!((engine.pos - 6.2).abs() < 1.0);
+    let errors: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok())
+        .filter_map(|event| match event {
+            PlayerEvent::Error(error) => Some(error),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(errors, ["Playback engine restarted"]);
+}
+
+#[tokio::test]
 async fn real_mpv_restore_starts_paused_at_position() {
     let tone = Tone::new();
     let (tx, _rx) = unbounded_channel();
