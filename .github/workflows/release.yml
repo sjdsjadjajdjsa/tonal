@@ -37,7 +37,7 @@ jobs:
         if: runner.os == 'Linux'
         env:
           DEBIAN_FRONTEND: noninteractive
-        run: apt-get update && apt-get install -y --no-install-recommends ca-certificates curl file git build-essential pkg-config libsqlite3-dev libdbus-1-dev libfontconfig-dev libxkbcommon-dev
+        run: apt-get update && apt-get install -y --no-install-recommends ca-certificates curl file git build-essential pkg-config libdbus-1-dev libfontconfig-dev libxkbcommon-dev
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
@@ -53,7 +53,7 @@ jobs:
             echo "Tag $TAG but Cargo.toml says $version"
             exit 1
           fi
-      - run: cargo build --release
+      - run: cargo build --release --features bundled-sqlite
       - name: AppImage
         if: runner.os == 'Linux'
         run: packaging/linux/build-appimage.sh

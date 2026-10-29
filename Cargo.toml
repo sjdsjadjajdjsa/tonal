@@ -39,6 +39,9 @@ libc = "0.2"
 rusqlite = { version = "0.41", features = ["bundled"] }
 raw-window-handle = "0.6"
 
+[features]
+bundled-sqlite = ["rusqlite/bundled"]
+
 [build-dependencies]
 slint-build = "1.18"
 winresource = "0.1"

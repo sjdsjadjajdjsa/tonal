@@ -12,7 +12,7 @@ appdir=$work/AppDir
 tool=${APPIMAGETOOL:-$work/appimagetool-x86_64.AppImage}
 ytdlp=$work/yt-dlp
 
-cargo build --release
+cargo build --release --features bundled-sqlite
 
 mkdir -p "$work"
 rm -rf "$appdir"
