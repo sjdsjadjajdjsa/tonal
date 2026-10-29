@@ -32,6 +32,11 @@ fn bundled_tools_on_path() {
 }
 
 fn main() -> anyhow::Result<()> {
+    // glibc gives every thread its own malloc arena; two are plenty here and save several MB.
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    unsafe {
+        libc::mallopt(libc::M_ARENA_MAX, 2);
+    }
     bundled_tools_on_path();
     env_logger::init();
     let _ = rustls::crypto::ring::default_provider().install_default();
