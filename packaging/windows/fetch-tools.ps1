@@ -14,4 +14,6 @@ $archive = Join-Path $tmp $asset.name
 Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $archive
 7z x $archive "-o$tmp\mpv" -y | Out-Null
 Copy-Item "$tmp\mpv\mpv.exe" $Dest
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/mpv-player/mpv/master/LICENSE.GPL" -OutFile (Join-Path $Dest "mpv-LICENSE.GPL.txt")
+Set-Content -Path (Join-Path $Dest "MPV-VERSION.txt") -Value "$($asset.name) from $($release.html_url)"
 Write-Host "Bundled $($asset.name) and yt-dlp"

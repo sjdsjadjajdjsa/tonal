@@ -26,7 +26,7 @@ fi
 install -m 755 "$ytdlp" "$appdir/usr/bin/yt-dlp"
 install -m 644 packaging/linux/tonal.desktop "$appdir/usr/share/applications/"
 install -m 644 ui/icon.png "$appdir/usr/share/icons/hicolor/256x256/apps/tonal.png"
-install -m 644 README.md LICENSE "$appdir/usr/share/doc/tonal/"
+install -m 644 README.md LICENSE THIRD-PARTY-NOTICES.md "$appdir/usr/share/doc/tonal/"
 install -m 644 ui/fonts/Inter-LICENSE.txt "$appdir/usr/share/doc/tonal/FONTS-LICENSE.txt"
 ln -s usr/share/applications/tonal.desktop "$appdir/tonal.desktop"
 ln -s usr/share/icons/hicolor/256x256/apps/tonal.png "$appdir/tonal.png"

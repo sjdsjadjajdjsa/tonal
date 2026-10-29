@@ -61,7 +61,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           mkdir -p dist/tonal
-          cp target/release/tonal target/appimage/yt-dlp README.md LICENSE dist/tonal/
+          cp target/release/tonal target/appimage/yt-dlp README.md LICENSE THIRD-PARTY-NOTICES.md dist/tonal/
           cp ui/fonts/Inter-LICENSE.txt dist/tonal/FONTS-LICENSE.txt
           cp packaging/linux/tonal.desktop ui/icon.png dist/tonal/
           tar czf tonal-linux-x86_64.tar.gz -C dist tonal
@@ -70,7 +70,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory dist/tonal -Force | Out-Null
-          Copy-Item target/release/tonal.exe, README.md, LICENSE dist/tonal/
+          Copy-Item target/release/tonal.exe, README.md, LICENSE, THIRD-PARTY-NOTICES.md dist/tonal/
           Copy-Item ui/fonts/Inter-LICENSE.txt dist/tonal/FONTS-LICENSE.txt
           ./packaging/windows/fetch-tools.ps1 dist/tonal
           Compress-Archive -Path dist/tonal -DestinationPath tonal-windows-x86_64.zip
