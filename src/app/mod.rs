@@ -64,8 +64,9 @@ pub fn run() -> anyhow::Result<()> {
     let hwnd = {
         use raw_window_handle::{HasWindowHandle, RawWindowHandle};
         window.show()?;
-        match window.window().window_handle()?.as_raw() {
-            RawWindowHandle::Win32(handle) => Some(handle.hwnd.get() as *mut std::ffi::c_void),
+        let slint_handle = window.window().window_handle();
+        match slint_handle.window_handle().map(|handle| handle.as_raw()) {
+            Ok(RawWindowHandle::Win32(handle)) => Some(handle.hwnd.get() as *mut std::ffi::c_void),
             _ => None,
         }
     };
