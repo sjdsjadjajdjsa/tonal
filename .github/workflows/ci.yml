@@ -10,7 +10,11 @@ permissions:
 
 jobs:
   check:
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -21,7 +25,22 @@ jobs:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - name: System libraries
+        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev libdbus-1-dev libfontconfig-dev libxkbcommon-dev mpv
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test
+      - name: Tests
+        if: runner.os == 'Linux'
+        run: cargo test
+      - name: Tests (no mpv)
+        if: runner.os == 'Windows'
+        run: cargo test -- --skip real_mpv
+      - name: Installer script
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory dist/tonal -Force | Out-Null
+          Copy-Item README.md, LICENSE dist/tonal/
+          New-Item -ItemType File dist/tonal/tonal.exe | Out-Null
+          iscc /Q "/DSource=$env:GITHUB_WORKSPACE\dist\tonal" packaging\windows\tonal.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

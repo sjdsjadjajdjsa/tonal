@@ -32,8 +32,13 @@ pub fn cookies_browser() -> Option<String> {
         .filter(|v| !v.is_empty())
 }
 
+#[cfg(windows)]
+pub(crate) const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 pub(crate) fn ytdlp() -> tokio::process::Command {
     let mut command = tokio::process::Command::new("yt-dlp");
+    #[cfg(windows)]
+    command.creation_flags(CREATE_NO_WINDOW);
     if let Some(browser) = cookies_browser() {
         command.args(["--cookies-from-browser", &browser]);
     }

@@ -75,6 +75,8 @@ impl Mpv {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .kill_on_drop(true);
+        #[cfg(windows)]
+        command.creation_flags(crate::sources::CREATE_NO_WINDOW);
         #[cfg(target_os = "linux")]
         unsafe {
             command.pre_exec(|| {
