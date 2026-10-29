@@ -42,6 +42,68 @@ pub(crate) fn ytdlp() -> tokio::process::Command {
     if let Some(browser) = cookies_browser() {
         command.args(["--cookies-from-browser", &browser]);
     }
+    if let Some(runtime) = js_runtime() {
+        command.args(["--js-runtimes", runtime]);
+    }
+    command
+}
+
+/// yt-dlp needs a JavaScript runtime to solve YouTube's challenges. It looks for
+/// Deno by default; this also enables Node or Bun when one of those is installed.
+/// mpv's ytdl hook options, matching what ytdlp() passes on the command line.
+pub fn ytdl_raw_options() -> String {
+    let mut options = Vec::new();
+    if let Some(browser) = cookies_browser() {
+        options.push(format!("cookies-from-browser={browser}"));
+    }
+    if let Some(runtime) = js_runtime() {
+        options.push(format!("js-runtimes={runtime}"));
+    }
+    options.join(",")
+}
+
+pub fn js_runtime() -> Option<&'static str> {
+    static RUNTIME: OnceLock<Option<&'static str>> = OnceLock::new();
+    *RUNTIME.get_or_init(|| {
+        ["deno", "node", "bun"]
+            .into_iter()
+            .find(|name| on_path(name))
+    })
+}
+
+/// Updates yt-dlp in place when it is the standalone build (bundled or downloaded).
+/// Returns the version line yt-dlp prints, or an error that says how to update it
+/// when a package manager owns it.
+pub async fn update_ytdlp() -> anyhow::Result<String> {
+    let output = tokio::time::timeout(
+        Duration::from_secs(120),
+        ytdlp_plain().args(["--update-to", "stable"]).output(),
+    )
+    .await??;
+    let text = String::from_utf8_lossy(&output.stdout).to_string()
+        + &String::from_utf8_lossy(&output.stderr);
+    if text.contains("package manager") || text.contains("pip") {
+        anyhow::bail!("yt-dlp is installed by your system, update it with your package manager");
+    }
+    anyhow::ensure!(
+        output.status.success(),
+        "{}",
+        text.lines().last().unwrap_or("yt-dlp update failed")
+    );
+    Ok(text
+        .lines()
+        .rev()
+        .find(|l| l.contains("Updated yt-dlp") || l.contains("up to date"))
+        .unwrap_or("yt-dlp updated")
+        .trim()
+        .to_string())
+}
+
+fn ytdlp_plain() -> tokio::process::Command {
+    let mut command = tokio::process::Command::new("yt-dlp");
+    #[cfg(windows)]
+    command.creation_flags(CREATE_NO_WINDOW);
+    command.kill_on_drop(true);
     command
 }
 
