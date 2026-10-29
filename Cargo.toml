@@ -41,6 +41,7 @@ raw-window-handle = "0.6"
 
 [features]
 bundled-sqlite = ["rusqlite/bundled"]
+debug-hooks = []
 
 [build-dependencies]
 slint-build = "1.18"
@@ -51,3 +52,6 @@ lto = true
 panic = "abort"
 codegen-units = 1
 strip = true
+
+[package.metadata.cargo-machete]
+ignored = ["md-5"]

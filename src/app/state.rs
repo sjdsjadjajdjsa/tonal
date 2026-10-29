@@ -26,6 +26,7 @@ pub struct State {
     pub restore_position: Option<f64>,
     pub muted_from: Option<f64>,
     pub toast: u64,
+    pub warned_youtube_runtime: bool,
 }
 impl State {
     pub fn new(settings: Settings) -> Self {
@@ -50,6 +51,7 @@ impl State {
             restore_position: None,
             muted_from: None,
             toast: 0,
+            warned_youtube_runtime: false,
         }
     }
     pub fn session(&self) -> Session {

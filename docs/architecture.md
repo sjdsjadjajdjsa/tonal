@@ -51,8 +51,14 @@ SQLite in `data_dir()/library.db`, schema migrations via `PRAGMA user_version`. 
 ### app / UI
 Sidebar: Home (recent, most played, quick picks), Search (source tabs: YouTube, SoundCloud, Audius, Local; and All), Library (Liked, Playlists, Local files, Downloads), Settings. Bottom player bar (art, title/artist, like, prev/play/next, seek, time, shuffle/repeat, volume, queue, lyrics, mini mode). Queue panel, synced lyrics panel, mini player mode (small window). Context actions on tracks: play, play next, add to queue, like, add to playlist, download, start radio. Spotify import dialog. Media keys + MPRIS via souvlaki. Keyboard shortcuts (space, ctrl+f, arrows). Session restore. Dark theme, accent from settings.
 
+### recovery
+If the active mpv dies (IPC EOF or a broken write), the engine spawns a new one and reloads the current track at the last position with the same pause state, at most 3 times per 60 s, then stops with an error. No polling.
+
+### yt-dlp
+`sources::ytdlp()` adds browser cookies and a JavaScript runtime (`deno`, `node` or `bun`, whichever is on PATH) for YouTube challenges; `ytdl_raw_options()` passes the same to mpv. `update_ytdlp()` runs `--update-to stable` for standalone builds.
+
 ### visualizer (`src/visualizer.rs`, `src/app/waves.rs`, `ui/visualizer.slint`)
 Linux only. mpv instances are named `tonal-<pid>-<n>` via `--audio-client-name`; the capture thread finds them with `pw-dump` and reads mono f32 with `pw-record --target <node>` (no fallback to the mic). FFT (rustfft, 2048) into 36 log bands, auto gain, smoothing, then two filled layers plus a line as SVG path strings in pixel coordinates (Slint Path keeps aspect ratio, so the viewbox must match the element size). A 30 fps Slint Timer runs only while playing and stops once the waves settle after pause. Capture processes die with the app (PR_SET_PDEATHSIG).
 
 ### Test hooks
-`TONAL_DEBUG_QUERY` (search and play first result), `TONAL_DEBUG_VIEW` (mini, queue, lyrics, settings), `TONAL_DEBUG_SNAPSHOT` (window snapshot PNG after 12 s), `TONAL_DEBUG_SOURCE` (0 YouTube, 1 SoundCloud, 2 Audius), `TONAL_DEBUG_PLAYLIST` (open and play a playlist id), `TONAL_DEBUG_TITLE` (window title, for compositor rules that size test windows). For silent tests route mpv to a null sink: `pactl load-module module-null-sink sink_name=tonal_test` and `MPV_HOME` with `audio-device=pipewire/tonal_test`; use `XDG_DATA_HOME` to keep test data out of the real library.
+Only in builds with `--features debug-hooks` (src/app/debug.rs); release builds leave them out. `TONAL_DEBUG_QUERY` (search and play first result), `TONAL_DEBUG_VIEW` (mini, queue, lyrics, settings), `TONAL_DEBUG_SNAPSHOT` (window snapshot PNG after 12 s), `TONAL_DEBUG_SOURCE` (0 YouTube, 1 SoundCloud, 2 Audius), `TONAL_DEBUG_PLAYLIST` (open and play a playlist id), `TONAL_DEBUG_TITLE` (window title, for compositor rules that size test windows). For silent tests route mpv to a null sink: `pactl load-module module-null-sink sink_name=tonal_test` and `MPV_HOME` with `audio-device=pipewire/tonal_test`; use `XDG_DATA_HOME` to keep test data out of the real library.

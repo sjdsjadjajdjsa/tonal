@@ -167,14 +167,24 @@ pub fn settings(s: &Settings) -> Vec<SettingRow> {
         ),
         (
             "YouTube",
-            vec![(
-                "youtube_cookies",
-                "Use browser login",
-                s.youtube_cookies.clone(),
-                "If YouTube asks to sign in, type your browser: chromium, firefox, brave, chrome",
-                "text",
-                false,
-            )],
+            vec![
+                (
+                    "youtube_cookies",
+                    "Use browser login",
+                    s.youtube_cookies.clone(),
+                    "If YouTube asks to sign in, type your browser: chromium, firefox, brave, chrome",
+                    "text",
+                    false,
+                ),
+                (
+                    "update-ytdlp",
+                    "yt-dlp",
+                    "Update".into(),
+                    "Keeps YouTube and SoundCloud working",
+                    "action",
+                    false,
+                ),
+            ],
         ),
         (
             "Appearance",
@@ -299,6 +309,11 @@ mod tests {
     fn settings_exposes_playback_and_credentials() {
         let fields = settings(&Settings::default());
         assert!(fields.iter().any(|f| f.key == "music_dirs"));
+        let update = fields.iter().find(|f| f.key == "update-ytdlp").unwrap();
+        assert_eq!(update.label, "yt-dlp");
+        assert_eq!(update.value, "Update");
+        assert_eq!(update.hint, "Keeps YouTube and SoundCloud working");
+        assert_eq!(update.kind, "action");
         assert!(
             fields
                 .iter()
