@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest]
+        os: [ubuntu-24.04, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -27,13 +27,16 @@ jobs:
       - name: System libraries
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev libdbus-1-dev libfontconfig-dev libxkbcommon-dev mpv
+      - name: System tools
+        if: runner.os == 'macOS'
+        run: brew install mpv
       - run: cargo fmt --check
       - name: Unused dependencies
         if: runner.os == 'Linux'
         uses: bnjbvr/cargo-machete@v0.9.2
       - run: cargo clippy --all-targets -- -D warnings
       - name: Tests
-        if: runner.os == 'Linux'
+        if: runner.os != 'Windows'
         run: cargo test
       - name: Tests (no mpv)
         if: runner.os == 'Windows'
