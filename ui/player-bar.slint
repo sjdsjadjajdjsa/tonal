@@ -102,7 +102,7 @@ export component PlayerBar inherits Rectangle {
         spacing: 16px;
         HorizontalLayout {
             horizontal-stretch: 1;
-            min-width: 256px;
+            min-width: 290px;
             preferred-width: 0px;
             spacing: 14px;
             VerticalLayout {
@@ -153,10 +153,11 @@ export component PlayerBar inherits Rectangle {
         }
         HorizontalLayout {
             horizontal-stretch: 1;
-            min-width: 256px;
+            min-width: 290px;
             preferred-width: 0px;
             alignment: end;
             spacing: 4px;
+            VerticalLayout { alignment: center; IconButton { icon: Icons.equalizer; active: root.panel == "eq"; icon-size: 17px; clicked => { root.command("eq"); } } }
             VerticalLayout { alignment: center; IconButton { icon: Icons.lyrics; active: root.panel == "lyrics"; icon-size: 17px; clicked => { root.command("lyrics"); } } }
             VerticalLayout { alignment: center; IconButton { icon: Icons.queue; active: root.panel == "queue"; icon-size: 17px; clicked => { root.command("queue"); } } }
             VerticalLayout {

@@ -5,6 +5,7 @@ import { PlayerBar } from "player-bar.slint";
 import { SettingsView, SettingRow, LyricsView, LyricRow } from "views.slint";
 import { Dialog } from "dialogs.slint";
 import { ArtistView, AlbumView, CardRow } from "browse.slint";
+import { EqPanel } from "equalizer.slint";
 
 export { TrackRow, PlaylistRow, SettingRow, LyricRow, CardRow, Theme }
 
@@ -16,7 +17,7 @@ export component AppWindow inherits Window {
     icon: @image-url("icon.png");
     preferred-width: 1240px;
     preferred-height: 780px;
-    min-width: root.mini ? 340px : 860px;
+    min-width: root.mini ? 340px : 940px;
     min-height: (root.mini ? 150px : 520px) + root.titlebar-inset;
     background: Theme.background;
     default-font-family: "Inter";
@@ -87,6 +88,17 @@ export component AppWindow inherits Window {
     in property <string> album-meta;
     in property <[string]> album-artists;
     in property <image> album-cover;
+    in property <[float]> eq-gains;
+    in property <string> eq-preset: "Flat";
+    in property <float> eq-preamp;
+    in property <bool> eq-comparing;
+    in property <string> eq-backdrop;
+    in property <string> eq-fill;
+    in property <string> eq-haze;
+    in property <string> eq-glow;
+    in property <string> eq-line;
+    in-out property <length> eq-width;
+    in-out property <length> eq-height;
 
     function update-wide() {
         root.slim = root.width - (root.panel != "" ? 320px : 0px) < 900px;
@@ -118,6 +130,13 @@ export component AppWindow inherits Window {
     callback open-card(string, int);
     callback artist-action(string);
     callback album-action(string);
+    callback eq-choose(string);
+    callback eq-drag(int, float);
+    callback eq-release();
+    callback eq-reset(int);
+    callback eq-preamp-change(float);
+    callback eq-compare(bool);
+    callback eq-resized();
     callback nav(int);
 
     public function focus-search() {
@@ -398,9 +417,29 @@ export component AppWindow inherits Window {
                             height: 44px;
                             padding-left: 8px;
                             Label {
-                                text: root.panel == "queue" ? "Queue" : "Lyrics";
+                                text: root.panel == "queue" ? "Queue" : root.panel == "eq" ? "Equalizer" : "Lyrics";
                                 font-size: 17px;
                                 font-weight: 700;
+                            }
+                            if root.panel == "eq": VerticalLayout {
+                                alignment: center;
+                                Rectangle {
+                                    width: 30px;
+                                    height: 30px;
+                                    border-radius: 15px;
+                                    background: compare.pressed ? Theme.text : compare.has-hover ? Theme.hover : transparent;
+                                    animate background { duration: 120ms; }
+                                    Icon {
+                                        data: Icons.compare;
+                                        width: 16px;
+                                        height: 16px;
+                                        tint: compare.pressed ? Theme.on-accent : compare.has-hover ? Theme.text : Theme.muted;
+                                    }
+                                    compare := TouchArea {
+                                        mouse-cursor: pointer;
+                                        changed pressed => { root.eq-compare(self.pressed); }
+                                    }
+                                }
                             }
                             if root.panel == "queue" && root.queue.length > 0: VerticalLayout {
                                 alignment: center;
@@ -423,6 +462,34 @@ export component AppWindow inherits Window {
                             reorder(i, d) => { root.queue-move(i, d); }
                             artist(i, w) => { root.open-artist("queue", i, w); }
                         }
+                        if root.panel == "eq": EqPanel {
+                            padding-left: 8px;
+                            init => {
+                                root.eq-width = self.graph-width;
+                                root.eq-height = self.graph-height;
+                                root.eq-resized();
+                            }
+                            changed graph-width => {
+                                root.eq-width = self.graph-width;
+                                root.eq-height = self.graph-height;
+                                root.eq-resized();
+                            }
+                            gains: root.eq-gains;
+                            preset: root.eq-preset;
+                            preamp: root.eq-preamp;
+                            comparing: root.eq-comparing;
+                            backdrop: root.eq-backdrop;
+                            fill: root.eq-fill;
+                            haze: root.eq-haze;
+                            glow: root.eq-glow;
+                            line: root.eq-line;
+                            choose(name) => { root.eq-choose(name); }
+                            drag(i, g) => { root.eq-drag(i, g); }
+                            release => { root.eq-release(); }
+                            reset(i) => { root.eq-reset(i); }
+                            preamp-change(v) => { root.eq-preamp-change(v); }
+                        }
+                        if root.panel == "eq": Rectangle { vertical-stretch: 1; }
                         if root.panel == "lyrics": LyricsView {
                             vertical-stretch: 1;
                             min-height: 80px;

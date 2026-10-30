@@ -14,7 +14,7 @@ pub(super) fn debug_hooks(app: &Controller, window: &AppWindow) {
     }
     if let Ok(view) = std::env::var("TONAL_DEBUG_VIEW") {
         match view.as_str() {
-            "mini" | "queue" | "lyrics" => app.command(&view),
+            "mini" | "queue" | "lyrics" | "eq" => app.command(&view),
             "settings" => app.load_page("Settings"),
             _ => {}
         }
@@ -47,6 +47,9 @@ pub(super) fn debug_hooks(app: &Controller, window: &AppWindow) {
             artist: artist.into(),
             ..Default::default()
         }));
+    }
+    if let Ok(preset) = std::env::var("TONAL_DEBUG_EQ") {
+        app.eq_choose(&preset);
     }
     if let Ok(title) = std::env::var("TONAL_DEBUG_TITLE") {
         window.set_window_title(title.into());

@@ -137,6 +137,7 @@ pub fn settings(s: &Settings) -> Vec<SettingRow> {
                     "toggle",
                     false,
                 ),
+                ("eq", "Equalizer", s.eq_preset.clone(), "", "action", false),
                 (
                     "visualizer",
                     "Wave visualizer",

@@ -73,11 +73,7 @@ pub(super) struct Mpv {
 }
 
 impl Mpv {
-    pub async fn spawn(
-        events: UnboundedSender<Message>,
-        volume: f64,
-        normalize: bool,
-    ) -> Result<Self> {
+    pub async fn spawn(events: UnboundedSender<Message>, volume: f64, af: &str) -> Result<Self> {
         let id = NEXT_SOCKET.fetch_add(1, Ordering::Relaxed);
         #[cfg(unix)]
         let endpoint = std::env::temp_dir().join(format!("tonal-{}-{id}.sock", std::process::id()));
@@ -105,8 +101,8 @@ impl Mpv {
             "--audio-client-name=tonal-{}-{id}",
             std::process::id()
         ));
-        if normalize {
-            command.arg("--af=dynaudnorm=f=250:g=15");
+        if !af.is_empty() {
+            command.arg(format!("--af={af}"));
         }
         #[cfg(test)]
         command.arg("--ao=null");

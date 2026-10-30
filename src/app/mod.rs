@@ -2,6 +2,7 @@ mod browse;
 mod controller;
 #[cfg(feature = "debug-hooks")]
 mod debug;
+mod equalizer;
 mod integrations;
 mod library_actions;
 mod models;
@@ -40,6 +41,10 @@ pub fn run() -> anyhow::Result<()> {
             gapless: settings.gapless,
             shuffle: settings.shuffle,
             repeat: settings.repeat,
+            equalizer: player::Equalizer {
+                gains: settings.eq_gains,
+                preamp: settings.eq_preamp,
+            },
         },
         tx,
     )?;
@@ -195,6 +200,23 @@ pub fn run() -> anyhow::Result<()> {
     window.on_add_playlist(move |id| c.add_playlist(id as i64));
     let c = app.clone();
     window.on_command(move |command| c.command(&command));
+    app.eq_init(&window);
+    let c = app.clone();
+    window.on_eq_choose(move |name| c.eq_choose(&name));
+    let c = app.clone();
+    window.on_eq_drag(move |band, gain| c.eq_drag(band as usize, gain as f64));
+    let c = app.clone();
+    window.on_eq_reset(move |band| c.eq_reset(band as usize));
+    let c = app.clone();
+    window.on_eq_preamp_change(move |v| c.eq_preamp(v as f64));
+    let c = app.clone();
+    window.on_eq_compare(move |on| c.eq_compare(on));
+    let weak = window.as_weak();
+    window.on_eq_resized(move || {
+        if let Some(w) = weak.upgrade() {
+            equalizer::render(&w);
+        }
+    });
     let c = app.clone();
     window.on_seek(move |position| c.seek(position as f64));
     let c = app.clone();

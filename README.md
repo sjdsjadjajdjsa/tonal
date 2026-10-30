@@ -25,6 +25,7 @@ Most music apps are a web browser in disguise. Tonal draws its own window with [
 - **Your library:** liked songs, playlists, play history, most played, and a queue you can reorder. The queue and position come back when you reopen the app.
 - **Spotify import:** paste a public playlist or album link and Tonal finds every song on YouTube Music (up to 100 songs). Log in with a free Spotify developer app for bigger playlists and your liked songs. Spotify audio itself is never used.
 - **Flowing visualizer:** a soft wave across the bottom of the window that moves with the music. It only runs while something plays, and settles into a still line when you pause.
+- **Equalizer:** drag six points on a smooth curve, or pick a preset. Hold the compare button to hear the song without it.
 - **Good playback:** gapless, crossfade, volume levelling, shuffle and repeat, all done by mpv.
 - **Radio:** when the queue runs out, Tonal keeps going with similar songs.
 - **Synced lyrics** from [LRCLIB](https://lrclib.net), highlighted line by line.

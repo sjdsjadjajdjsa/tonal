@@ -525,11 +525,50 @@ async fn real_mpv_loaded_then_failed_repeat_cycle_stops() {
     assert!(std::iter::from_fn(|| rx.try_recv().ok()).any(|e| matches!(e, PlayerEvent::Error(_))));
 }
 
+#[tokio::test]
+async fn real_mpv_equalizer_changes_live_and_survives_filter_rebuilds() {
+    let tone = Tone::new();
+    let (mut engine, _) = tone_engine(&tone).await;
+    let bass = super::Equalizer {
+        gains: [6.0, 4.0, 1.0, 0.0, 0.0, 0.0],
+        preamp: -3.0,
+    };
+    for command in bass.commands() {
+        let reply = engine.active.as_mut().unwrap().request(command).await;
+        assert!(
+            reply.is_ok(),
+            "mpv rejected an equalizer command: {reply:?}"
+        );
+    }
+    engine.command(Cmd::Equalizer(bass)).await.unwrap();
+    engine.command(Cmd::Normalize(true)).await.unwrap();
+    let af = engine
+        .active
+        .as_mut()
+        .unwrap()
+        .request(json!(["get_property", "af"]))
+        .await
+        .unwrap();
+    let graph = af
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["label"] == "eq")
+        .expect("equalizer filter")["params"]["graph"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(graph.contains("lowshelf@b0=f=60:g=6.0"), "{graph}");
+    assert!(graph.contains("volume@pre=volume=-3.0dB"), "{graph}");
+    assert!(af.to_string().contains("dynaudnorm"), "{af}");
+}
+
 fn config() -> PlayerConfig {
     PlayerConfig {
         volume: 35.0,
         crossfade_secs: 0.0,
         normalize: false,
+        equalizer: Default::default(),
         gapless: true,
         shuffle: false,
         repeat: RepeatMode::Off,

@@ -54,6 +54,10 @@ fn tick(window: &AppWindow) {
         let now = Instant::now();
         let dt = now.duration_since(waves.last).as_secs_f32();
         waves.last = now;
+        let eq_open = window.get_panel() == "eq";
+        waves
+            .visualizer
+            .set_backdrop(eq_open.then(|| (window.get_eq_width(), window.get_eq_height())));
         let frame = waves
             .visualizer
             .frame(dt, window.get_wave_width(), window.get_wave_height());
@@ -66,6 +70,7 @@ fn tick(window: &AppWindow) {
             window.set_wave_haze(Default::default());
             window.set_wave_glow(Default::default());
             window.set_wave_line(Default::default());
+            window.set_eq_backdrop(Default::default());
             return;
         }
         window.set_wave_back(frame.back.into());
@@ -74,5 +79,6 @@ fn tick(window: &AppWindow) {
         window.set_wave_haze(frame.haze.into());
         window.set_wave_glow(frame.glow.into());
         window.set_wave_line(frame.line.into());
+        window.set_eq_backdrop(frame.backdrop.into());
     });
 }

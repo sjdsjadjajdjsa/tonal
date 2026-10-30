@@ -1,0 +1,218 @@
+import { Theme, Icons, Label, Icon, Scrubber } from "theme.slint";
+
+component Chip inherits Rectangle {
+    in property <string> text;
+    in property <bool> active;
+    in property <bool> passive;
+    callback clicked;
+    height: 28px;
+    width: label.preferred-width + 24px;
+    border-radius: 14px;
+    background: root.active ? Theme.hover : touch.has-hover && !root.passive ? Theme.surface : transparent;
+    opacity: root.passive && !root.active ? 0.45 : 1;
+    animate background, opacity { duration: 140ms; }
+    label := Label {
+        text: root.text;
+        font-size: 12px;
+        font-weight: root.active ? 600 : 500;
+        color: root.active || touch.has-hover ? Theme.text : Theme.muted;
+        horizontal-alignment: center;
+    }
+    touch := TouchArea {
+        enabled: !root.passive;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+/// The equalizer: preset chips, a curve with one handle per band, and a preamp.
+export component EqPanel inherits VerticalLayout {
+    in property <[float]> gains;
+    in property <string> preset;
+    in property <float> preamp;
+    in property <bool> comparing;
+    in property <string> backdrop;
+    in property <string> fill;
+    in property <string> haze;
+    in property <string> glow;
+    in property <string> line;
+    out property <length> graph-width: graph.width;
+    out property <length> graph-height: graph.height;
+    callback choose(string);
+    callback drag(int, float);
+    callback release();
+    callback reset(int);
+    callback preamp-change(float);
+
+    private property <length> pad: 22px;
+    private property <int> band: -1;
+    private property <length> step: (graph.width - 2 * root.pad) / 5;
+
+    function nearest(x: length) -> int {
+        return clamp(round((x - root.pad) / root.step), 0, 5);
+    }
+    function gain-at(y: length) -> float {
+        return clamp(round((graph.height / 2 - y) / (graph.height / 2 - 16px) * 24) / 2, -12, 12);
+    }
+
+    spacing: 14px;
+
+    VerticalLayout {
+        spacing: 4px;
+        HorizontalLayout {
+            spacing: 4px;
+            alignment: start;
+            for name in ["Flat", "Bass", "Vocal", "Bright"]: Chip {
+                text: name;
+                active: root.preset == name;
+                clicked => { root.choose(name); }
+            }
+        }
+        HorizontalLayout {
+            spacing: 4px;
+            alignment: start;
+            for name in ["Warm", "Late night"]: Chip {
+                text: name;
+                active: root.preset == name;
+                clicked => { root.choose(name); }
+            }
+            Chip { text: "Custom"; passive: true; active: root.preset == "Custom"; }
+        }
+    }
+
+    graph := Rectangle {
+        height: 176px;
+        border-radius: Theme.radius-l;
+        background: Theme.text.with-alpha(0.025);
+        clip: true;
+
+        Path {
+            width: 100%;
+            height: 100%;
+            viewbox-width: graph.width / 1px;
+            viewbox-height: graph.height / 1px;
+            commands: root.backdrop;
+            fill: @linear-gradient(180deg, Theme.text.with-alpha(0.01) 0%, Theme.text.with-alpha(0.06) 100%);
+            stroke-width: 0px;
+        }
+        Rectangle {
+            y: (graph.height - 1px) / 2;
+            height: 1px;
+            background: Theme.text.with-alpha(0.05);
+        }
+        Path {
+            width: 100%;
+            height: 100%;
+            viewbox-width: graph.width / 1px;
+            viewbox-height: graph.height / 1px;
+            commands: root.fill;
+            fill: @linear-gradient(180deg, Theme.text.with-alpha(0.09) 0%, Theme.text.with-alpha(0) 80%);
+            stroke-width: 0px;
+        }
+        Path {
+            width: 100%;
+            height: 100%;
+            viewbox-width: graph.width / 1px;
+            viewbox-height: graph.height / 1px;
+            commands: root.haze;
+            fill: Theme.text.with-alpha(0.03);
+            stroke-width: 0px;
+        }
+        Path {
+            width: 100%;
+            height: 100%;
+            viewbox-width: graph.width / 1px;
+            viewbox-height: graph.height / 1px;
+            commands: root.glow;
+            fill: Theme.text.with-alpha(0.07);
+            stroke-width: 0px;
+        }
+        Path {
+            width: 100%;
+            height: 100%;
+            viewbox-width: graph.width / 1px;
+            viewbox-height: graph.height / 1px;
+            commands: root.line;
+            fill: Theme.text.with-alpha(0.85);
+            stroke-width: 0px;
+        }
+
+        for gain[i] in root.gains: Rectangle {
+            private property <length> size: root.band == i ? 13px : touch.has-hover && root.nearest(touch.mouse-x) == i ? 12px : 10px;
+            x: root.pad + i * root.step - self.width / 2;
+            y: graph.height / 2 - gain / 12 * (graph.height / 2 - 16px) - self.height / 2;
+            width: self.size;
+            height: self.size;
+            border-radius: self.size / 2;
+            background: Theme.text;
+            opacity: root.comparing ? 0.3 : 1;
+            animate width, height, opacity { duration: 120ms; easing: ease-out; }
+        }
+
+        if root.band >= 0: Label {
+            private property <float> value: root.gains[root.band];
+            x: root.pad + root.band * root.step - self.width / 2;
+            y: graph.height / 2 - self.value / 12 * (graph.height / 2 - 16px) - 26px;
+            width: 48px;
+            height: 14px;
+            horizontal-alignment: center;
+            font-size: 10.5px;
+            font-weight: 600;
+            text: (self.value > 0 ? "+" : "") + self.value + " dB";
+        }
+
+        touch := TouchArea {
+            mouse-cursor: root.band >= 0 ? MouseCursor.ns-resize : MouseCursor.pointer;
+            pointer-event(event) => {
+                if event.button != PointerEventButton.left { return; }
+                if event.kind == PointerEventKind.down {
+                    root.band = root.nearest(self.mouse-x);
+                    root.drag(root.band, root.gain-at(self.mouse-y));
+                }
+                if event.kind == PointerEventKind.up && root.band >= 0 {
+                    root.band = -1;
+                    root.release();
+                }
+            }
+            moved => {
+                if self.pressed && root.band >= 0 {
+                    root.drag(root.band, root.gain-at(self.mouse-y));
+                }
+            }
+            double-clicked => { root.reset(root.nearest(self.mouse-x)); }
+        }
+    }
+
+    Rectangle {
+        height: 12px;
+        for label[i] in ["60", "150", "400", "1k", "3k", "8k"]: Label {
+            x: root.pad + i * root.step - self.width / 2;
+            y: -8px;
+            width: 32px;
+            horizontal-alignment: center;
+            font-size: 10.5px;
+            color: Theme.faint;
+            text: label;
+        }
+    }
+
+    HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 6px;
+        spacing: 12px;
+        height: 30px;
+        VerticalLayout {
+            alignment: center;
+            Icon { data: Icons.volume-low; width: 16px; height: 16px; tint: Theme.faint; }
+        }
+        VerticalLayout {
+            alignment: center;
+            Scrubber {
+                value: root.preamp + 12;
+                maximum: 12;
+                live: true;
+                changed(v) => { root.preamp-change(round((v - 12) * 2) / 2); }
+            }
+        }
+    }
+}

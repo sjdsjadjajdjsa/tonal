@@ -37,6 +37,8 @@ pub struct WaveFrame {
     pub haze: String,
     pub glow: String,
     pub line: String,
+    /// The back wave redrawn for the equalizer's graph, when it is open.
+    pub backdrop: String,
 }
 
 pub struct Visualizer {
@@ -54,6 +56,7 @@ pub struct Visualizer {
     width: f32,
     height: f32,
     presence: f32,
+    backdrop: Option<(f32, f32)>,
 }
 
 impl Visualizer {
@@ -89,12 +92,18 @@ impl Visualizer {
             width: 1000.0,
             height: 60.0,
             presence: 0.0,
+            backdrop: None,
         }
     }
 
     pub fn set_playing(&mut self, playing: bool) {
         self.playing = playing;
         self.capture.set_active(playing);
+    }
+
+    /// Also draw the back wave at this size (the equalizer graph), or stop with None.
+    pub fn set_backdrop(&mut self, size: Option<(f32, f32)>) {
+        self.backdrop = size.filter(|(w, h)| *w > 1.0 && *h > 1.0);
     }
 
     pub fn is_settled(&self) -> bool {
@@ -154,6 +163,16 @@ impl Visualizer {
         self.presence = (self.energy * 8.0).min(1.0);
         let back = self.points(&blurred, t * 0.7, 0.82, 0.8);
         let front = self.points(&blurred, t * 1.6 + 4.2, 1.0, 1.5);
+        let backdrop = match self.backdrop {
+            Some((w, h)) => {
+                let size = (self.width, self.height);
+                (self.width, self.height) = (w, h);
+                let points = self.points(&blurred, t * 0.7, 0.6, 0.8);
+                (self.width, self.height) = size;
+                area(&points, h + 1.0)
+            }
+            None => String::new(),
+        };
         WaveFrame {
             back: area(&back, self.height + 1.0),
             front: area(&front, self.height + 1.0),
@@ -161,6 +180,7 @@ impl Visualizer {
             haze: ribbon(&front, 5.0, 3.0),
             glow: ribbon(&front, 2.2, 1.6),
             line: ribbon(&front, 0.7, 0.7),
+            backdrop,
         }
     }
 
@@ -220,9 +240,9 @@ fn curve(path: &mut String, points: &[(f32, f32)]) {
 }
 
 /// The wave filled down to `floor`.
-fn area(points: &Points, floor: f32) -> String {
+pub(crate) fn area(points: &[(f32, f32)], floor: f32) -> String {
     use std::fmt::Write;
-    let (first, last) = (points[0], points[POINTS - 1]);
+    let (first, last) = (points[0], points[points.len() - 1]);
     let mut path = format!(
         "M {:.2} {floor:.2} L {:.2} {:.2}",
         first.0, first.0, first.1
@@ -235,22 +255,23 @@ fn area(points: &Points, floor: f32) -> String {
 /// A closed band of even thickness along the wave's crest, `up` above it and `down`
 /// below, measured along the curve's normal. Filled bands render identically on
 /// every backend, unlike open stroked paths.
-fn ribbon(points: &Points, up: f32, down: f32) -> String {
+pub(crate) fn ribbon(points: &[(f32, f32)], up: f32, down: f32) -> String {
     use std::fmt::Write;
+    let n = points.len();
     let normal = |i: usize| {
         let a = points[i.saturating_sub(1)];
-        let b = points[(i + 1).min(POINTS - 1)];
+        let b = points[(i + 1).min(n - 1)];
         let (dx, dy) = (b.0 - a.0, b.1 - a.1);
         let len = (dx * dx + dy * dy).sqrt().max(f32::EPSILON);
         (dy / len, -dx / len)
     };
-    let mut top = [(0.0f32, 0.0f32); POINTS];
-    let mut bottom = [(0.0f32, 0.0f32); POINTS];
-    for i in 0..POINTS {
+    let mut top = vec![(0.0f32, 0.0f32); n];
+    let mut bottom = vec![(0.0f32, 0.0f32); n];
+    for i in 0..n {
         let (nx, ny) = normal(i);
         let (x, y) = points[i];
         top[i] = (x + nx * up, y + ny * up);
-        bottom[POINTS - 1 - i] = (x - nx * down, y - ny * down);
+        bottom[n - 1 - i] = (x - nx * down, y - ny * down);
     }
     let mut path = format!("M {:.2} {:.2}", top[0].0, top[0].1);
     curve(&mut path, &top);

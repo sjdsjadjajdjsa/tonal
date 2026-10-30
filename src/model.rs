@@ -167,6 +167,9 @@ pub struct Settings {
     pub scrobble_enabled: bool,
     pub visualizer: bool,
     pub youtube_cookies: String,
+    pub eq_gains: [f64; 6],
+    pub eq_preamp: f64,
+    pub eq_preset: String,
 }
 
 impl Default for Settings {
@@ -196,6 +199,9 @@ impl Default for Settings {
             scrobble_enabled: false,
             visualizer: true,
             youtube_cookies: String::new(),
+            eq_gains: [0.0; 6],
+            eq_preamp: 0.0,
+            eq_preset: "Flat".into(),
         }
     }
 }

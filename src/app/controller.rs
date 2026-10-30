@@ -160,7 +160,7 @@ impl Controller {
                 self.player.set_shuffle(true);
                 self.play(0);
             }
-            "queue" | "lyrics" => {
+            "queue" | "lyrics" | "eq" => {
                 let panel = command.to_owned();
                 self.ui(move |w| {
                     if w.get_panel() == panel {

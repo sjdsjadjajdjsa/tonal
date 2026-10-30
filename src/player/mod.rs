@@ -30,6 +30,71 @@ pub struct PlayerConfig {
     pub gapless: bool,
     pub shuffle: bool,
     pub repeat: RepeatMode,
+    pub equalizer: Equalizer,
+}
+
+/// Center frequencies of the equalizer bands. The first is a low shelf, the last a
+/// high shelf, the rest are peaks an octave wide.
+pub const EQ_BANDS: [f64; 6] = [60.0, 150.0, 400.0, 1000.0, 3000.0, 8000.0];
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Equalizer {
+    pub gains: [f64; 6],
+    pub preamp: f64,
+}
+
+impl Equalizer {
+    /// mpv filter for the whole equalizer, labelled so each band can be changed live.
+    fn graph(&self) -> String {
+        let bands: Vec<String> = EQ_BANDS
+            .iter()
+            .zip(self.gains)
+            .enumerate()
+            .map(|(i, (f, g))| match i {
+                0 => format!("lowshelf@b0=f={f}:g={g:.1}"),
+                5 => format!("highshelf@b5=f={f}:g={g:.1}"),
+                _ => format!("equalizer@b{i}=f={f}:t=o:w=1:g={g:.1}"),
+            })
+            .collect();
+        format!(
+            "@eq:lavfi=[{},volume@pre=volume={:.1}dB]",
+            bands.join(","),
+            self.preamp
+        )
+    }
+
+    fn commands(&self) -> Vec<Value> {
+        let mut out: Vec<Value> = self
+            .gains
+            .iter()
+            .enumerate()
+            .map(|(i, g)| {
+                let target = match i {
+                    0 => "lowshelf@b0".to_string(),
+                    5 => "highshelf@b5".to_string(),
+                    _ => format!("equalizer@b{i}"),
+                };
+                json!(["af-command", "eq", "g", format!("{g:.1}"), target])
+            })
+            .collect();
+        out.push(json!([
+            "af-command",
+            "eq",
+            "volume",
+            format!("{:.1}dB", self.preamp),
+            "volume@pre"
+        ]));
+        out
+    }
+}
+
+fn filters(normalize: bool, equalizer: &Equalizer) -> String {
+    let eq = equalizer.graph();
+    if normalize {
+        format!("dynaudnorm=f=250:g=15,{eq}")
+    } else {
+        eq
+    }
 }
 
 mod mpv;
@@ -65,6 +130,7 @@ enum Cmd {
     Repeat(RepeatMode),
     Crossfade(f64),
     Normalize(bool),
+    Equalizer(Equalizer),
     Gapless(bool),
     YtdlOptions,
     Shutdown,
@@ -142,6 +208,9 @@ impl PlayerHandle {
     }
     pub fn set_normalize(&self, on: bool) {
         let _ = self.tx.send(Cmd::Normalize(on));
+    }
+    pub fn set_equalizer(&self, equalizer: Equalizer) {
+        let _ = self.tx.send(Cmd::Equalizer(equalizer));
     }
     pub fn refresh_ytdl_options(&self) {
         let _ = self.tx.send(Cmd::YtdlOptions);
@@ -313,14 +382,8 @@ impl Engine {
             self.core_idle = true;
             self.update_buffering();
             let result: Result<()> = async {
-                self.active = Some(
-                    Mpv::spawn(
-                        self.ipc_tx.clone(),
-                        self.config.volume,
-                        self.config.normalize,
-                    )
-                    .await?,
-                );
+                self.active =
+                    Some(Mpv::spawn(self.ipc_tx.clone(), self.config.volume, &self.af()).await?);
                 self.active_send(json!(["set_property", "pause", paused]))
                     .await?;
                 self.active
@@ -414,14 +477,8 @@ impl Engine {
             return self.stop_playback().await;
         };
         if self.active.is_none() {
-            self.active = Some(
-                Mpv::spawn(
-                    self.ipc_tx.clone(),
-                    self.config.volume,
-                    self.config.normalize,
-                )
-                .await?,
-            );
+            self.active =
+                Some(Mpv::spawn(self.ipc_tx.clone(), self.config.volume, &self.af()).await?);
         }
         self.cache_paused = false;
         self.emit(PlayerEvent::Paused(self.paused));
@@ -626,11 +683,22 @@ impl Engine {
             }
             Cmd::Normalize(on) => {
                 self.config.normalize = on;
-                let filter = if on { "dynaudnorm=f=250:g=15" } else { "" };
-                self.active_send(json!(["set_property", "af", filter]))
+                let filter = self.af();
+                self.active_send(json!(["set_property", "af", filter.clone()]))
                     .await?;
                 if let Some(mpv) = &mut self.standby {
                     mpv.send(json!(["set_property", "af", filter])).await?;
+                }
+            }
+            Cmd::Equalizer(equalizer) => {
+                if equalizer != self.config.equalizer {
+                    self.config.equalizer = equalizer;
+                    for command in equalizer.commands() {
+                        self.active_send(command.clone()).await?;
+                        if let Some(mpv) = &mut self.standby {
+                            mpv.send(command).await?;
+                        }
+                    }
                 }
             }
             Cmd::Gapless(on) => {
@@ -851,6 +919,10 @@ impl Engine {
         }
         Ok(())
     }
+    fn af(&self) -> String {
+        filters(self.config.normalize, &self.config.equalizer)
+    }
+
     async fn maybe_fade(&mut self) -> Result<()> {
         let remaining = self.duration - self.pos;
         if self.config.crossfade_secs <= 0.0
@@ -872,7 +944,7 @@ impl Engine {
         let track_duration = track.duration_secs.unwrap_or(0.0);
         let next = self.queue.key_at(index).expect("queue index");
         if self.standby.is_none() {
-            self.standby = Some(Mpv::spawn(self.ipc_tx.clone(), 0.0, self.config.normalize).await?);
+            self.standby = Some(Mpv::spawn(self.ipc_tx.clone(), 0.0, &self.af()).await?);
         }
         let mpv = self.standby.as_mut().expect("standby mpv");
         mpv.send(json!(["set_property", "volume", 0])).await?;
