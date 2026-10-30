@@ -21,10 +21,10 @@ for size in 16 32 128 256 512; do
 done
 iconutil -c icns "$iconset" -o "$app/Contents/Resources/tonal.icns"
 
-# A stable certificate (from setup-signing.sh) keeps macOS permissions across
-# rebuilds. Without it, ad-hoc signing changes the app's identity every build.
+# Ad-hoc signing. macOS ignores Full Disk Access for apps signed with an
+# untrusted self-made certificate, so the local certificate is opt-in only.
 identity="Tonal Local Signing"
-if security find-identity -p codesigning 2>/dev/null | grep -q "\"$identity\""; then
+if [ "${TONAL_SIGN_LOCAL:-}" = 1 ] && security find-identity -p codesigning 2>/dev/null | grep -q "\"$identity\""; then
     codesign --force --sign "$identity" --identifier io.github.sjdsjadjajdjsa.tonal "$app"
 else
     codesign --force --sign - "$app"
