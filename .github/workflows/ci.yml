@@ -63,7 +63,7 @@ jobs:
           security set-keychain-settings "$TONAL_KEYCHAIN"
           security unlock-keychain -p "$TONAL_KEYCHAIN_PASSWORD" "$TONAL_KEYCHAIN"
           security list-keychains -d user -s "$TONAL_KEYCHAIN" $(security list-keychains -d user | tr -d '"')
-          sh packaging/macos/setup-signing.sh
+          sh packaging/macos/setup-signing.sh || { security dump-keychain "$TONAL_KEYCHAIN"; exit 1; }
           sh packaging/macos/setup-signing.sh
           security find-identity -p codesigning
           sh packaging/macos/build-app.sh
