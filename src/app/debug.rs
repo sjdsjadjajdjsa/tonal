@@ -28,6 +28,9 @@ pub(super) fn debug_hooks(app: &Controller, window: &AppWindow) {
         window.set_source(source);
         app.search(query, source, true);
     }
+    if std::env::var_os("TONAL_DEBUG_RESCAN").is_some() {
+        app.command("rescan");
+    }
     if let Ok(view) = std::env::var("TONAL_DEBUG_VIEW") {
         match view.as_str() {
             "mini" | "queue" | "lyrics" | "eq" => app.command(&view),
@@ -39,7 +42,10 @@ pub(super) fn debug_hooks(app: &Controller, window: &AppWindow) {
                     w.set_home_tab(2);
                     w.set_stats_period(period);
                 });
-                app.load_stats(period);
+                let app = app.clone();
+                slint::Timer::single_shot(std::time::Duration::from_millis(1500), move || {
+                    app.command(&format!("stats:{period}"));
+                });
             }
             "albums" => {
                 app.command("local:albums");
