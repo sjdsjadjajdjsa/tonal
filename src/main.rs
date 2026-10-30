@@ -3,6 +3,8 @@
 mod app;
 mod artwork;
 mod integrations;
+#[cfg(windows)]
+mod job;
 mod library;
 mod media_controls;
 mod model;

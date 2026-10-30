@@ -19,8 +19,9 @@ use tokio::{
 
 static NEXT_SOCKET: AtomicU64 = AtomicU64::new(0);
 
-/// Linux kills mpv through PR_SET_PDEATHSIG. macOS has no equivalent, so a small
-/// shell loop stops mpv once Tonal is gone, even after Cmd+Q or a crash.
+/// Linux kills mpv through PR_SET_PDEATHSIG and Windows through a Job Object
+/// (src/job.rs). macOS has neither, so a small shell loop stops mpv once Tonal is
+/// gone, even after Cmd+Q or a crash.
 #[cfg(all(unix, not(target_os = "linux")))]
 fn stop_with_parent(mpv: u32) {
     let script = format!(
@@ -130,6 +131,8 @@ impl Mpv {
         if let Some(pid) = child.id() {
             stop_with_parent(pid);
         }
+        #[cfg(windows)]
+        crate::job::adopt(child.raw_handle());
         let deadline = Instant::now() + Duration::from_secs(5);
         let stream = loop {
             #[cfg(unix)]

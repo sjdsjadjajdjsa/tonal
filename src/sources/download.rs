@@ -55,6 +55,8 @@ async fn download_attempt(
     artwork: bool,
 ) -> Result<PathBuf> {
     let mut child = download_command(&track.play_url, dir, artwork).spawn()?;
+    #[cfg(windows)]
+    crate::job::adopt(child.raw_handle());
     let stdout = child.stdout.take().context("yt-dlp stdout unavailable")?;
     let stderr = child.stderr.take().context("yt-dlp stderr unavailable")?;
     let errors = tokio::spawn(async move {
