@@ -354,9 +354,8 @@ impl Visualizer {
         use std::f32::consts::TAU;
         let over = self.width * 0.04;
         let span = self.width + 2.0 * over;
-        let base = (self.height * 0.22).min(14.0);
-        let floor = self.height - base;
-        let range = (floor - 3.0) * 0.62;
+        let floor = self.height + 1.0;
+        let range = self.height * 0.8;
         let mut points = [(0.0f32, self.height); POINTS];
         for (i, point) in points.iter_mut().enumerate() {
             let x = i as f32 / (POINTS - 1) as f32;
@@ -364,7 +363,7 @@ impl Visualizer {
             let i0 = pos.floor() as usize;
             let i1 = (i0 + 1).min(BANDS - 1);
             let f = pos - i0 as f32;
-            let level = (levels[i0] * (1.0 - f) + levels[i1] * f).powf(1.2) * 1.2;
+            let level = (levels[i0] * (1.0 - f) + levels[i1] * f).powf(0.9) * 1.15;
             let swell = 0.72
                 + 0.28
                     * (phase + x * 7.0 * ripple).sin()
