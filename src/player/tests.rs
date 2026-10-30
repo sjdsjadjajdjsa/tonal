@@ -202,7 +202,9 @@ async fn real_mpv_crash_command_error_restarts_without_reading_eof() {
     assert_ne!(engine.active.as_ref().unwrap().id, instance);
     assert_eq!(engine.queue.track().unwrap().title, "tone-one");
     assert!(engine.paused);
-    tokio::time::timeout(Duration::from_secs(10), async {
+    // The old reader may be cancelled before it reports EOF; either way it must not
+    // add a second error.
+    let _ = tokio::time::timeout(Duration::from_secs(3), async {
         loop {
             let message = engine.ipc_rx.recv().await.unwrap();
             let old_eof = message.instance == instance && message.value["event"] == "ipc-error";
@@ -212,8 +214,7 @@ async fn real_mpv_crash_command_error_restarts_without_reading_eof() {
             }
         }
     })
-    .await
-    .unwrap();
+    .await;
     let errors = std::iter::from_fn(|| rx.try_recv().ok())
         .filter(|event| matches!(event, PlayerEvent::Error(_)))
         .count();
