@@ -217,7 +217,7 @@ export component AppWindow inherits Window {
                     padding-bottom: 8px;
                     spacing: 16px;
                     if root.page != "Search" && root.page != "Home" && root.page != "Artist" && root.page != "Album": HorizontalLayout {
-                        height: 38px;
+                        height: 44px;
                         spacing: 8px;
                         Label {
                             horizontal-stretch: 1;
@@ -390,11 +390,12 @@ export component AppWindow inherits Window {
                     background: Theme.panel;
                     Rectangle { x: 0; width: 1px; background: Theme.border; }
                     VerticalLayout {
-                        padding-top: 20px;
+                        padding-top: 24px;
                         padding-left: 14px;
                         padding-right: 10px;
                         spacing: 12px;
                         HorizontalLayout {
+                            height: 44px;
                             padding-left: 8px;
                             Label {
                                 text: root.panel == "queue" ? "Queue" : "Lyrics";

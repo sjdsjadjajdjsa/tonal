@@ -129,7 +129,7 @@ component TrackItem inherits Rectangle {
         }
         HorizontalLayout {
             padding-left: root.compact ? 8px : 10px;
-            padding-right: root.compact ? 4px : 10px;
+            padding-right: root.compact ? 12px : 10px;
             spacing: root.compact ? 10px : 14px;
             if !root.compact: Rectangle {
                 width: 28px;
@@ -233,9 +233,8 @@ component TrackItem inherits Rectangle {
                     clicked => { root.menu(self.absolute-position.x - 190px, self.absolute-position.y + 30px); }
                 }
             }
-            if root.compact: HorizontalLayout {
+            if root.compact && row.has-hover: HorizontalLayout {
                 alignment: end;
-                opacity: row.has-hover ? 1 : 0;
                 VerticalLayout { alignment: center; IconButton { icon: Icons.up; size: 26px; icon-size: 15px; clicked => { root.reorder(-1); } } }
                 VerticalLayout { alignment: center; IconButton { icon: Icons.down; size: 26px; icon-size: 15px; clicked => { root.reorder(1); } } }
                 VerticalLayout { alignment: center; IconButton { icon: Icons.close; size: 26px; icon-size: 15px; clicked => { root.remove(); } } }
