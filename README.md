@@ -57,10 +57,12 @@ Download the newest version from [Releases](https://github.com/sjdsjadjajdjsa/to
 | | Download | Run |
 | --- | --- | --- |
 | **Linux** | `tonal-x86_64.AppImage` | Mark it executable (`chmod +x tonal-x86_64.AppImage`) and run it. yt-dlp is inside; install [mpv](https://mpv.io) from your package manager. Needs glibc 2.35 or newer (Ubuntu 22.04, Fedora 36, Arch and so on). `tonal-linux-x86_64.tar.gz` is the same as a plain folder. |
-| **Windows** | `tonal-setup-x86_64.exe` | Run it. Installs for your user only, with no admin rights, and adds a Start menu entry. mpv and yt-dlp are inside. `tonal-windows-x86_64.zip` is the same without an installer. |
+| **Windows** | `tonal-setup-x86_64.exe` | Run it. Installs for your user only, with no admin rights, and adds a Start menu entry. mpv and yt-dlp are inside. `tonal-windows-x86_64.zip` is the portable version: unzip it anywhere (a USB stick works) and run `tonal.exe`. It keeps the library, settings and cache in `data` and `cache` folders next to it. |
 | **macOS** | `tonal-macos-arm64.dmg` | Open it and drag Tonal to Applications. The first time, right-click Tonal and pick Open, as the app isn't signed. Install the tools with `brew install mpv yt-dlp deno`. For Apple Silicon Macs on macOS 14.4 or newer. |
 
-Windows will say the publisher is unknown, as the installer isn't signed: click "More info", then "Run anyway". The visualizer works on Linux and macOS for now.
+Windows will say the publisher is unknown, as the installer isn't signed: click "More info", then "Run anyway". The visualizer works on Linux, Windows and macOS; on Windows it needs Windows 10 21H2 or Windows 11 or newer.
+
+Any build turns portable when a file named `portable` or a folder named `data` sits next to the program: the library and settings then go to `data` and the cache to `cache` in that folder.
 
 To build Tonal.app on macOS yourself, run `sh packaging/macos/build-app.sh` from a clone of this repo. It builds the app and puts it in Applications. The first time a song plays, macOS asks to let Tonal listen to its audio for the visualizer.
 
@@ -114,7 +116,7 @@ The binary is about 21 MB. The software renderer was picked over the GPU one bec
 - `src/sources`: YouTube Music (InnerTube), SoundCloud (yt-dlp), Audius (public API), local files (lofty), radio, matching and downloads.
 - `src/library`: SQLite for tracks, likes, playlists, history, settings and the saved session.
 - `src/integrations`: Spotify import, LRCLIB lyrics, Last.fm and ListenBrainz.
-- `src/visualizer.rs`: reads Tonal's own audio from PipeWire, runs an FFT and turns it into smooth wave paths.
+- `src/visualizer`: reads Tonal's own audio (PipeWire on Linux, WASAPI process loopback on Windows, a Core Audio process tap on macOS), runs an FFT and turns it into smooth wave paths.
 - `ui/`: the Slint interface.
 
 [docs/architecture.md](docs/architecture.md) has the details.
