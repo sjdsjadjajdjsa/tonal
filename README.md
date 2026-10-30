@@ -58,6 +58,7 @@ Download the newest version from [Releases](https://github.com/sjdsjadjajdjsa/to
 | --- | --- | --- |
 | **Linux** | `tonal-x86_64.AppImage` | Mark it executable (`chmod +x tonal-x86_64.AppImage`) and run it. yt-dlp is inside; install [mpv](https://mpv.io) from your package manager. Needs glibc 2.35 or newer (Ubuntu 22.04, Fedora 36, Arch and so on). `tonal-linux-x86_64.tar.gz` is the same as a plain folder. |
 | **Windows** | `tonal-setup-x86_64.exe` | Run it. Installs for your user only, with no admin rights, and adds a Start menu entry. mpv and yt-dlp are inside. `tonal-windows-x86_64.zip` is the portable version: unzip it anywhere (a USB stick works) and run `tonal.exe`. It keeps the library, settings and cache in `data` and `cache` folders next to it. |
+| **Arch Linux** | AUR: `tonal` | `yay -S tonal` or any AUR helper. Builds from source and uses your system's mpv and yt-dlp. |
 | **macOS** | `tonal-macos-arm64.dmg` | Open it and drag Tonal to Applications. The first time, right-click Tonal and pick Open, as the app isn't signed. Install the tools with `brew install mpv yt-dlp deno`. For Apple Silicon Macs on macOS 14.4 or newer. |
 
 Windows will say the publisher is unknown, as the installer isn't signed: click "More info", then "Run anyway". The visualizer works on Linux, Windows and macOS; on Windows it needs Windows 10 21H2 or Windows 11 or newer.
@@ -97,18 +98,34 @@ Right-click a song for play next, add to queue, start radio, download and add to
 
 ## If YouTube asks you to sign in
 
-YouTube sometimes answers "Sign in to confirm you're not a bot", mostly after a lot of plays in a short time. Open **Settings → YouTube → Use browser login** and type the browser where you're signed in to YouTube (`firefox`, `chromium`, `brave`, `chrome`). Tonal then passes that browser's cookies to yt-dlp. SoundCloud, Audius and local files keep working either way.
+YouTube sometimes answers "Sign in to confirm you're not a bot", mostly after a lot of plays in a short time. Open **Settings → YouTube → Use browser login** and type the browser where you're signed in to YouTube (`firefox`, `chromium`, `brave`, `chrome`). Tonal then passes that browser's cookies to yt-dlp. On macOS, also turn Tonal on in System Settings → Privacy & Security → Full Disk Access, and pick Always Allow when the Keychain asks, so yt-dlp can read the browser's login. SoundCloud, Audius and local files keep working either way.
 
-## Performance
+## Benchmarks
 
-Measured on the release build, Arch Linux, Hyprland, playing a stream with the visualizer on.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/benchmark-dark.svg">
+  <img alt="Memory and CPU of music players while playing a song" src="docs/images/benchmark-light.svg">
+</picture>
 
-| | CPU | Memory |
-| --- | --- | --- |
-| Idle | 0% | about 33 MB |
-| Playing | about 5% of one core, plus about 0.5% for mpv | about 46 MB |
+Every player was measured the same way by [`bench/bench.py`](bench/bench.py): start it fresh, wait 30 seconds, then play a song into a silent output and measure 30 seconds of it, twice, and take the median. Memory is PSS summed over every process the app starts (mpv for Tonal, the browser processes for Electron apps), so shared libraries count once. CPU is the share of one core. Arch Linux, Hyprland, Ryzen 5 7600, October 2026.
 
-The binary is about 21 MB. The software renderer was picked over the GPU one because it used a third of the memory at the same CPU. Nothing redraws while the app is idle, and the visualizer timer stops as soon as the waves settle.
+| | Memory playing | CPU playing | CPU before playing | Plays |
+| --- | --- | --- | --- | --- |
+| **Tonal (waves off)** | 117 MB | 0.5% | 0.0% | same as Tonal |
+| **Tonal** | 120 MB | 6.2% | 0.1% | YouTube, SoundCloud, Audius, local |
+| Strawberry | 133 MB | 1.8% | 0.6% | local files |
+| Amberol | 182 MB | 0.8% | 0.9% | local files |
+| Tauon | 228 MB | 3.0% | 0.6% | local files |
+| Riff | 495 MB | 60.8% | 32.2% | YouTube Music, SoundCloud, local |
+| YouTube Music (Pear) | 805 MB | 10.4% | 12.7% | YouTube Music |
+| Spotify | 1282 MB | 2.7% | 49.0% | Spotify |
+| Spotifast | 100–250 MB (their claim) | not measured | not measured | Spotify, Premium only |
+
+- Versions: Tonal 0.2.0 (this repo), Spotify 1.3.4, Riff 43.2.2 and YouTube Music (Pear) 3.12.0 from their AppImages, Strawberry 1.2.31, Amberol 2026.1 and Tauon 13.1.0 from Flathub.
+- Strawberry, Amberol and Tauon play a local MP3. The others stream, which costs more.
+- Tonal's waves cost about 5.5% of one core, because the window is redrawn by the CPU 30 times a second. Turn them off in Settings and Tonal is the lightest player measured here.
+- [Spotifast](https://github.com/crmne/spotifast) states "100–250 MB of RAM" in its README, and playback needs Spotify Premium, so it isn't measured here.
+- "Before playing" is the 15 seconds right after the 30-second wait, with the app open and nothing playing.
 
 ## How it works
 

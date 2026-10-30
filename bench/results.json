@@ -1,0 +1,338 @@
+{
+  "Tonal": {
+    "streams": true,
+    "runs": [
+      {
+        "idle": {
+          "cpu": 0.07,
+          "mb": 113.4,
+          "processes": 2
+        },
+        "playing": {
+          "cpu": 6.15,
+          "mb": 119.1,
+          "processes": 3
+        },
+        "verified_playing": true
+      },
+      {
+        "idle": {
+          "cpu": 0.07,
+          "mb": 114.0,
+          "processes": 2
+        },
+        "playing": {
+          "cpu": 6.15,
+          "mb": 120.0,
+          "processes": 3
+        },
+        "verified_playing": true
+      }
+    ],
+    "idle": {
+      "cpu": 0.07,
+      "mb": 113.7,
+      "processes": 2.0
+    },
+    "playing": {
+      "cpu": 6.15,
+      "mb": 119.55,
+      "processes": 3.0
+    },
+    "verified_playing": true
+  },
+  "Spotify": {
+    "streams": true,
+    "runs": [
+      {
+        "idle": {
+          "cpu": 48.73,
+          "mb": 1255.2,
+          "processes": 10
+        },
+        "playing": {
+          "cpu": 1.95,
+          "mb": 1280.4,
+          "processes": 10
+        },
+        "verified_playing": true
+      },
+      {
+        "idle": {
+          "cpu": 49.19,
+          "mb": 1303.9,
+          "processes": 10
+        },
+        "playing": {
+          "cpu": 3.46,
+          "mb": 1283.0,
+          "processes": 10
+        },
+        "verified_playing": true
+      }
+    ],
+    "idle": {
+      "cpu": 48.959999999999994,
+      "mb": 1279.5500000000002,
+      "processes": 10.0
+    },
+    "playing": {
+      "cpu": 2.705,
+      "mb": 1281.7,
+      "processes": 10.0
+    },
+    "verified_playing": true
+  },
+  "Riff": {
+    "streams": true,
+    "runs": [
+      {
+        "idle": {
+          "cpu": 33.02,
+          "mb": 448.4,
+          "processes": 6
+        },
+        "playing": {
+          "cpu": 60.46,
+          "mb": 503.4,
+          "processes": 6
+        },
+        "verified_playing": true
+      },
+      {
+        "idle": {
+          "cpu": 31.43,
+          "mb": 463.4,
+          "processes": 6
+        },
+        "playing": {
+          "cpu": 61.18,
+          "mb": 485.8,
+          "processes": 7
+        },
+        "verified_playing": true
+      }
+    ],
+    "idle": {
+      "cpu": 32.225,
+      "mb": 455.9,
+      "processes": 6.0
+    },
+    "playing": {
+      "cpu": 60.82,
+      "mb": 494.6,
+      "processes": 6.5
+    },
+    "verified_playing": true
+  },
+  "YouTube Music (Pear)": {
+    "streams": true,
+    "runs": [
+      {
+        "idle": {
+          "cpu": 13.55,
+          "mb": 815.7,
+          "processes": 8
+        },
+        "playing": {
+          "cpu": 10.46,
+          "mb": 819.6,
+          "processes": 8
+        },
+        "verified_playing": true
+      },
+      {
+        "idle": {
+          "cpu": 11.93,
+          "mb": 777.0,
+          "processes": 8
+        },
+        "playing": {
+          "cpu": 10.43,
+          "mb": 790.3,
+          "processes": 8
+        },
+        "verified_playing": true
+      }
+    ],
+    "idle": {
+      "cpu": 12.74,
+      "mb": 796.35,
+      "processes": 8.0
+    },
+    "playing": {
+      "cpu": 10.445,
+      "mb": 804.95,
+      "processes": 8.0
+    },
+    "verified_playing": true
+  },
+  "Strawberry": {
+    "streams": false,
+    "runs": [
+      {
+        "idle": {
+          "cpu": 0.53,
+          "mb": 122.7,
+          "processes": 3
+        },
+        "playing": {
+          "cpu": 1.79,
+          "mb": 132.9,
+          "processes": 3
+        },
+        "verified_playing": true
+      },
+      {
+        "idle": {
+          "cpu": 0.66,
+          "mb": 122.7,
+          "processes": 3
+        },
+        "playing": {
+          "cpu": 1.79,
+          "mb": 133.0,
+          "processes": 3
+        },
+        "verified_playing": true
+      }
+    ],
+    "idle": {
+      "cpu": 0.595,
+      "mb": 122.7,
+      "processes": 3.0
+    },
+    "playing": {
+      "cpu": 1.79,
+      "mb": 132.95,
+      "processes": 3.0
+    },
+    "verified_playing": true
+  },
+  "Amberol": {
+    "streams": false,
+    "runs": [
+      {
+        "idle": {
+          "cpu": 0.92,
+          "mb": 181.3,
+          "processes": 3
+        },
+        "playing": {
+          "cpu": 0.83,
+          "mb": 181.4,
+          "processes": 3
+        },
+        "verified_playing": true
+      },
+      {
+        "idle": {
+          "cpu": 0.86,
+          "mb": 182.3,
+          "processes": 3
+        },
+        "playing": {
+          "cpu": 0.83,
+          "mb": 182.4,
+          "processes": 3
+        },
+        "verified_playing": true
+      }
+    ],
+    "idle": {
+      "cpu": 0.89,
+      "mb": 181.8,
+      "processes": 3.0
+    },
+    "playing": {
+      "cpu": 0.83,
+      "mb": 181.9,
+      "processes": 3.0
+    },
+    "verified_playing": true
+  },
+  "Tauon": {
+    "streams": false,
+    "runs": [
+      {
+        "idle": {
+          "cpu": 0.59,
+          "mb": 225.6,
+          "processes": 3
+        },
+        "playing": {
+          "cpu": 3.07,
+          "mb": 228.6,
+          "processes": 3
+        },
+        "verified_playing": true
+      },
+      {
+        "idle": {
+          "cpu": 0.59,
+          "mb": 224.9,
+          "processes": 3
+        },
+        "playing": {
+          "cpu": 2.97,
+          "mb": 228.0,
+          "processes": 3
+        },
+        "verified_playing": true
+      }
+    ],
+    "idle": {
+      "cpu": 0.59,
+      "mb": 225.25,
+      "processes": 3.0
+    },
+    "playing": {
+      "cpu": 3.02,
+      "mb": 228.3,
+      "processes": 3.0
+    },
+    "verified_playing": true
+  },
+  "Tonal (waves off)": {
+    "streams": true,
+    "runs": [
+      {
+        "idle": {
+          "cpu": 0.0,
+          "mb": 111.2,
+          "processes": 2
+        },
+        "playing": {
+          "cpu": 0.5,
+          "mb": 116.0,
+          "processes": 2
+        },
+        "verified_playing": true
+      },
+      {
+        "idle": {
+          "cpu": 0.0,
+          "mb": 112.8,
+          "processes": 2
+        },
+        "playing": {
+          "cpu": 0.5,
+          "mb": 117.2,
+          "processes": 2
+        },
+        "verified_playing": true
+      }
+    ],
+    "idle": {
+      "cpu": 0.0,
+      "mb": 112.0,
+      "processes": 2.0
+    },
+    "playing": {
+      "cpu": 0.5,
+      "mb": 116.6,
+      "processes": 2.0
+    },
+    "verified_playing": true
+  }
+}
