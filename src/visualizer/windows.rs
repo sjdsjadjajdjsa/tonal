@@ -148,20 +148,31 @@ enum Sample {
     Int16,
 }
 
+/// Fields drop in order, so the audio client is released before its event closes.
 struct Stream {
     client: IAudioClient,
     capture: IAudioCaptureClient,
-    event: HANDLE,
+    event: Event,
     sample: Sample,
+}
+
+struct Event(HANDLE);
+
+impl Drop for Event {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = CloseHandle(self.0);
+        }
+    }
 }
 
 impl Stream {
     /// Float32 first; 16-bit PCM if the system refuses it.
     fn open() -> Result<Self> {
-        let event = unsafe { CreateEventW(None, false, false, PCWSTR::null())? };
+        let event = Event(unsafe { CreateEventW(None, false, false, PCWSTR::null())? });
         let mut last = Error::from(E_FAIL);
         for sample in [Sample::Float, Sample::Int16] {
-            match Self::init(sample, event) {
+            match Self::init(sample, event.0) {
                 Ok((client, capture)) => {
                     return Ok(Self {
                         client,
@@ -172,9 +183,6 @@ impl Stream {
                 }
                 Err(error) => last = error,
             }
-        }
-        unsafe {
-            let _ = CloseHandle(event);
         }
         Err(last)
     }
@@ -199,7 +207,7 @@ impl Stream {
         unsafe { self.client.Start()? };
         let mut result = Ok(());
         while alive() {
-            if unsafe { WaitForSingleObject(self.event, 100) } != WAIT_OBJECT_0 {
+            if unsafe { WaitForSingleObject(self.event.0, 100) } != WAIT_OBJECT_0 {
                 continue;
             }
             if let Err(error) = self.drain(ring) {
@@ -237,14 +245,6 @@ impl Stream {
                 ring.last = Some(Instant::now());
             }
             unsafe { self.capture.ReleaseBuffer(frames)? };
-        }
-    }
-}
-
-impl Drop for Stream {
-    fn drop(&mut self) {
-        unsafe {
-            let _ = CloseHandle(self.event);
         }
     }
 }
@@ -316,7 +316,9 @@ fn activate() -> Result<IAudioClient> {
             },
         },
     };
-    let mut variant = PROPVARIANT::default();
+    // PROPVARIANT's Drop calls PropVariantClear, which would CoTaskMemFree the blob,
+    // and the blob here is `params` on the stack. Never drop it.
+    let mut variant = std::mem::ManuallyDrop::new(PROPVARIANT::default());
     unsafe {
         let inner = &mut *variant.Anonymous.Anonymous;
         inner.vt = VT_BLOB;
@@ -332,7 +334,7 @@ fn activate() -> Result<IAudioClient> {
         ActivateAudioInterfaceAsync(
             VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK,
             &IAudioClient::IID,
-            Some(&raw const variant),
+            Some(&raw const *variant),
             &handler,
         )?
     };
