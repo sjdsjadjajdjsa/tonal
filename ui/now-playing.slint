@@ -1,0 +1,151 @@
+import { Theme, Icons, Label, Icon, IconButton } from "theme.slint";
+import { LinkText } from "track-list.slint";
+import { LyricsView, LyricRow } from "views.slint";
+import { Waves } from "visualizer.slint";
+
+/// The current song large: cover, names, the waves along the bottom and synced lyrics beside.
+export component NowPlayingView inherits Rectangle {
+    in property <image> art;
+    in property <string> title;
+    in property <[string]> artists;
+    in property <string> album;
+    in property <string> year;
+    in property <[LyricRow]> lyrics;
+    in property <int> lyric-index: -1;
+    in property <bool> slim;
+    in property <bool> waves;
+    in property <string> wave-back;
+    in property <string> wave-front;
+    in property <string> wave-back-line;
+    in property <string> wave-haze;
+    in property <string> wave-glow;
+    in property <string> wave-line;
+    in property <bool> wave-resting: true;
+    in property <color> accent: Theme.text;
+    out property <length> stage-height: clamp(root.height * 0.3, 120px, 240px);
+    out property <length> art-size: max(120px, min(root.column-width * 0.8, root.height - root.top - root.stage-height * 0.6 - 134px, 400px));
+    callback close();
+    callback open-artist(int);
+    callback open-album();
+    callback seek(float);
+
+    private property <length> top: 68px;
+    private property <length> pad-left: root.slim ? 22px : 32px;
+    private property <length> pad-right: root.slim ? 18px : 28px;
+    private property <bool> side: root.lyrics.length > 0 && root.lyrics[0].time >= 0 && root.width >= 860px;
+    private property <length> lyrics-width: root.side ? min(400px, (root.width - root.pad-left - root.pad-right) * 0.42) : 0px;
+    private property <length> column-width: root.width - root.pad-left - root.pad-right - (root.side ? root.lyrics-width + 32px : 0px);
+    private property <float> shown: 0;
+    init => { root.shown = 1; }
+    animate shown { duration: 180ms; easing: ease-out; }
+    opacity: root.shown;
+
+    if root.waves: Waves {
+        x: 0;
+        y: root.height - self.height;
+        width: root.width;
+        height: root.stage-height;
+        back: root.wave-back;
+        front: root.wave-front;
+        back-line: root.wave-back-line;
+        haze: root.wave-haze;
+        glow: root.wave-glow;
+        line: root.wave-line;
+        resting: root.wave-resting;
+        accent: root.accent;
+    }
+
+    VerticalLayout {
+        x: root.pad-left;
+        y: root.top;
+        width: root.column-width;
+        height: root.height - root.top - root.stage-height * 0.6;
+        alignment: center;
+        spacing: 0px;
+        HorizontalLayout {
+            alignment: center;
+            Rectangle {
+                width: root.art-size;
+                height: root.art-size;
+                Rectangle {
+                    width: root.art-size * (0.96 + 0.04 * root.shown);
+                    height: self.width;
+                    border-radius: Theme.radius-l;
+                    background: Theme.raised;
+                    drop-shadow-blur: 44px;
+                    drop-shadow-offset-y: 14px;
+                    drop-shadow-color: #00000070;
+                    if root.art.width == 0: Icon {
+                        data: Icons.music;
+                        width: parent.width * 0.22;
+                        height: parent.width * 0.22;
+                        tint: Theme.faint;
+                    }
+                    Image {
+                        width: 100%;
+                        height: 100%;
+                        source: root.art;
+                        image-fit: cover;
+                    }
+                }
+            }
+        }
+        Rectangle { height: 30px; }
+        Label {
+            text: root.title;
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.4px;
+            horizontal-alignment: center;
+        }
+        Rectangle { height: 8px; }
+        HorizontalLayout {
+            alignment: center;
+            spacing: 6px;
+            height: 20px;
+            for name[i] in root.artists: HorizontalLayout {
+                spacing: 6px;
+                if i > 0: Label { text: "·"; font-size: 15px; color: Theme.faint; }
+                LinkText {
+                    grow: false;
+                    text: name;
+                    font-size: 15px;
+                    font-weight: 500;
+                    clicked => { root.open-artist(i); }
+                }
+            }
+        }
+        Rectangle { height: 4px; }
+        HorizontalLayout {
+            alignment: center;
+            spacing: 6px;
+            height: 18px;
+            if root.album != "": LinkText {
+                grow: false;
+                text: root.album;
+                font-size: 13px;
+                color: Theme.faint;
+                clicked => { root.open-album(); }
+            }
+            if root.album != "" && root.year != "": Label { text: "·"; font-size: 13px; color: Theme.faint; }
+            if root.year != "": Label { text: root.year; font-size: 13px; color: Theme.faint; }
+        }
+    }
+
+    if root.side: LyricsView {
+        x: root.width - root.pad-right - self.width;
+        y: root.top;
+        width: root.lyrics-width;
+        height: root.height - root.top - 24px;
+        lines: root.lyrics;
+        active: root.lyric-index;
+        seek(t) => { root.seek(t); }
+    }
+
+    IconButton {
+        x: root.width - root.pad-right - self.width;
+        y: 24px + (44px - self.height) / 2;
+        icon: Icons.down;
+        clicked => { root.close(); }
+    }
+}

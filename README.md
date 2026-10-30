@@ -24,6 +24,10 @@ Most music apps are a web browser in disguise. Tonal draws its own window with [
 - **One search, four sources:** YouTube Music, SoundCloud, Audius and your local files. YouTube results come straight from YouTube Music, in under a second.
 - **Your library:** liked songs, playlists, play history, most played, and a queue you can reorder. The queue and position come back when you reopen the app.
 - **Spotify import:** paste a public playlist or album link and Tonal finds every song on YouTube Music (up to 100 songs). Log in with a free Spotify developer app for bigger playlists and your liked songs. Spotify audio itself is never used.
+- **Now playing:** click the cover in the player bar (or `Ctrl` `N`) for a big cover, the waves and synced lyrics.
+- **Album grid:** browse your local files as albums, sorted by artist, year or recently added.
+- **Listening stats:** your top artists and albums this month and of all time, on Home. They never leave your computer.
+- **Album colors:** the waves and the equalizer take a soft color from the cover.
 - **Flowing visualizer:** a soft wave across the bottom of the window that moves with the music. It only runs while something plays, and settles into a still line when you pause.
 - **Equalizer:** drag six points on a smooth curve, or pick a preset. Hold the compare button to hear the song without it.
 - **Good playback:** gapless, crossfade, volume levelling, shuffle and repeat, all done by mpv.
@@ -93,6 +97,7 @@ cargo run --release
 | `Ctrl` `↑` `↓` | Volume |
 | `Ctrl` `L` | Like the current song |
 | `Ctrl` `M` | Mini player |
+| `Ctrl` `N` | Now playing, `Esc` to go back |
 | `Alt` `←` `→` | Back, forward |
 
 Right-click a song for play next, add to queue, start radio, download and add to playlist.

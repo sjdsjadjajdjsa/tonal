@@ -38,6 +38,8 @@ export component EqPanel inherits VerticalLayout {
     in property <string> haze;
     in property <string> glow;
     in property <string> line;
+    /// Tint of the curve and the waves behind it.
+    in property <color> accent: Theme.text;
     out property <length> graph-width: graph.width;
     out property <length> graph-height: graph.height;
     callback choose(string);
@@ -97,7 +99,7 @@ export component EqPanel inherits VerticalLayout {
             viewbox-width: graph.width / 1px;
             viewbox-height: graph.height / 1px;
             commands: root.backdrop;
-            fill: @linear-gradient(180deg, Theme.text.with-alpha(0.01) 0%, Theme.text.with-alpha(0.06) 100%);
+            fill: @linear-gradient(180deg, root.accent.with-alpha(0.01) 0%, root.accent.with-alpha(0.06) 100%);
             stroke-width: 0px;
         }
         Rectangle {
@@ -111,7 +113,7 @@ export component EqPanel inherits VerticalLayout {
             viewbox-width: graph.width / 1px;
             viewbox-height: graph.height / 1px;
             commands: root.fill;
-            fill: @linear-gradient(180deg, Theme.text.with-alpha(0.09) 0%, Theme.text.with-alpha(0) 80%);
+            fill: @linear-gradient(180deg, root.accent.with-alpha(0.09) 0%, root.accent.with-alpha(0) 80%);
             stroke-width: 0px;
         }
         Path {
@@ -120,7 +122,7 @@ export component EqPanel inherits VerticalLayout {
             viewbox-width: graph.width / 1px;
             viewbox-height: graph.height / 1px;
             commands: root.haze;
-            fill: Theme.text.with-alpha(0.03);
+            fill: root.accent.with-alpha(0.03);
             stroke-width: 0px;
         }
         Path {
@@ -129,7 +131,7 @@ export component EqPanel inherits VerticalLayout {
             viewbox-width: graph.width / 1px;
             viewbox-height: graph.height / 1px;
             commands: root.glow;
-            fill: Theme.text.with-alpha(0.07);
+            fill: root.accent.with-alpha(0.07);
             stroke-width: 0px;
         }
         Path {
@@ -138,7 +140,7 @@ export component EqPanel inherits VerticalLayout {
             viewbox-width: graph.width / 1px;
             viewbox-height: graph.height / 1px;
             commands: root.line;
-            fill: Theme.text.with-alpha(0.85);
+            fill: root.accent.with-alpha(0.85);
             stroke-width: 0px;
         }
 

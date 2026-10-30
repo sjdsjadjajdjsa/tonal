@@ -32,6 +32,7 @@ pub struct State {
     pub artist_page: Option<crate::model::ArtistPage>,
     pub album_page: Option<crate::model::AlbumPage>,
     pub browse_cache: Vec<(String, Instant, super::browse::Cached)>,
+    pub collection: super::collection::Collection,
 }
 impl State {
     pub fn new(settings: Settings) -> Self {
@@ -62,6 +63,7 @@ impl State {
             artist_page: None,
             album_page: None,
             browse_cache: Vec::new(),
+            collection: Default::default(),
         }
     }
     pub fn session(&self) -> Session {

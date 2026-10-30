@@ -9,6 +9,10 @@ All notable changes to Tonal. Versions follow [Semantic Versioning](https://semv
 - A small tag next to the time shows what plays, like FLAC 24/96, Opus 160k or MP3 320k.
 - Settings → Playback → Output picks the speakers or headphones, and switches live.
 - ReplayGain (on by default): files with loudness tags play at their saved level, and then the dynamic Even out volume steps aside for them.
+- Now playing view: click the cover in the player bar or press Ctrl+N for a large cover, the names, the waves across the view and synced lyrics beside it on wide windows. Esc goes back.
+- Local files can show an album grid, sorted by artist, year or recently added. Albums are grouped by album artist and open their album page.
+- Listening stats on Home: top artists and albums for this month and all time, with play counts. Computed from your local play history only.
+- Album colors (on by default, Settings → Appearance): the waves and the equalizer curve take a soft color from the cover and fade to it when the song changes.
 - Bit-perfect mode: no equalizer, no volume change and no resampling by Tonal, with exclusive output on Windows and macOS. On Linux, PipeWire may still resample to its own rate.
 
 ## 0.2.0 - 2026-10-30

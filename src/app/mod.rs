@@ -1,4 +1,5 @@
 mod browse;
+mod collection;
 mod controller;
 #[cfg(feature = "debug-hooks")]
 mod debug;
@@ -6,6 +7,7 @@ mod equalizer;
 mod integrations;
 mod library_actions;
 mod models;
+mod now_playing;
 mod playback;
 mod search;
 mod settings;
@@ -83,6 +85,10 @@ pub fn run() -> anyhow::Result<()> {
     window.set_albums(ModelRc::new(VecModel::<crate::CardRow>::default()));
     window.set_singles(ModelRc::new(VecModel::<crate::CardRow>::default()));
     window.set_similar(ModelRc::new(VecModel::<crate::CardRow>::default()));
+    window.set_local_albums(ModelRc::new(VecModel::<crate::CardRow>::default()));
+    window.set_top_artists(ModelRc::new(VecModel::<crate::CardRow>::default()));
+    window.set_top_albums(ModelRc::new(VecModel::<crate::CardRow>::default()));
+    window.set_album_colors(settings.album_colors);
     window.set_playlists(ModelRc::new(VecModel::<PlaylistRow>::default()));
     window.set_settings(ModelRc::new(VecModel::<SettingRow>::from(
         models::settings(&settings),
@@ -161,6 +167,13 @@ pub fn run() -> anyhow::Result<()> {
     window.on_album_action(move |action| c.album_action(&action));
     let c = app.clone();
     window.on_nav(move |step| c.nav(step));
+    let c = app.clone();
+    let weak = window.as_weak();
+    window.on_now_changed(move || {
+        if let Some(w) = weak.upgrade() {
+            c.now_changed(w.get_now_open(), w.get_now_art_size());
+        }
+    });
     {
         use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
         let c = app.clone();
@@ -259,6 +272,7 @@ pub fn run() -> anyhow::Result<()> {
             " " if !typing => c.player.toggle_pause(),
             "l" if ctrl => c.command("like"),
             "m" if ctrl => c.command("mini"),
+            "n" if ctrl => c.command("now"),
             k if k == slint::SharedString::from(slint::platform::Key::LeftArrow).as_str()
                 && ctrl =>
             {

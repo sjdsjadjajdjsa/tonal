@@ -286,14 +286,24 @@ pub fn settings(s: &Settings) -> Vec<SettingRow> {
         ),
         (
             "Appearance",
-            vec![(
-                "accent",
-                "Accent color",
-                s.accent.clone(),
-                "Any hex color. Default #ececee.",
-                "text",
-                false,
-            )],
+            vec![
+                (
+                    "accent",
+                    "Accent color",
+                    s.accent.clone(),
+                    "Any hex color. Default #ececee.",
+                    "text",
+                    false,
+                ),
+                (
+                    "album_colors",
+                    "Album colors",
+                    s.album_colors.to_string(),
+                    "Tints the waves with a soft color from the cover.",
+                    "toggle",
+                    false,
+                ),
+            ],
         ),
         (
             "Spotify",

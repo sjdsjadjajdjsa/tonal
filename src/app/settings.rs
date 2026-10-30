@@ -4,6 +4,10 @@ use slint::ComponentHandle;
 impl Controller {
     pub fn setting(&self, key: &str, value: &str) {
         self.apply_setting(key, value);
+        if key == "album_colors" {
+            let on = self.state.lock().settings.album_colors;
+            self.ui(move |w| w.set_album_colors(on));
+        }
         if key == "bit_perfect" {
             self.eq_refresh();
         }
@@ -59,6 +63,11 @@ impl Controller {
             "visualizer" => {
                 if let Ok(v) = value.parse() {
                     s.visualizer = v;
+                }
+            }
+            "album_colors" => {
+                if let Ok(v) = value.parse() {
+                    s.album_colors = v;
                 }
             }
             "replaygain" => {

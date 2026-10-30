@@ -58,9 +58,13 @@ fn tick(window: &AppWindow) {
         waves
             .visualizer
             .set_backdrop(eq_open.then(|| (window.get_eq_width(), window.get_eq_height())));
-        let frame = waves
-            .visualizer
-            .frame(dt, window.get_wave_width(), window.get_wave_height());
+        // The now playing view shows the waves large; the bar hides its own meanwhile.
+        let (width, height) = if window.get_now_open() && window.get_stage_width() > 1.0 {
+            (window.get_stage_width(), window.get_stage_height())
+        } else {
+            (window.get_wave_width(), window.get_wave_height())
+        };
+        let frame = waves.visualizer.frame(dt, width, height);
         if waves.visualizer.is_settled() {
             waves.timer.stop();
             window.set_wave_resting(true);

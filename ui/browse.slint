@@ -69,7 +69,7 @@ component CardGrid inherits VerticalLayout {
     private property <length> card-width: (root.width - (root.columns - 1) * 4px) / root.columns;
     private property <int> rows: ceil(root.cards.length / root.columns);
     spacing: 4px;
-    if root.cards.length > 0: Label {
+    if root.cards.length > 0 && root.heading != "": Label {
         text: root.heading;
         height: 40px;
         font-size: 16px;
@@ -253,6 +253,54 @@ export component ArtistView inherits Rectangle {
                 color: Theme.faint;
             }
         }
+    }
+}
+
+/// Local albums as covers.
+export component AlbumGrid inherits Rectangle {
+    in property <[CardRow]> cards;
+    in property <string> empty-text;
+    callback open(int);
+    scroller := ScrollView {
+        VerticalLayout {
+            width: scroller.visible-width;
+            padding-bottom: 24px;
+            CardGrid { cards: root.cards; open(i) => { root.open(i); } }
+        }
+    }
+    if root.cards.length == 0: VerticalLayout {
+        alignment: center;
+        spacing: 10px;
+        HorizontalLayout {
+            alignment: center;
+            Icon { data: Icons.album; width: 28px; height: 28px; tint: Theme.faint; }
+        }
+        Label { text: root.empty-text; color: Theme.faint; horizontal-alignment: center; }
+    }
+}
+
+/// Top artists and albums from the play history.
+export component StatsView inherits Rectangle {
+    in property <[CardRow]> artists;
+    in property <[CardRow]> albums;
+    callback open(string, int);
+    scroller := ScrollView {
+        VerticalLayout {
+            width: scroller.visible-width;
+            padding-bottom: 24px;
+            spacing: 22px;
+            CardGrid { heading: "Artists"; cards: root.artists; round: true; open(i) => { root.open("top-artist", i); } }
+            CardGrid { heading: "Albums"; cards: root.albums; open(i) => { root.open("top-album", i); } }
+        }
+    }
+    if root.artists.length == 0 && root.albums.length == 0: VerticalLayout {
+        alignment: center;
+        spacing: 10px;
+        HorizontalLayout {
+            alignment: center;
+            Icon { data: Icons.music; width: 28px; height: 28px; tint: Theme.faint; }
+        }
+        Label { text: "Play something and it shows up here"; color: Theme.faint; horizontal-alignment: center; }
     }
 }
 

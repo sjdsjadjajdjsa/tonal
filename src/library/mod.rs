@@ -427,6 +427,81 @@ impl Library {
     pub fn load_session(&self) -> Option<Session> {
         self.load_json("session")
     }
+
+    /// Every played track with its number of plays since `since` (ms since the epoch,
+    /// None for all time), most played first.
+    pub fn play_counts(&self, since: Option<i64>) -> anyhow::Result<Vec<(Track, u64)>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(&format!(
+            "SELECT {COLUMNS},p.n FROM tracks t JOIN (SELECT track_id,COUNT(*) AS n,MAX(rowid) AS seq
+            FROM plays WHERE played_at>=?1 GROUP BY track_id) p ON p.track_id=t.id
+            ORDER BY p.n DESC,p.seq DESC"
+        ))?;
+        Ok(stmt
+            .query_map([since.unwrap_or(i64::MIN)], |row| {
+                Ok((row_track(row)?, row.get::<_, i64>(10)?.max(0) as u64))
+            })?
+            .collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// The most played artists, counting a song for its first credited artist.
+    pub fn top_artists(&self, since: Option<i64>, limit: usize) -> anyhow::Result<Vec<Top>> {
+        Ok(top(self.play_counts(since)?, limit, |t| {
+            let artist = t.artists().into_iter().next()?.name;
+            (!artist.trim().is_empty()).then(|| (artist, String::new()))
+        }))
+    }
+
+    /// The most played albums, grouped by album title and album artist.
+    pub fn top_albums(&self, since: Option<i64>, limit: usize) -> anyhow::Result<Vec<Top>> {
+        Ok(top(self.play_counts(since)?, limit, |t| {
+            t.album_ref().map(|a| (a.title, a.artist))
+        }))
+    }
+}
+
+/// One artist or album in the listening stats.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Top {
+    pub title: String,
+    /// The album artist; empty for artists.
+    pub artist: String,
+    pub plays: u64,
+    /// Its most played song, for artwork and links.
+    pub track: Track,
+}
+
+fn top(
+    counts: Vec<(Track, u64)>,
+    limit: usize,
+    key: impl Fn(&Track) -> Option<(String, String)>,
+) -> Vec<Top> {
+    let mut list: Vec<Top> = Vec::new();
+    for (track, plays) in counts {
+        let Some((title, artist)) = key(&track) else {
+            continue;
+        };
+        match list.iter_mut().find(|e| {
+            e.title.trim().eq_ignore_ascii_case(title.trim())
+                && e.artist.trim().eq_ignore_ascii_case(artist.trim())
+        }) {
+            Some(entry) => {
+                entry.plays += plays;
+                if entry.track.artwork_url.is_none() {
+                    entry.track.artwork_url = track.artwork_url;
+                }
+            }
+            None => list.push(Top {
+                title,
+                artist,
+                plays,
+                track,
+            }),
+        }
+    }
+    list.sort_by_key(|e| std::cmp::Reverse(e.plays));
+    list.truncate(limit);
+    list
 }
 
 #[cfg(test)]
@@ -593,6 +668,68 @@ mod tests {
         let saved = l.liked()?.remove(0);
         assert_eq!(saved.artist_refs, t.artist_refs);
         assert_eq!(saved.album_id.as_deref(), Some("MPRE2"));
+        Ok(())
+    }
+
+    #[test]
+    fn top_artists_and_albums_by_period() -> anyhow::Result<()> {
+        let db = Db::new();
+        let l = &db.library;
+        let mut a = track("a");
+        a.artist = "Nina".into();
+        a.album = Some("Blue".into());
+        let mut b = track("b");
+        b.artist = "nina".into();
+        b.album = Some("blue".into());
+        b.artwork_url = Some("https://img/b.jpg".into());
+        let mut c = track("c");
+        c.artist = "Otis".into();
+        c.album = None;
+        for t in [&a, &b, &b, &c, &c, &c] {
+            l.record_play(t)?;
+        }
+        let old = now() - 90 * 24 * 3600 * 1000;
+        l.conn.lock().execute(
+            "INSERT INTO plays VALUES (?1,?2),(?1,?2),(?1,?2),(?1,?2)",
+            params![a.id, old],
+        )?;
+
+        let all = l.top_artists(None, 10)?;
+        assert_eq!(
+            all.iter()
+                .map(|t| (t.title.as_str(), t.plays))
+                .collect::<Vec<_>>(),
+            vec![("Nina", 7), ("Otis", 3)]
+        );
+        assert_eq!(all[0].track.id, a.id);
+        assert_eq!(
+            all[0].track.artwork_url.as_deref(),
+            Some("https://img/b.jpg")
+        );
+
+        let month = now() - 30 * 24 * 3600 * 1000;
+        let recent = l.top_artists(Some(month), 10)?;
+        assert_eq!(
+            recent
+                .iter()
+                .map(|t| (t.title.as_str(), t.plays))
+                .collect::<Vec<_>>(),
+            vec![("Otis", 3), ("nina", 3)]
+        );
+        assert_eq!(l.top_artists(Some(month), 1)?.len(), 1);
+
+        let albums = l.top_albums(None, 10)?;
+        assert_eq!(albums.len(), 1, "songs without an album are left out");
+        assert_eq!(
+            (
+                albums[0].title.as_str(),
+                albums[0].artist.as_str(),
+                albums[0].plays
+            ),
+            ("Blue", "Nina", 7)
+        );
+        assert_eq!(l.top_albums(Some(month), 10)?[0].plays, 3);
+        assert!(l.top_albums(Some(now() + 1000), 10)?.is_empty());
         Ok(())
     }
 }

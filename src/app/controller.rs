@@ -111,6 +111,7 @@ impl Controller {
             s.playlist = None;
             s.generation += 1;
         }
+        self.clear_collection();
         let p = page.to_owned();
         self.ui(move |w| {
             w.set_page(p.clone().into());
@@ -131,6 +132,9 @@ impl Controller {
                 self.ui(|w| w.set_home_tab(0));
             }
             self.display(tracks, page.into());
+            if page == "Local files" && self.state.lock().collection.local_albums {
+                self.load_local_albums();
+            }
         }
     }
     pub fn command(&self, command: &str) {
@@ -197,6 +201,17 @@ impl Controller {
                     self.player.set_volume(s.muted_from.take().unwrap_or(80.0));
                 }
             }
+            "now" => self.ui(|w| {
+                let open = !w.get_now_open() && w.get_now_id() != "";
+                w.set_now_open(open);
+            }),
+            "local:songs" | "local:albums" => {
+                let albums = command == "local:albums";
+                self.state.lock().collection.local_albums = albums;
+                self.local_view(albums);
+            }
+            c if c.starts_with("sort:") => self.local_sort(c[5..].parse().unwrap_or(0)),
+            c if c.starts_with("stats:") => self.load_stats(c[6..].parse().unwrap_or(0)),
             "save-settings" => self.save_settings(),
             "update-ytdlp" => self.update_ytdlp(),
             "rescan" => self.rescan(),

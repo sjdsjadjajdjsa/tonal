@@ -50,6 +50,7 @@ export component PlayerBar inherits Rectangle {
     in property <string> wave-glow;
     in property <string> wave-line;
     in property <bool> wave-resting: true;
+    in property <color> wave-accent: Theme.text;
     out property <length> wave-height: root.mini ? root.height * 0.5 : 64px;
     in property <[string]> artists;
     in property <bool> has-album;
@@ -106,7 +107,7 @@ export component PlayerBar inherits Rectangle {
         glow: root.wave-glow;
         line: root.wave-line;
         resting: root.wave-resting;
-        accent: Theme.text;
+        accent: root.wave-accent;
     }
 
     if !root.mini: HorizontalLayout {
@@ -120,7 +121,15 @@ export component PlayerBar inherits Rectangle {
             spacing: 14px;
             VerticalLayout {
                 alignment: center;
-                Artwork { source: root.art; size: 56px; }
+                Artwork {
+                    source: root.art;
+                    size: 56px;
+                    TouchArea {
+                        enabled: root.has-track;
+                        mouse-cursor: root.has-track ? pointer : default;
+                        clicked => { root.command("now"); }
+                    }
+                }
             }
             VerticalLayout {
                 alignment: center;

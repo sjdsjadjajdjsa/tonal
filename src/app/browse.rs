@@ -79,21 +79,27 @@ fn local_artist(tracks: Vec<Track>, artist: &ArtistRef) -> ArtistPage {
 }
 
 fn local_album(tracks: Vec<Track>, album: &AlbumRef) -> AlbumPage {
-    let mut list: Vec<Track> = tracks
+    let titled: Vec<Track> = tracks
         .into_iter()
         .filter(|t| {
             t.album
                 .as_deref()
                 .is_some_and(|a| same_name(a, &album.title))
         })
-        .filter(|t| {
-            album.artist.is_empty()
-                || t.artists()
-                    .iter()
-                    .any(|a| same_name(&a.name, &album.artist))
-                || same_name(&t.artist, &album.artist)
-        })
         .collect();
+    let by_artist = |t: &Track| {
+        album.artist.is_empty()
+            || t.artists()
+                .iter()
+                .any(|a| same_name(&a.name, &album.artist))
+            || same_name(&t.artist, &album.artist)
+    };
+    // An album artist that no song credits ("Various Artists") keeps the whole album.
+    let mut list: Vec<Track> = if titled.iter().any(by_artist) {
+        titled.into_iter().filter(|t| by_artist(t)).collect()
+    } else {
+        titled
+    };
     list.sort_by(|a, b| a.play_url.cmp(&b.play_url));
     let artists = list.first().map(|t| t.artists()).unwrap_or_default();
     AlbumPage {
@@ -302,6 +308,7 @@ impl Controller {
             s.display.clear();
             s.generation
         };
+        self.clear_collection();
         self.ui(move |w| {
             w.set_page(page.into());
             w.set_heading(heading.clone().into());
@@ -563,6 +570,10 @@ impl Controller {
         let Ok(index) = usize::try_from(index) else {
             return;
         };
+        if let Some(nav) = self.collection_target(kind, index) {
+            self.go(nav);
+            return;
+        }
         let target = {
             let s = self.state.lock();
             let page = s.artist_page.as_ref();
