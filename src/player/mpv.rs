@@ -19,6 +19,22 @@ use tokio::{
 
 static NEXT_SOCKET: AtomicU64 = AtomicU64::new(0);
 
+/// Linux kills mpv through PR_SET_PDEATHSIG. macOS has no equivalent, so a small
+/// shell loop stops mpv once Tonal is gone, even after Cmd+Q or a crash.
+#[cfg(all(unix, not(target_os = "linux")))]
+fn stop_with_parent(mpv: u32) {
+    let script = format!(
+        "while kill -0 {tonal} 2>/dev/null; do kill -0 {mpv} 2>/dev/null || exit 0; sleep 1; done; kill {mpv} 2>/dev/null",
+        tonal = std::process::id()
+    );
+    let _ = Command::new("/bin/sh")
+        .args(["-c", &script])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
+}
+
 #[cfg(test)]
 tokio::task_local! {
     pub(super) static SPAWN_FAILURES: std::cell::Cell<usize>;
@@ -108,6 +124,10 @@ impl Mpv {
         let mut child = command
             .spawn()
             .context("could not start mpv (is it installed?)")?;
+        #[cfg(all(unix, not(target_os = "linux")))]
+        if let Some(pid) = child.id() {
+            stop_with_parent(pid);
+        }
         let deadline = Instant::now() + Duration::from_secs(5);
         let stream = loop {
             #[cfg(unix)]
