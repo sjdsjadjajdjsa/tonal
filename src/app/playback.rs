@@ -316,9 +316,33 @@ impl Controller {
     /// either swaps it in place or moves on. Three bot blocks in a row stop skipping.
     fn youtube_fallback(&self, index: usize, track: Track, error: String) {
         log::warn!("YouTube load failed for {}: {error}", track.title);
-        let first = self.state.lock().fallback_tried.insert(track.id.clone());
+        // One try per track at getting past the block on YouTube itself (PO token,
+        // other clients, IPv4, cookies) before looking on other sources.
+        let unblock = crate::sources::is_youtube_url(&track.play_url)
+            && self
+                .state
+                .lock()
+                .fallback_tried
+                .insert(format!("unblock:{}", track.id));
         let this = self.clone();
         tokio::spawn(async move {
+            let still_current = |this: &Self| {
+                let s = this.state.lock();
+                s.index == Some(index) && s.queue.get(index).is_some_and(|t| t.id == track.id)
+            };
+            if unblock {
+                match crate::sources::unblock_youtube(&track.play_url).await {
+                    Ok(how) => {
+                        if still_current(&this) {
+                            log::info!("Retrying {} on YouTube with {how}", track.title);
+                            this.player.replace(index, track.clone());
+                        }
+                        return;
+                    }
+                    Err(why) => log::info!("YouTube stays blocked for {}: {why}", track.title),
+                }
+            }
+            let first = this.state.lock().fallback_tried.insert(track.id.clone());
             let (reason, found) =
                 tokio::join!(crate::sources::playback_error(&track.play_url), async {
                     if !first {
@@ -358,11 +382,7 @@ impl Controller {
             }
             let bot = reason.as_deref().is_some_and(crate::sources::is_bot_block);
             // The user may have moved on while this resolved.
-            let still_current = {
-                let s = this.state.lock();
-                s.index == Some(index) && s.queue.get(index).is_some_and(|t| t.id == track.id)
-            };
-            if !still_current {
+            if !still_current(&this) {
                 return;
             }
             if let Some(found) = found {

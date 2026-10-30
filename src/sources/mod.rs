@@ -1,6 +1,7 @@
 mod audius;
 pub mod download;
 pub mod local;
+mod pot;
 mod soundcloud;
 mod youtube;
 mod youtube_browse;
@@ -36,26 +37,33 @@ pub fn cookies_browser() -> Option<String> {
 #[cfg(windows)]
 pub(crate) const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
+/// yt-dlp with browser cookies, a JavaScript runtime and the YouTube access
+/// strategy that last worked (PO token provider, player clients, IPv4).
 pub(crate) fn ytdlp() -> tokio::process::Command {
     let mut command = tokio::process::Command::new("yt-dlp");
     #[cfg(windows)]
     command.creation_flags(CREATE_NO_WINDOW);
-    if let Some(browser) = cookies_browser() {
-        command.args(["--cookies-from-browser", &browser]);
-    }
+    pot::prepare();
+    command.args(pot::args(pot::current()));
     if let Some(runtime) = js_runtime() {
         command.args(["--js-runtimes", runtime]);
     }
     command
 }
 
-/// yt-dlp needs a JavaScript runtime to solve YouTube's challenges. It looks for
-/// Deno by default; this also enables Node or Bun when one of those is installed.
 /// mpv's ytdl hook options, matching what ytdlp() passes on the command line.
+/// The access strategy goes through a yt-dlp config file that Tonal rewrites
+/// when it changes, so running mpv instances follow without a restart.
 pub fn ytdl_raw_options() -> String {
+    pot::prepare();
     let mut options = Vec::new();
-    if let Some(browser) = cookies_browser() {
-        options.push(format!("cookies-from-browser={browser}"));
+    match pot::write_config() {
+        Some(path) => options.push(format!("config-locations={}", path.display())),
+        None => {
+            if let Some(browser) = cookies_browser() {
+                options.push(format!("cookies-from-browser={browser}"));
+            }
+        }
     }
     if let Some(runtime) = js_runtime() {
         options.push(format!("js-runtimes={runtime}"));
@@ -63,6 +71,15 @@ pub fn ytdl_raw_options() -> String {
     options.join(",")
 }
 
+/// Tries each YouTube access layer until yt-dlp resolves `url`, remembering the
+/// one that worked for every later yt-dlp and mpv load. Returns a description of
+/// the working layer, or yt-dlp's last error.
+pub async fn unblock_youtube(url: &str) -> Result<String, String> {
+    pot::unblock(url).await
+}
+
+/// yt-dlp needs a JavaScript runtime to solve YouTube's challenges. It looks for
+/// Deno by default; this also enables Node or Bun when one of those is installed.
 pub fn js_runtime() -> Option<&'static str> {
     ["deno", "node", "bun"]
         .into_iter()

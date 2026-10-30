@@ -72,7 +72,7 @@ Any build turns portable when a file named `portable` or a folder named `data` s
 
 To build Tonal.app on macOS yourself, run `sh packaging/macos/build-app.sh` from a clone of this repo. It builds the app and puts it in Applications. Run `sh packaging/macos/setup-signing.sh` once before that, so macOS keeps Tonal's permissions (Full Disk Access, audio, Keychain) after each rebuild. The first time a song plays, macOS asks to let Tonal listen to its audio for the visualizer.
 
-For full YouTube support yt-dlp needs a JavaScript runtime: install [Deno](https://deno.com) or Node.js. Tonal picks up whichever it finds. The visualizer on Linux needs PipeWire (`pw-record`, `pw-dump`).
+For full YouTube support yt-dlp needs a JavaScript runtime: install [Deno](https://deno.com) or Node.js. Tonal picks up whichever it finds. With Deno, Tonal also sets up the [bgutil PO Token provider](https://github.com/Brainicism/bgutil-ytdlp-pot-provider) for yt-dlp on first launch (about 70 MB in its cache folder, no server). When YouTube still refuses a song ("Sign in to confirm you're not a bot"), Tonal retries it with other player clients, then over IPv4, then with and without browser cookies, and remembers what worked. If YouTube blocks your network outright, only Use browser login (a signed-in browser) or another network gets through. The visualizer on Linux needs PipeWire (`pw-record`, `pw-dump`).
 
 ## Build it yourself
 
