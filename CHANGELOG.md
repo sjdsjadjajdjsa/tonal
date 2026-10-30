@@ -14,6 +14,8 @@ All notable changes to Tonal. Versions follow [Semantic Versioning](https://semv
 - Listening stats on Home: top artists and albums for this month and all time, with play counts. Computed from your local play history only.
 - Album colors (on by default, Settings → Appearance): the waves and the equalizer curve take a soft color from the cover and fade to it when the song changes.
 - Bit-perfect mode: no equalizer, no volume change and no resampling by Tonal, with exclusive output on Windows and macOS. On Linux, PipeWire may still resample to its own rate.
+- Equalizer headphone correction: the headphones chip searches the AutoEQ database (downloaded on demand and cached) and puts your model's correction underneath any preset, drawn as a faint line on the curve.
+- Equalizer fine-tune: drag a dot sideways to move that band's frequency; the labels follow. Double-click resets gain and frequency.
 
 ## 0.2.0 - 2026-10-30
 

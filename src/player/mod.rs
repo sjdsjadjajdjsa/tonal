@@ -1,4 +1,4 @@
-use crate::model::{RepeatMode, Track};
+use crate::model::{EqFilter, FilterKind, RepeatMode, Track};
 use tokio::sync::mpsc::UnboundedSender;
 
 #[derive(Clone, Debug)]
@@ -42,48 +42,87 @@ pub struct PlayerConfig {
     pub bit_perfect: bool,
 }
 
-/// Center frequencies of the equalizer bands. The first is a low shelf, the last a
-/// high shelf, the rest are peaks an octave wide.
-pub const EQ_BANDS: [f64; 6] = [60.0, 150.0, 400.0, 1000.0, 3000.0, 8000.0];
+pub use crate::model::EQ_BANDS;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Equalizer {
     pub gains: [f64; 6],
+    /// Center frequency of each band in Hz.
+    pub freqs: [f64; 6],
     pub preamp: f64,
+    /// Headphone correction, applied before the bands. Changing it rebuilds the graph.
+    pub correction: Vec<EqFilter>,
+}
+
+impl Default for Equalizer {
+    fn default() -> Self {
+        Self {
+            gains: [0.0; 6],
+            freqs: EQ_BANDS,
+            preamp: 0.0,
+            correction: Vec::new(),
+        }
+    }
+}
+
+/// Label of band `i` inside the graph, the target of its live commands.
+fn band_target(i: usize) -> String {
+    match i {
+        0 => "lowshelf@b0".into(),
+        5 => "highshelf@b5".into(),
+        _ => format!("equalizer@b{i}"),
+    }
 }
 
 impl Equalizer {
     /// mpv filter for the whole equalizer, labelled so each band can be changed live.
     fn graph(&self) -> String {
-        let bands: Vec<String> = EQ_BANDS
+        let correction = self.correction.iter().enumerate().map(|(i, c)| {
+            let (f, g, q) = (c.freq, c.gain, c.q);
+            let name = match c.kind {
+                FilterKind::Peak => "equalizer",
+                FilterKind::LowShelf => "lowshelf",
+                FilterKind::HighShelf => "highshelf",
+            };
+            format!("{name}@h{i}=f={f:.0}:t=q:w={q:.2}:g={g:.1}")
+        });
+        let bands = self
+            .freqs
             .iter()
             .zip(self.gains)
             .enumerate()
             .map(|(i, (f, g))| match i {
-                0 => format!("lowshelf@b0=f={f}:g={g:.1}"),
-                5 => format!("highshelf@b5=f={f}:g={g:.1}"),
-                _ => format!("equalizer@b{i}=f={f}:t=o:w=1:g={g:.1}"),
-            })
-            .collect();
+                0 | 5 => format!("{}=f={f:.0}:g={g:.1}", band_target(i)),
+                _ => format!("{}=f={f:.0}:t=o:w=1:g={g:.1}", band_target(i)),
+            });
+        let filters: Vec<String> = correction.chain(bands).collect();
         format!(
             "@eq:lavfi=[{},volume@pre=volume={:.1}dB]",
-            bands.join(","),
+            filters.join(","),
             self.preamp
         )
     }
 
+    /// Live commands for every band's gain and frequency, then the preamp.
     fn commands(&self) -> Vec<Value> {
-        let mut out: Vec<Value> = self
-            .gains
-            .iter()
-            .enumerate()
-            .map(|(i, g)| {
-                let target = match i {
-                    0 => "lowshelf@b0".to_string(),
-                    5 => "highshelf@b5".to_string(),
-                    _ => format!("equalizer@b{i}"),
-                };
-                json!(["af-command", "eq", "g", format!("{g:.1}"), target])
+        let mut out: Vec<Value> = (0..6)
+            .flat_map(|i| {
+                [
+                    json!([
+                        "af-command",
+                        "eq",
+                        "g",
+                        format!("{:.1}", self.gains[i]),
+                        band_target(i)
+                    ]),
+                    json!([
+                        "af-command",
+                        "eq",
+                        "f",
+                        format!("{:.0}", self.freqs[i]),
+                        band_target(i)
+                    ]),
+                ]
             })
             .collect();
         out.push(json!([
@@ -749,12 +788,24 @@ impl Engine {
             }
             Cmd::Equalizer(equalizer) => {
                 if equalizer != self.config.equalizer {
-                    self.config.equalizer = equalizer;
+                    let before = std::mem::replace(&mut self.config.equalizer, equalizer);
+                    let rebuild = before.correction != self.config.equalizer.correction;
                     // Bit-perfect runs without the filter; it comes back on respawn.
                     let commands = if self.config.bit_perfect {
                         Vec::new()
+                    } else if rebuild {
+                        vec![json!(["set_property", "af", self.af()])]
                     } else {
-                        equalizer.commands()
+                        // Only what changed, so a drag sends one or two commands.
+                        let old = before.commands();
+                        self.config
+                            .equalizer
+                            .commands()
+                            .into_iter()
+                            .zip(old)
+                            .filter(|(new, old)| new != old)
+                            .map(|(new, _)| new)
+                            .collect()
                     };
                     for command in commands {
                         self.active_send(command.clone()).await?;

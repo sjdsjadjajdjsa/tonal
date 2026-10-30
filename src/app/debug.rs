@@ -89,6 +89,32 @@ pub(super) fn debug_hooks(app: &Controller, window: &AppWindow) {
     if let Ok(preset) = std::env::var("TONAL_DEBUG_EQ") {
         app.eq_choose(&preset);
     }
+    // "model" applies the best match's correction, "?query" opens the search with the
+    // query typed, "model?query" does both; "-" takes the correction off.
+    if let Ok(value) = std::env::var("TONAL_DEBUG_HEADPHONE") {
+        let (name, query) = match value.split_once('?') {
+            Some((name, query)) => (name.to_string(), Some(query.to_string())),
+            None => (value, None),
+        };
+        match name.as_str() {
+            "" => {}
+            "-" => app.eq_headphones_clear(),
+            _ => app.eq_headphones_debug(name),
+        }
+        if let Some(query) = query {
+            window.set_eq_headphone_query(query.as_str().into());
+            app.eq_headphones_open();
+            // Once the panel is laid out and the list is in.
+            let weak = window.as_weak();
+            let app = app.clone();
+            slint::Timer::single_shot(std::time::Duration::from_millis(3000), move || {
+                if let Some(w) = weak.upgrade() {
+                    app.eq_headphones_search(&query);
+                    w.set_eq_headphone_show(w.get_eq_headphone_show() + 1);
+                }
+            });
+        }
+    }
     if let Ok(title) = std::env::var("TONAL_DEBUG_TITLE") {
         window.set_window_title(title.into());
     }

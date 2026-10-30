@@ -99,6 +99,13 @@ export component AppWindow inherits Window {
     in property <string> eq-haze;
     in property <string> eq-glow;
     in property <string> eq-line;
+    in property <[float]> eq-spots;
+    in property <[string]> eq-labels;
+    in property <string> eq-correction;
+    in property <string> eq-headphone;
+    in-out property <string> eq-headphone-query;
+    in property <[string]> eq-headphone-results;
+    in property <int> eq-headphone-show;
     in-out property <length> eq-width;
     in-out property <length> eq-height;
     in-out property <bool> now-open;
@@ -166,7 +173,11 @@ export component AppWindow inherits Window {
     callback artist-action(string);
     callback album-action(string);
     callback eq-choose(string);
-    callback eq-drag(int, float);
+    callback eq-drag(int, float, float);
+    callback eq-headphones-open();
+    callback eq-headphones-search(string);
+    callback eq-headphones-pick(int);
+    callback eq-headphones-clear();
     callback eq-release();
     callback eq-reset(int);
     callback eq-compare(bool);
@@ -565,8 +576,20 @@ export component AppWindow inherits Window {
                             haze: root.eq-haze;
                             glow: root.eq-glow;
                             line: root.eq-line;
+                            spots: root.eq-spots;
+                            labels: root.eq-labels;
+                            correction: root.eq-correction;
+                            headphone: root.eq-headphone;
+                            headphone-query <=> root.eq-headphone-query;
+                            headphone-results: root.eq-headphone-results;
+                            show-search: root.eq-headphone-show;
+                            changed typing => { root.typing = self.typing; }
+                            headphones-open => { root.eq-headphones-open(); }
+                            headphones-search(q) => { root.eq-headphones-search(q); }
+                            headphones-pick(i) => { root.eq-headphones-pick(i); }
+                            headphones-clear => { root.eq-headphones-clear(); }
                             choose(name) => { root.eq-choose(name); }
-                            drag(i, g) => { root.eq-drag(i, g); }
+                            drag(i, g, s) => { root.eq-drag(i, g, s); }
                             release => { root.eq-release(); }
                             reset(i) => { root.eq-reset(i); }
                         }

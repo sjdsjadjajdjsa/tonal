@@ -532,6 +532,7 @@ async fn real_mpv_equalizer_changes_live_and_survives_filter_rebuilds() {
     let bass = super::Equalizer {
         gains: [6.0, 4.0, 1.0, 0.0, 0.0, 0.0],
         preamp: -3.0,
+        ..Default::default()
     };
     for command in bass.commands() {
         let reply = engine.active.as_mut().unwrap().request(command).await;
@@ -561,6 +562,67 @@ async fn real_mpv_equalizer_changes_live_and_survives_filter_rebuilds() {
     assert!(graph.contains("lowshelf@b0=f=60:g=6.0"), "{graph}");
     assert!(graph.contains("volume@pre=volume=-3.0dB"), "{graph}");
     assert!(af.to_string().contains("dynaudnorm"), "{af}");
+}
+
+async fn eq_graph(engine: &mut Engine) -> String {
+    property(engine, "af")
+        .await
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["label"] == "eq")
+        .expect("equalizer filter")["params"]["graph"]
+        .as_str()
+        .unwrap()
+        .to_string()
+}
+
+#[tokio::test]
+async fn real_mpv_headphone_layer_builds_a_graph_and_bands_move_live() {
+    let tone = Tone::new();
+    let (mut engine, mut rx) = tone_engine(&tone).await;
+    let sample = "Preamp: -6.3 dB\nFilter 1: ON LSC Fc 105 Hz Gain 6.5 dB Q 0.70\nFilter 2: ON PK Fc 2166 Hz Gain 0.9 dB Q 3.32\nFilter 3: ON HSC Fc 10000 Hz Gain -3.1 dB Q 0.70\n";
+    let (preamp, correction) = crate::integrations::autoeq::parse_parametric(sample).unwrap();
+    let mut eq = super::Equalizer {
+        gains: [3.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        preamp: preamp - 1.5,
+        correction,
+        ..Default::default()
+    };
+    engine.command(Cmd::Equalizer(eq.clone())).await.unwrap();
+    let graph = eq_graph(&mut engine).await;
+    for part in [
+        "lowshelf@h0=f=105:t=q:w=0.70:g=6.5",
+        "equalizer@h1=f=2166:t=q:w=3.32:g=0.9",
+        "highshelf@h2=f=10000:t=q:w=0.70:g=-3.1",
+        "lowshelf@b0=f=60:g=3.0",
+        "volume@pre=volume=-7.8dB",
+    ] {
+        assert!(graph.contains(part), "{part} missing from {graph}");
+    }
+    // mpv took the graph: the filter answers commands and playback goes on.
+    let mpv = engine.active.as_mut().unwrap();
+    let moved = mpv
+        .request(json!(["af-command", "eq", "f", "1500", "equalizer@b3"]))
+        .await;
+    assert!(moved.is_ok(), "mpv rejected a frequency change: {moved:?}");
+    let wrong = mpv
+        .request(json!(["af-command", "eq", "f", "1500", "equalizer@nope"]))
+        .await;
+    assert!(wrong.is_err(), "a bad target must be rejected");
+    let pos = engine.pos;
+    pump_until(&mut engine, |e| e.pos > pos + 0.3).await;
+    // Moving a band is live: the graph is not rebuilt, so its text keeps the old value.
+    eq.freqs[3] = 1500.0;
+    engine.command(Cmd::Equalizer(eq.clone())).await.unwrap();
+    assert_eq!(eq_graph(&mut engine).await, graph);
+    // Dropping the layer rebuilds the graph without it.
+    eq.correction.clear();
+    engine.command(Cmd::Equalizer(eq)).await.unwrap();
+    let graph = eq_graph(&mut engine).await;
+    assert!(!graph.contains("@h0"), "{graph}");
+    assert!(graph.contains("equalizer@b3=f=1500:t=o:w=1"), "{graph}");
+    assert!(errors(&mut rx).is_empty());
 }
 
 async fn property(engine: &mut Engine, name: &str) -> Value {
@@ -684,6 +746,7 @@ async fn real_mpv_bit_perfect_clears_af_and_sets_exclusive() {
             equalizer: super::Equalizer {
                 gains: [6.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                 preamp: -3.0,
+                ..Default::default()
             },
             ..config()
         },

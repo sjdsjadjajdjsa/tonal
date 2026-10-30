@@ -43,10 +43,7 @@ pub fn run() -> anyhow::Result<()> {
             gapless: settings.gapless,
             shuffle: settings.shuffle,
             repeat: settings.repeat,
-            equalizer: player::Equalizer {
-                gains: settings.eq_gains,
-                preamp: equalizer::headroom(&settings.eq_gains),
-            },
+            equalizer: equalizer::heard(&settings, false),
             audio_device: settings.audio_device.clone(),
             replaygain: settings.replaygain,
             bit_perfect: settings.bit_perfect,
@@ -221,11 +218,19 @@ pub fn run() -> anyhow::Result<()> {
     let c = app.clone();
     window.on_eq_choose(move |name| c.eq_choose(&name));
     let c = app.clone();
-    window.on_eq_drag(move |band, gain| c.eq_drag(band as usize, gain as f64));
+    window.on_eq_drag(move |band, gain, spot| c.eq_drag(band as usize, gain as f64, spot as f64));
     let c = app.clone();
     window.on_eq_reset(move |band| c.eq_reset(band as usize));
     let c = app.clone();
     window.on_eq_compare(move |on| c.eq_compare(on));
+    let c = app.clone();
+    window.on_eq_headphones_open(move || c.eq_headphones_open());
+    let c = app.clone();
+    window.on_eq_headphones_search(move |query| c.eq_headphones_search(&query));
+    let c = app.clone();
+    window.on_eq_headphones_pick(move |i| c.eq_headphones_pick(i as usize));
+    let c = app.clone();
+    window.on_eq_headphones_clear(move || c.eq_headphones_clear());
     let weak = window.as_weak();
     window.on_eq_resized(move || {
         if let Some(w) = weak.upgrade() {

@@ -1,18 +1,27 @@
-import { Theme, Label } from "theme.slint";
+import { Theme, Icons, Icon, Label, TextField } from "theme.slint";
 
 component Chip inherits Rectangle {
     in property <string> text;
+    /// Shown instead of the text: a round chip.
+    in property <string> icon;
     in property <bool> active;
     in property <bool> passive;
     in property <bool> locked;
     callback clicked;
     height: 28px;
-    width: label.preferred-width + 24px;
+    width: root.icon != "" ? 28px : label.preferred-width + 24px;
     border-radius: 14px;
     background: root.active ? Theme.hover : touch.has-hover && !root.passive ? Theme.surface : transparent;
     opacity: root.passive && !root.active ? 0.45 : 1;
     animate background, opacity { duration: 140ms; }
+    if root.icon != "": Icon {
+        data: root.icon;
+        width: 15px;
+        height: 15px;
+        tint: root.active || touch.has-hover ? Theme.text : Theme.muted;
+    }
     label := Label {
+        visible: root.icon == "";
         text: root.text;
         font-size: 12px;
         font-weight: root.active ? 600 : 500;
@@ -26,9 +35,23 @@ component Chip inherits Rectangle {
     }
 }
 
-/// The equalizer: preset chips, and a curve with one handle per band.
+/// The equalizer: preset chips, a headphone correction underneath, and a curve with one
+/// handle per band. Up and down sets a band's gain, sideways its frequency.
 export component EqPanel inherits VerticalLayout {
     in property <[float]> gains;
+    /// Where each band sits on the 20 Hz to 20 kHz log axis, 0 to 1.
+    in property <[float]> spots;
+    /// Each band's frequency, like "60" or "1.2k".
+    in property <[string]> labels;
+    /// The headphone correction's response, drawn faintly.
+    in property <string> correction;
+    /// Name of the headphone model whose correction is on, or empty.
+    in property <string> headphone;
+    in-out property <string> headphone-query;
+    in property <[string]> headphone-results;
+    /// Bumping this opens the headphone search.
+    in property <int> show-search;
+    out property <bool> typing;
     in property <string> preset;
     in property <bool> comparing;
     /// Bit-perfect: the equalizer is out of the signal path, shown flat and dimmed.
@@ -43,16 +66,35 @@ export component EqPanel inherits VerticalLayout {
     out property <length> graph-width: graph.width;
     out property <length> graph-height: graph.height;
     callback choose(string);
-    callback drag(int, float);
+    /// Band, gain in dB, and spot on the axis.
+    callback drag(int, float, float);
     callback release();
     callback reset(int);
+    callback headphones-open();
+    callback headphones-search(string);
+    callback headphones-pick(int);
+    callback headphones-clear();
 
-    private property <length> pad: 22px;
+    changed show-search => { search.show(); }
+
+    private property <length> inset: 10px;
+    private property <length> span: graph.width - 2 * root.inset;
     private property <int> band: -1;
-    private property <length> step: (graph.width - 2 * root.pad) / 5;
+    /// 0 until the drag picks a direction, then 1 for gain or 2 for frequency.
+    private property <int> axis;
+    private property <length> press-x;
+    private property <length> press-y;
+    private property <float> press-spot;
 
+    function x-of(i: int) -> length {
+        return root.inset + root.spots[i] * root.span;
+    }
     function nearest(x: length) -> int {
-        return clamp(round((x - root.pad) / root.step), 0, 5);
+        return (x > (root.x-of(0) + root.x-of(1)) / 2 ? 1 : 0)
+            + (x > (root.x-of(1) + root.x-of(2)) / 2 ? 1 : 0)
+            + (x > (root.x-of(2) + root.x-of(3)) / 2 ? 1 : 0)
+            + (x > (root.x-of(3) + root.x-of(4)) / 2 ? 1 : 0)
+            + (x > (root.x-of(4) + root.x-of(5)) / 2 ? 1 : 0);
     }
     function gain-at(y: length) -> float {
         return clamp(round((graph.height / 2 - y) / (graph.height / 2 - 16px) * 24) / 2, -12, 12);
@@ -84,6 +126,108 @@ export component EqPanel inherits VerticalLayout {
                 clicked => { root.choose(name); }
             }
             Chip { text: "Custom"; passive: true; active: !root.bypassed && root.preset == "Custom"; }
+            phones := Chip {
+                icon: Icons.headphones;
+                locked: root.bypassed;
+                active: !root.bypassed && root.headphone != "";
+                clicked => {
+                    root.headphones-open();
+                    root.headphones-search(root.headphone-query);
+                    search.show();
+                }
+            }
+        }
+    }
+
+    /// Finds a headphone model; the one in use sits on top with a way to take it off.
+    search := PopupWindow {
+        x: root.padding-left;
+        y: phones.absolute-position.y - root.absolute-position.y + phones.height + 6px;
+        width: root.width - root.padding-left - root.padding-right;
+        close-policy: close-on-click-outside;
+        Rectangle {
+            background: Theme.popup;
+            border-radius: Theme.radius-m;
+            drop-shadow-blur: 24px;
+            drop-shadow-offset-y: 8px;
+            drop-shadow-color: #00000090;
+            VerticalLayout {
+                padding: 4px;
+                spacing: 2px;
+                if root.headphone != "": HorizontalLayout {
+                    height: 32px;
+                    padding-left: 10px;
+                    spacing: 8px;
+                    VerticalLayout {
+                        alignment: center;
+                        Icon { data: Icons.headphones; width: 14px; height: 14px; tint: Theme.text; }
+                    }
+                    Label {
+                        text: root.headphone;
+                        font-size: 13px;
+                        font-weight: 600;
+                        horizontal-stretch: 1;
+                    }
+                    Rectangle {
+                        width: 32px;
+                        border-radius: Theme.radius-s;
+                        background: clear.has-hover ? Theme.hover : transparent;
+                        animate background { duration: 120ms; }
+                        Icon {
+                            data: Icons.close;
+                            width: 13px;
+                            height: 13px;
+                            tint: clear.has-hover ? Theme.text : Theme.muted;
+                        }
+                        clear := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => {
+                                root.headphones-clear();
+                                search.close();
+                            }
+                        }
+                    }
+                }
+                TextField {
+                    height: 36px;
+                    radius: Theme.radius-s;
+                    icon: Icons.search;
+                    placeholder: "Search headphones";
+                    text <=> root.headphone-query;
+                    init => { self.focus(); }
+                    changed focused => { root.typing = self.focused; }
+                    edited(text) => { root.headphones-search(text); }
+                    accepted => {
+                        if root.headphone-results.length > 0 {
+                            root.headphones-pick(0);
+                            search.close();
+                        }
+                    }
+                }
+                for name[i] in root.headphone-results: Rectangle {
+                    visible: name != root.headphone;
+                    height: self.visible ? 32px : 0px;
+                    border-radius: Theme.radius-s;
+                    background: tap.has-hover ? Theme.hover : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        Label {
+                            text: name;
+                            font-size: 13px;
+                            font-weight: 500;
+                            color: tap.has-hover ? Theme.text : Theme.muted;
+                        }
+                    }
+                    tap := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            root.headphones-pick(i);
+                            search.close();
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -106,6 +250,15 @@ export component EqPanel inherits VerticalLayout {
             y: (graph.height - 1px) / 2;
             height: 1px;
             background: Theme.text.with-alpha(0.05);
+        }
+        Path {
+            width: 100%;
+            height: 100%;
+            viewbox-width: graph.width / 1px;
+            viewbox-height: graph.height / 1px;
+            commands: root.correction;
+            fill: Theme.text.with-alpha(0.2);
+            stroke-width: 0px;
         }
         Path {
             width: 100%;
@@ -146,7 +299,7 @@ export component EqPanel inherits VerticalLayout {
 
         for gain[i] in root.gains: Rectangle {
             private property <length> size: root.band == i ? 13px : touch.has-hover && root.nearest(touch.mouse-x) == i ? 12px : 10px;
-            x: root.pad + i * root.step - self.width / 2;
+            x: root.x-of(i) - self.width / 2;
             y: graph.height / 2 - gain / 12 * (graph.height / 2 - 16px) - self.height / 2;
             width: self.size;
             height: self.size;
@@ -156,9 +309,9 @@ export component EqPanel inherits VerticalLayout {
             animate width, height, opacity { duration: 120ms; easing: ease-out; }
         }
 
-        if root.band >= 0: Label {
+        if root.band >= 0 && root.axis != 2: Label {
             private property <float> value: root.gains[root.band];
-            x: root.pad + root.band * root.step - self.width / 2;
+            x: root.x-of(root.band) - self.width / 2;
             y: graph.height / 2 - self.value / 12 * (graph.height / 2 - 16px) - 26px;
             width: 48px;
             height: 14px;
@@ -170,21 +323,41 @@ export component EqPanel inherits VerticalLayout {
 
         touch := TouchArea {
             enabled: !root.bypassed;
-            mouse-cursor: root.band >= 0 ? MouseCursor.ns-resize : MouseCursor.pointer;
+            mouse-cursor: root.axis == 2 ? MouseCursor.ew-resize : root.band >= 0 ? MouseCursor.ns-resize : MouseCursor.pointer;
             pointer-event(event) => {
                 if event.button != PointerEventButton.left { return; }
                 if event.kind == PointerEventKind.down {
                     root.band = root.nearest(self.mouse-x);
-                    root.drag(root.band, root.gain-at(self.mouse-y));
+                    root.axis = 0;
+                    root.press-x = self.mouse-x;
+                    root.press-y = self.mouse-y;
+                    root.press-spot = root.spots[root.band];
                 }
                 if event.kind == PointerEventKind.up && root.band >= 0 {
+                    // A click without a drag sets the gain where it landed.
+                    if root.axis == 0 {
+                        root.drag(root.band, root.gain-at(self.mouse-y), root.press-spot);
+                    }
                     root.band = -1;
+                    root.axis = 0;
                     root.release();
                 }
             }
             moved => {
-                if self.pressed && root.band >= 0 {
-                    root.drag(root.band, root.gain-at(self.mouse-y));
+                if !self.pressed || root.band < 0 { return; }
+                if root.axis == 0 {
+                    // The first few pixels decide: sideways moves the frequency.
+                    if abs(self.mouse-x - root.press-x) > 6px && abs(self.mouse-x - root.press-x) > 1.5 * abs(self.mouse-y - root.press-y) {
+                        root.axis = 2;
+                    } else if abs(self.mouse-y - root.press-y) > 4px {
+                        root.axis = 1;
+                    }
+                }
+                if root.axis == 1 {
+                    root.drag(root.band, root.gain-at(self.mouse-y), root.press-spot);
+                }
+                if root.axis == 2 {
+                    root.drag(root.band, root.gains[root.band], root.press-spot + (self.mouse-x - root.press-x) / root.span);
                 }
             }
             double-clicked => { root.reset(root.nearest(self.mouse-x)); }
@@ -193,13 +366,14 @@ export component EqPanel inherits VerticalLayout {
 
     Rectangle {
         height: 12px;
-        for label[i] in ["60", "150", "400", "1k", "3k", "8k"]: Label {
-            x: root.pad + i * root.step - self.width / 2;
+        for label[i] in root.labels: Label {
+            x: root.x-of(i) - self.width / 2;
             y: -8px;
             width: 32px;
             horizontal-alignment: center;
             font-size: 10.5px;
-            color: Theme.faint;
+            color: root.band == i ? Theme.text : Theme.faint;
+            animate color { duration: 120ms; }
             text: label;
         }
     }

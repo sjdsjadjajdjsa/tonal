@@ -143,6 +143,35 @@ pub enum RepeatMode {
     One,
 }
 
+/// Standard center frequencies of the equalizer bands. The first is a low shelf, the
+/// last a high shelf, the rest are peaks an octave wide.
+pub const EQ_BANDS: [f64; 6] = [60.0, 150.0, 400.0, 1000.0, 3000.0, 8000.0];
+
+/// Shape of one parametric equalizer filter.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FilterKind {
+    Peak,
+    LowShelf,
+    HighShelf,
+}
+
+/// One parametric filter: center (or corner) frequency in Hz, gain in dB and its Q.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct EqFilter {
+    pub kind: FilterKind,
+    pub freq: f64,
+    pub gain: f64,
+    pub q: f64,
+}
+
+/// A headphone correction from AutoEQ: a layer underneath the user's equalizer.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Headphone {
+    pub name: String,
+    pub preamp: f64,
+    pub filters: Vec<EqFilter>,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -168,7 +197,11 @@ pub struct Settings {
     pub visualizer: bool,
     pub youtube_cookies: String,
     pub eq_gains: [f64; 6],
+    /// Center frequency of each band, moved by dragging a dot sideways.
+    pub eq_freqs: [f64; 6],
     pub eq_preamp: f64,
+    /// Headphone correction underneath the equalizer, if one was chosen.
+    pub headphone: Option<Headphone>,
     pub eq_preset: String,
     pub album_colors: bool,
     /// mpv audio device name; empty is the system default.
@@ -205,7 +238,9 @@ impl Default for Settings {
             visualizer: true,
             youtube_cookies: String::new(),
             eq_gains: [0.0; 6],
+            eq_freqs: EQ_BANDS,
             eq_preamp: 0.0,
+            headphone: None,
             eq_preset: "Flat".into(),
             album_colors: true,
             audio_device: String::new(),
