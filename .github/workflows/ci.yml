@@ -57,11 +57,11 @@ jobs:
         if: runner.os == 'macOS'
         env:
           TONAL_KEYCHAIN: ${{ runner.temp }}/tonal-ci.keychain-db
-          TONAL_KEYCHAIN_PASSWORD: ci
+          KEYCHAIN_PASSWORD: ci
         run: |
-          security create-keychain -p "$TONAL_KEYCHAIN_PASSWORD" "$TONAL_KEYCHAIN"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$TONAL_KEYCHAIN"
           security set-keychain-settings "$TONAL_KEYCHAIN"
-          security unlock-keychain -p "$TONAL_KEYCHAIN_PASSWORD" "$TONAL_KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$TONAL_KEYCHAIN"
           security list-keychains -d user -s "$TONAL_KEYCHAIN" $(security list-keychains -d user | tr -d '"')
           sh packaging/macos/setup-signing.sh || { security dump-keychain "$TONAL_KEYCHAIN"; exit 1; }
           sh packaging/macos/setup-signing.sh

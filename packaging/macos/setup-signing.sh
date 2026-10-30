@@ -4,8 +4,7 @@
 # so macOS keeps Full Disk Access, audio recording and Keychain permissions
 # across rebuilds. Running it again does nothing.
 #
-# TONAL_KEYCHAIN picks another keychain (used by CI), and
-# TONAL_KEYCHAIN_PASSWORD its password, so nothing asks for one.
+# TONAL_KEYCHAIN picks another keychain (CI uses a temporary one).
 set -eu
 
 name="Tonal Local Signing"
@@ -51,13 +50,12 @@ pass=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 
 security import "$tmp/cert.p12" -k "$keychain" -f pkcs12 -P "$pass" -T /usr/bin/codesign >/dev/null
 
-# Lets codesign use the key without a dialog on every build.
-if [ -n "${TONAL_KEYCHAIN_PASSWORD:-}" ]; then
-    security set-key-partition-list -S apple-tool:,apple:,codesign: -s -l "$name" \
-        -k "$TONAL_KEYCHAIN_PASSWORD" "$keychain" >/dev/null
-else
-    echo "macOS now asks for your login password once, so codesign may use the new key."
-    security set-key-partition-list -S apple-tool:,apple:,codesign: -s -l "$name" "$keychain" >/dev/null
+# A test signature now, so any keychain dialog shows up here and not mid-build.
+echo "If macOS asks to let codesign use the key, enter your login password and pick Always Allow."
+cp /usr/bin/true "$tmp/test"
+if ! out=$(codesign --force --sign "$name" "$tmp/test" 2>&1); then
+    echo "$out" >&2
+    exit 1
 fi
 
 echo "Done: build-app.sh now signs Tonal.app as \"$name\"."
