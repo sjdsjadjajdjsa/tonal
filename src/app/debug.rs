@@ -77,6 +77,15 @@ pub(super) fn debug_hooks(app: &Controller, window: &AppWindow) {
             ..Default::default()
         }));
     }
+    // Clicks a card after the page has loaded, like "local-album:0" or "top-artist:1".
+    if let Ok(spec) = std::env::var("TONAL_DEBUG_CARD") {
+        let c = app.clone();
+        slint::Timer::single_shot(std::time::Duration::from_secs(5), move || {
+            if let Some((kind, index)) = spec.split_once(':') {
+                c.open_card(kind, index.parse().unwrap_or(0));
+            }
+        });
+    }
     if let Ok(preset) = std::env::var("TONAL_DEBUG_EQ") {
         app.eq_choose(&preset);
     }
