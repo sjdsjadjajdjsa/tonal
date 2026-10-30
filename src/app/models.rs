@@ -94,7 +94,76 @@ pub fn lyrics(
 }
 type Field<'a> = (&'a str, &'a str, String, &'a str, &'a str, bool);
 
+pub const SYSTEM_DEFAULT: &str = "System default";
+
+static DEVICES: std::sync::Mutex<Vec<crate::player::AudioDevice>> =
+    std::sync::Mutex::new(Vec::new());
+
+/// Remembers mpv's output devices for the Output row. True when the list changed.
+pub fn set_devices(devices: Vec<crate::player::AudioDevice>) -> bool {
+    let mut known = DEVICES.lock().expect("devices poisoned");
+    if *known == devices {
+        return false;
+    }
+    *known = devices;
+    true
+}
+
+/// The mpv device name for a description picked in the Output row.
+pub fn device_named(description: &str) -> Option<String> {
+    if description == SYSTEM_DEFAULT {
+        return Some(String::new());
+    }
+    DEVICES
+        .lock()
+        .expect("devices poisoned")
+        .iter()
+        .find(|d| d.description == description)
+        .map(|d| d.name.clone())
+}
+
+/// The Output row's choices and the one showing now.
+fn outputs(current: &str) -> (Vec<String>, String) {
+    let devices = DEVICES.lock().expect("devices poisoned");
+    let mut options = vec![SYSTEM_DEFAULT.to_string()];
+    options.extend(devices.iter().map(|d| d.description.clone()));
+    let shown = match current {
+        "" => SYSTEM_DEFAULT.to_string(),
+        name => devices
+            .iter()
+            .find(|d| d.name == name)
+            .map_or_else(|| name.to_string(), |d| d.description.clone()),
+    };
+    (options, shown)
+}
+
+thread_local! {
+    static OPTIONS: std::cell::RefCell<(Vec<String>, ModelRc<slint::SharedString>)> =
+        Default::default();
+}
+
+/// The same model while the options stay the same, so unchanged rows compare equal
+/// and `update` leaves them (and any open dropdown) alone. UI thread only.
+fn options_model(options: &[String]) -> ModelRc<slint::SharedString> {
+    OPTIONS.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if cache.0 != options || cache.1.row_count() != options.len() {
+            *cache = (
+                options.to_vec(),
+                ModelRc::new(VecModel::from(
+                    options
+                        .iter()
+                        .map(|o| slint::SharedString::from(o.as_str()))
+                        .collect::<Vec<_>>(),
+                )),
+            );
+        }
+        cache.1.clone()
+    })
+}
+
 pub fn settings(s: &Settings) -> Vec<SettingRow> {
+    let (outputs, output) = outputs(&s.audio_device);
     let dirs = s
         .music_dirs
         .iter()
@@ -105,6 +174,7 @@ pub fn settings(s: &Settings) -> Vec<SettingRow> {
         (
             "Playback",
             vec![
+                ("audio_device", "Output", output, "", "choice", false),
                 (
                     "crossfade_secs",
                     "Crossfade",
@@ -126,6 +196,22 @@ pub fn settings(s: &Settings) -> Vec<SettingRow> {
                     "Even out volume",
                     s.normalize.to_string(),
                     "Keeps loud and quiet songs at a similar level.",
+                    "toggle",
+                    false,
+                ),
+                (
+                    "replaygain",
+                    "ReplayGain",
+                    s.replaygain.to_string(),
+                    "Uses the loudness saved in your files when they have it.",
+                    "toggle",
+                    false,
+                ),
+                (
+                    "bit_perfect",
+                    "Bit-perfect",
+                    s.bit_perfect.to_string(),
+                    "Sends the file untouched. No equalizer, volume is up to your device.",
                     "toggle",
                     false,
                 ),
@@ -294,6 +380,11 @@ pub fn settings(s: &Settings) -> Vec<SettingRow> {
                 value: value.into(),
                 hint: hint.into(),
                 kind: kind.into(),
+                options: if kind == "choice" {
+                    options_model(&outputs)
+                } else {
+                    ModelRc::default()
+                },
                 secret,
                 header: if i == 0 {
                     header.into()

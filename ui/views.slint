@@ -1,5 +1,5 @@
 import { ScrollView } from "std-widgets.slint";
-import { Theme, Icons, Label, Icon, Button, Switch, TextField } from "theme.slint";
+import { Theme, Icons, Label, Icon, Button, Switch, TextField, Select } from "theme.slint";
 
 export struct SettingRow {
     key: string,
@@ -7,6 +7,7 @@ export struct SettingRow {
     value: string,
     hint: string,
     kind: string,
+    options: [string],
     secret: bool,
     header: string,
     first: bool,
@@ -81,6 +82,17 @@ export component SettingsView inherits Rectangle {
                                 text: field.value;
                                 secret: field.secret;
                                 committed(value) => {
+                                    if value != field.value { root.change(field.key, value); }
+                                }
+                            }
+                        }
+                        if field.kind == "choice": VerticalLayout {
+                            alignment: center;
+                            Select {
+                                width: 280px;
+                                value: field.value;
+                                options: field.options;
+                                picked(value) => {
                                     if value != field.value { root.change(field.key, value); }
                                 }
                             }

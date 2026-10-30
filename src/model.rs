@@ -170,6 +170,10 @@ pub struct Settings {
     pub eq_gains: [f64; 6],
     pub eq_preamp: f64,
     pub eq_preset: String,
+    /// mpv audio device name; empty is the system default.
+    pub audio_device: String,
+    pub replaygain: bool,
+    pub bit_perfect: bool,
 }
 
 impl Default for Settings {
@@ -202,6 +206,9 @@ impl Default for Settings {
             eq_gains: [0.0; 6],
             eq_preamp: 0.0,
             eq_preset: "Flat".into(),
+            audio_device: String::new(),
+            replaygain: true,
+            bit_perfect: false,
         }
     }
 }

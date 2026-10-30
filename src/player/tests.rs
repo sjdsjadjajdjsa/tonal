@@ -563,6 +563,195 @@ async fn real_mpv_equalizer_changes_live_and_survives_filter_rebuilds() {
     assert!(af.to_string().contains("dynaudnorm"), "{af}");
 }
 
+async fn property(engine: &mut Engine, name: &str) -> Value {
+    engine
+        .active
+        .as_mut()
+        .unwrap()
+        .request(json!(["get_property", name]))
+        .await
+        .unwrap()
+}
+
+fn errors(rx: &mut UnboundedReceiver<PlayerEvent>) -> Vec<String> {
+    std::iter::from_fn(|| rx.try_recv().ok())
+        .filter_map(|event| match event {
+            PlayerEvent::Error(error) => Some(error),
+            _ => None,
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn real_mpv_quality_tag_for_wav_tone() {
+    let tone = Tone::new();
+    let (mut engine, mut rx) = tone_engine(&tone).await;
+    pump_until(&mut engine, |e| e.quality.shown == "PCM 16/44.1").await;
+    let tags: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok())
+        .filter_map(|event| match event {
+            PlayerEvent::Quality(tag) => Some(tag),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(tags, ["PCM 16/44.1"], "one stable tag, no flicker");
+    engine.command(Cmd::Stop).await.unwrap();
+    assert_eq!(engine.quality.shown, "");
+}
+
+#[tokio::test]
+async fn real_mpv_audio_device_setting_applied_and_kept_on_restart() {
+    let tone = Tone::new();
+    let (tx, mut rx) = unbounded_channel();
+    let mut engine = Engine::new(
+        PlayerConfig {
+            audio_device: "tonal/first".into(),
+            ..config()
+        },
+        tx,
+    );
+    engine.command(Cmd::Play(tone.tracks(), 0)).await.unwrap();
+    pump_until(&mut engine, |e| e.pos > 0.1).await;
+    assert_eq!(property(&mut engine, "audio-device").await, "tonal/first");
+    engine
+        .command(Cmd::AudioDevice("tonal/second".into()))
+        .await
+        .unwrap();
+    assert_eq!(property(&mut engine, "audio-device").await, "tonal/second");
+    let instance = engine.active.as_ref().unwrap().id;
+    engine.active.as_mut().unwrap().kill_for_test().await;
+    pump_until(&mut engine, |e| {
+        e.active.as_ref().is_some_and(|mpv| mpv.id != instance)
+    })
+    .await;
+    assert_eq!(property(&mut engine, "audio-device").await, "tonal/second");
+    engine
+        .command(Cmd::AudioDevice(String::new()))
+        .await
+        .unwrap();
+    assert_eq!(property(&mut engine, "audio-device").await, "auto");
+    assert_eq!(errors(&mut rx), ["Playback engine restarted"]);
+}
+
+#[tokio::test]
+async fn real_mpv_replaygain_set_and_takes_over_from_dynaudnorm() {
+    let tone = Tone::new();
+    let (tx, mut rx) = unbounded_channel();
+    let mut engine = Engine::new(
+        PlayerConfig {
+            normalize: true,
+            ..config()
+        },
+        tx,
+    );
+    engine.command(Cmd::Play(tone.tracks(), 0)).await.unwrap();
+    pump_until(&mut engine, |e| e.pos > 0.1).await;
+    assert_eq!(property(&mut engine, "replaygain").await, "album");
+    assert_eq!(property(&mut engine, "replaygain-clip").await, false);
+    assert_eq!(property(&mut engine, "replaygain-fallback").await, 0.0);
+    // The tone has no tags, so the dynamic normaliser stays.
+    assert!(!engine.rg_tagged);
+    assert!(
+        property(&mut engine, "af")
+            .await
+            .to_string()
+            .contains("dynaudnorm")
+    );
+    engine
+        .replaygain_tags(&json!({"REPLAYGAIN_TRACK_GAIN": "-6.10 dB"}))
+        .await
+        .unwrap();
+    let af = property(&mut engine, "af").await.to_string();
+    assert!(!af.contains("dynaudnorm") && af.contains("\"eq\""), "{af}");
+    engine.command(Cmd::ReplayGain(false)).await.unwrap();
+    // mpv reports the "no" choice as false.
+    assert_eq!(property(&mut engine, "replaygain").await, false);
+    assert!(
+        property(&mut engine, "af")
+            .await
+            .to_string()
+            .contains("dynaudnorm")
+    );
+    assert!(errors(&mut rx).is_empty());
+}
+
+#[tokio::test]
+async fn real_mpv_bit_perfect_clears_af_and_sets_exclusive() {
+    let tone = Tone::new();
+    let (tx, mut rx) = unbounded_channel();
+    let mut engine = Engine::new(
+        PlayerConfig {
+            normalize: true,
+            equalizer: super::Equalizer {
+                gains: [6.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                preamp: -3.0,
+            },
+            ..config()
+        },
+        tx,
+    );
+    engine.command(Cmd::Play(tone.tracks(), 0)).await.unwrap();
+    pump_until(&mut engine, |e| e.pos > 0.1).await;
+    engine.command(Cmd::Seek(4.0, false)).await.unwrap();
+    pump_until(&mut engine, |e| e.pos >= 4.0).await;
+    let track = engine.queue.track().unwrap().id;
+    let instance = engine.active.as_ref().unwrap().id;
+    engine.command(Cmd::BitPerfect(true)).await.unwrap();
+    assert_ne!(
+        engine.active.as_ref().unwrap().id,
+        instance,
+        "mpv respawned"
+    );
+    assert_eq!(property(&mut engine, "af").await, json!([]));
+    assert_eq!(property(&mut engine, "audio-exclusive").await, true);
+    assert_eq!(property(&mut engine, "volume").await, 100.0);
+    assert_eq!(property(&mut engine, "replaygain").await, false);
+    assert_eq!(property(&mut engine, "audio-samplerate").await, 0);
+    pump_until(&mut engine, |e| e.pos > 4.2).await;
+    assert_eq!(engine.queue.track().unwrap().id, track);
+    assert!(engine.pos < 6.5, "resumed where it was, not from the start");
+    // The equalizer and volume are kept for later but never reach mpv.
+    engine
+        .command(Cmd::Equalizer(super::Equalizer::default()))
+        .await
+        .unwrap();
+    engine.command(Cmd::Volume(20.0)).await.unwrap();
+    assert_eq!(property(&mut engine, "volume").await, 100.0);
+    assert_eq!(property(&mut engine, "af").await, json!([]));
+    engine.command(Cmd::BitPerfect(false)).await.unwrap();
+    assert_eq!(property(&mut engine, "audio-exclusive").await, false);
+    assert_eq!(property(&mut engine, "volume").await, 20.0);
+    assert!(
+        property(&mut engine, "af")
+            .await
+            .to_string()
+            .contains("dynaudnorm")
+    );
+    assert!(errors(&mut rx).is_empty(), "a planned respawn stays quiet");
+}
+
+#[test]
+fn device_lists_keep_the_main_backend() {
+    let help = "List of detected audio devices:\n  'auto' (Autoselect device)\n  'pipewire' (Default (pipewire))\n  'pipewire/hdmi' (Monitor (HDMI) [24G15N])\n  'pulse/hdmi' (Monitor)\n  'alsa' (Default (alsa))\n";
+    assert_eq!(
+        mpv::devices_from_help(help),
+        [AudioDevice {
+            name: "pipewire/hdmi".into(),
+            description: "Monitor (HDMI) [24G15N]".into()
+        }]
+    );
+    let list = json!([
+        {"name": "auto", "description": "Autoselect device"},
+        {"name": "wasapi/{1}", "description": "Speakers"},
+        {"name": "wasapi/{2}", "description": "Headphones"},
+        {"name": "openal", "description": "Default (openal)"}
+    ]);
+    let names: Vec<_> = mpv::devices_from_list(&list)
+        .into_iter()
+        .map(|d| d.description)
+        .collect();
+    assert_eq!(names, ["Speakers", "Headphones"]);
+}
+
 fn config() -> PlayerConfig {
     PlayerConfig {
         volume: 35.0,
@@ -572,6 +761,9 @@ fn config() -> PlayerConfig {
         gapless: true,
         shuffle: false,
         repeat: RepeatMode::Off,
+        audio_device: String::new(),
+        replaygain: true,
+        bit_perfect: false,
     }
 }
 

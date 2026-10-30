@@ -97,6 +97,7 @@ impl Controller {
                     w.set_now_id(now_id.into());
                     if !has_track {
                         super::waves::set_playing(&w, false);
+                        w.set_now_quality(Default::default());
                     }
                     w.set_position(initial_position as f32);
                     w.set_elapsed(models::time(initial_position).into());
@@ -283,6 +284,13 @@ impl Controller {
             }
             PlayerEvent::TrackFinished(track) => {
                 log::debug!("Finished {}", track.id);
+            }
+            PlayerEvent::Quality(tag) => self.ui(move |w| w.set_now_quality(tag.into())),
+            PlayerEvent::Devices(devices) => {
+                if models::set_devices(devices) {
+                    let settings = self.state.lock().settings.clone();
+                    self.ui(move |w| models::update(w.get_settings(), models::settings(&settings)));
+                }
             }
             PlayerEvent::Error(error) => match error
                 .strip_prefix("mpv could not load ")

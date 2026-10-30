@@ -6,6 +6,10 @@ All notable changes to Tonal. Versions follow [Semantic Versioning](https://semv
 
 ### Added
 - Equalizer: six bands on a curve you drag, six presets and a hold-to-compare button; volume headroom is handled automatically. It opens from the player bar or Settings and changes the sound live.
+- A small tag next to the time shows what plays, like FLAC 24/96, Opus 160k or MP3 320k.
+- Settings → Playback → Output picks the speakers or headphones, and switches live.
+- ReplayGain (on by default): files with loudness tags play at their saved level, and then the dynamic Even out volume steps aside for them.
+- Bit-perfect mode: no equalizer, no volume change and no resampling by Tonal, with exclusive output on Windows and macOS. On Linux, PipeWire may still resample to its own rate.
 
 ## 0.2.0 - 2026-10-30
 

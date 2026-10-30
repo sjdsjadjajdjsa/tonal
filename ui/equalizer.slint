@@ -4,6 +4,7 @@ component Chip inherits Rectangle {
     in property <string> text;
     in property <bool> active;
     in property <bool> passive;
+    in property <bool> locked;
     callback clicked;
     height: 28px;
     width: label.preferred-width + 24px;
@@ -19,7 +20,7 @@ component Chip inherits Rectangle {
         horizontal-alignment: center;
     }
     touch := TouchArea {
-        enabled: !root.passive;
+        enabled: !root.passive && !root.locked;
         mouse-cursor: pointer;
         clicked => { root.clicked(); }
     }
@@ -30,6 +31,8 @@ export component EqPanel inherits VerticalLayout {
     in property <[float]> gains;
     in property <string> preset;
     in property <bool> comparing;
+    /// Bit-perfect: the equalizer is out of the signal path, shown flat and dimmed.
+    in property <bool> bypassed;
     in property <string> backdrop;
     in property <string> fill;
     in property <string> haze;
@@ -54,6 +57,8 @@ export component EqPanel inherits VerticalLayout {
     }
 
     spacing: 14px;
+    opacity: root.bypassed ? 0.35 : 1;
+    animate opacity { duration: 160ms; }
 
     VerticalLayout {
         spacing: 4px;
@@ -62,7 +67,8 @@ export component EqPanel inherits VerticalLayout {
             alignment: start;
             for name in ["Flat", "Bass", "Vocal", "Bright"]: Chip {
                 text: name;
-                active: root.preset == name;
+                locked: root.bypassed;
+                active: !root.bypassed && root.preset == name;
                 clicked => { root.choose(name); }
             }
         }
@@ -71,10 +77,11 @@ export component EqPanel inherits VerticalLayout {
             alignment: start;
             for name in ["Warm", "Late night"]: Chip {
                 text: name;
-                active: root.preset == name;
+                locked: root.bypassed;
+                active: !root.bypassed && root.preset == name;
                 clicked => { root.choose(name); }
             }
-            Chip { text: "Custom"; passive: true; active: root.preset == "Custom"; }
+            Chip { text: "Custom"; passive: true; active: !root.bypassed && root.preset == "Custom"; }
         }
     }
 
@@ -160,6 +167,7 @@ export component EqPanel inherits VerticalLayout {
         }
 
         touch := TouchArea {
+            enabled: !root.bypassed;
             mouse-cursor: root.band >= 0 ? MouseCursor.ns-resize : MouseCursor.pointer;
             pointer-event(event) => {
                 if event.button != PointerEventButton.left { return; }

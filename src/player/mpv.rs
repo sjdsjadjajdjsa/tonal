@@ -59,6 +59,120 @@ pub(super) struct Message {
     pub value: Value,
 }
 
+/// How a new mpv instance is set up, from the engine's current settings.
+pub(super) struct Launch {
+    pub volume: f64,
+    pub af: String,
+    /// mpv device name, empty for the system default (or whatever mpv.conf says).
+    pub device: String,
+    pub replaygain: bool,
+    pub bit_perfect: bool,
+}
+
+impl Launch {
+    fn args(&self) -> Vec<String> {
+        let mut args = vec![
+            format!("--volume={}", self.volume),
+            format!(
+                "--gapless-audio={}",
+                if self.bit_perfect { "yes" } else { "weak" }
+            ),
+            format!(
+                "--replaygain={}",
+                if self.replaygain && !self.bit_perfect {
+                    "album"
+                } else {
+                    "no"
+                }
+            ),
+            "--replaygain-fallback=0".into(),
+            "--replaygain-clip=no".into(),
+        ];
+        if !self.device.is_empty() {
+            args.push(format!("--audio-device={}", self.device));
+        }
+        if self.bit_perfect {
+            // Exclusive mode is WASAPI exclusive on Windows and hog mode on macOS.
+            // The sample format already stays native unless --audio-format is set.
+            args.push("--audio-exclusive=yes".into());
+            args.push("--audio-samplerate=0".into());
+        } else if !self.af.is_empty() {
+            args.push(format!("--af={}", self.af));
+        }
+        args
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AudioDevice {
+    pub name: String,
+    pub description: String,
+}
+
+/// The devices of the audio backend mpv uses first (PipeWire, WASAPI, CoreAudio),
+/// without mpv's "auto" and per-backend default entries.
+pub(super) fn pick_devices(all: Vec<AudioDevice>) -> Vec<AudioDevice> {
+    let Some(backend) = all
+        .iter()
+        .find(|d| d.name != "auto")
+        .map(|d| d.name.split('/').next().unwrap_or_default().to_string())
+    else {
+        return Vec::new();
+    };
+    let prefix = format!("{backend}/");
+    all.into_iter()
+        .filter(|d| d.name.starts_with(&prefix))
+        .collect()
+}
+
+pub(super) fn devices_from_list(list: &Value) -> Vec<AudioDevice> {
+    pick_devices(
+        list.as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|d| {
+                Some(AudioDevice {
+                    name: d["name"].as_str()?.to_string(),
+                    description: d["description"].as_str().unwrap_or_default().to_string(),
+                })
+            })
+            .collect(),
+    )
+}
+
+/// Parses `mpv --audio-device=help`: lines like `  'name' (description)`.
+pub(super) fn devices_from_help(text: &str) -> Vec<AudioDevice> {
+    pick_devices(
+        text.lines()
+            .filter_map(|line| {
+                let rest = line.trim().strip_prefix('\'')?;
+                let (name, rest) = rest.split_once("' (")?;
+                Some(AudioDevice {
+                    name: name.to_string(),
+                    description: rest.strip_suffix(')').unwrap_or(rest).to_string(),
+                })
+            })
+            .collect(),
+    )
+}
+
+/// Lists output devices without an IPC session, so Settings can show them before
+/// anything has played.
+pub(super) async fn audio_devices() -> Vec<AudioDevice> {
+    let mut command = Command::new("mpv");
+    command
+        .arg("--audio-device=help")
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .kill_on_drop(true);
+    #[cfg(windows)]
+    command.creation_flags(crate::sources::CREATE_NO_WINDOW);
+    match tokio::time::timeout(Duration::from_secs(5), command.output()).await {
+        Ok(Ok(output)) => devices_from_help(&String::from_utf8_lossy(&output.stdout)),
+        _ => Vec::new(),
+    }
+}
+
 pub(super) struct Mpv {
     pub id: u64,
     child: Child,
@@ -73,7 +187,7 @@ pub(super) struct Mpv {
 }
 
 impl Mpv {
-    pub async fn spawn(events: UnboundedSender<Message>, volume: f64, af: &str) -> Result<Self> {
+    pub async fn spawn(events: UnboundedSender<Message>, launch: &Launch) -> Result<Self> {
         let id = NEXT_SOCKET.fetch_add(1, Ordering::Relaxed);
         #[cfg(unix)]
         let endpoint = std::env::temp_dir().join(format!("tonal-{}-{id}.sock", std::process::id()));
@@ -84,15 +198,18 @@ impl Mpv {
             "--idle=yes",
             "--no-video",
             "--no-terminal",
+            // yt-dlp's default sort already ranks audio by the site's quality
+            // field, then codec (lossless, Opus, Vorbis, AAC, MP3), then bitrate,
+            // and drops DRC variants. That picks Opus 251 (or premium 774) on
+            // YouTube and AAC 160k over Opus 64k on SoundCloud, so no -S here.
             "--ytdl-format=bestaudio/best",
             "--cache=yes",
             "--demuxer-max-bytes=16MiB",
             "--demuxer-max-back-bytes=8MiB",
-            "--gapless-audio=weak",
             "--prefetch-playlist=yes",
         ]);
         command.arg(format!("--input-ipc-server={}", endpoint.display()));
-        command.arg(format!("--volume={volume}"));
+        command.args(launch.args());
         command.arg(format!(
             "--ytdl-raw-options={}",
             crate::sources::ytdl_raw_options()
@@ -101,9 +218,7 @@ impl Mpv {
             "--audio-client-name=tonal-{}-{id}",
             std::process::id()
         ));
-        if !af.is_empty() {
-            command.arg(format!("--af={af}"));
-        }
+
         #[cfg(test)]
         command.arg("--ao=null");
         command
@@ -261,6 +376,13 @@ impl Mpv {
             "core-idle",
             "volume",
             "playlist",
+            "audio-codec-name",
+            "audio-params",
+            "audio-bitrate",
+            "file-format",
+            "current-tracks/audio",
+            "metadata",
+            "audio-device-list",
         ]
         .iter()
         .enumerate()

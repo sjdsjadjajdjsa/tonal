@@ -20,6 +20,10 @@ pub enum PlayerEvent {
     TrackFinished(Track),
     NearQueueEnd,
     Error(String),
+    /// Short format tag of what plays, like "FLAC 24/96" or "Opus 160k".
+    Quality(String),
+    /// Output devices of the audio backend mpv uses.
+    Devices(Vec<AudioDevice>),
 }
 
 #[derive(Clone, Debug)]
@@ -31,6 +35,11 @@ pub struct PlayerConfig {
     pub shuffle: bool,
     pub repeat: RepeatMode,
     pub equalizer: Equalizer,
+    /// mpv audio device name; empty means the system default.
+    pub audio_device: String,
+    pub replaygain: bool,
+    /// No filters, no software volume, exclusive output, no resampling by mpv.
+    pub bit_perfect: bool,
 }
 
 /// Center frequencies of the equalizer bands. The first is a low shelf, the last a
@@ -88,6 +97,7 @@ impl Equalizer {
     }
 }
 
+/// The filter chain. ReplayGain is a gain mpv applies itself, so it needs no filter.
 fn filters(normalize: bool, equalizer: &Equalizer) -> String {
     let eq = equalizer.graph();
     if normalize {
@@ -98,12 +108,15 @@ fn filters(normalize: bool, equalizer: &Equalizer) -> String {
 }
 
 mod mpv;
+mod quality;
 mod queue;
 #[cfg(test)]
 mod tests;
 
 use anyhow::Result;
-use mpv::{Disconnected, Message, Mpv};
+pub use mpv::AudioDevice;
+use mpv::{Disconnected, Launch, Message, Mpv};
+use quality::Quality;
 use queue::Queue;
 use serde_json::{Value, json};
 use tokio::{
@@ -133,6 +146,10 @@ enum Cmd {
     Equalizer(Equalizer),
     Gapless(bool),
     YtdlOptions,
+    AudioDevice(String),
+    ReplayGain(bool),
+    BitPerfect(bool),
+    Devices,
     Shutdown,
 }
 
@@ -218,6 +235,21 @@ impl PlayerHandle {
     pub fn set_gapless(&self, on: bool) {
         let _ = self.tx.send(Cmd::Gapless(on));
     }
+    /// mpv device name, empty for the system default. Applies live.
+    pub fn set_audio_device(&self, name: &str) {
+        let _ = self.tx.send(Cmd::AudioDevice(name.to_string()));
+    }
+    pub fn set_replaygain(&self, on: bool) {
+        let _ = self.tx.send(Cmd::ReplayGain(on));
+    }
+    /// Restarts mpv at the same spot, since exclusive output can't change live.
+    pub fn set_bit_perfect(&self, on: bool) {
+        let _ = self.tx.send(Cmd::BitPerfect(on));
+    }
+    /// Emits `PlayerEvent::Devices`, even before anything has played.
+    pub fn refresh_devices(&self) {
+        let _ = self.tx.send(Cmd::Devices);
+    }
     pub fn shutdown(&self) {
         let _ = self.tx.send(Cmd::Shutdown);
     }
@@ -259,6 +291,10 @@ struct Engine {
     last_position: Instant,
     failures: usize,
     restarts: Vec<Instant>,
+    quality: Quality,
+    devices: Vec<AudioDevice>,
+    /// The playing file has ReplayGain tags, so they replace dynaudnorm.
+    rg_tagged: bool,
 }
 
 impl Engine {
@@ -294,6 +330,9 @@ impl Engine {
             last_position: Instant::now() - Duration::from_secs(1),
             failures: 0,
             restarts: Vec::new(),
+            quality: Quality::default(),
+            devices: Vec::new(),
+            rg_tagged: false,
         }
     }
 
@@ -342,6 +381,13 @@ impl Engine {
         {
             return Ok(());
         }
+        self.reload(true).await
+    }
+
+    /// Replaces mpv with a fresh one at the same track, position and pause state.
+    /// `crashed` counts against the restart budget and tells the user; a planned
+    /// respawn (bit-perfect on or off) closes the old output first and stays quiet.
+    async fn reload(&mut self, mut crashed: bool) -> Result<()> {
         // The reader may already have seen B start while the engine is still
         // waiting for A's EOF/playlist handshake (or handling a failed command).
         if let Some(mpv) = &self.active
@@ -363,27 +409,35 @@ impl Engine {
         self.gapless_eof = false;
         self.gapless_position = false;
         self.start_at = None;
-        self.active = None;
-        self.standby = None;
+        let old = [self.active.take(), self.standby.take()];
+        if !crashed {
+            // An exclusive device is only free once the old process is gone.
+            for mut mpv in old.into_iter().flatten() {
+                mpv.shutdown().await;
+            }
+        }
+        self.quality.forget();
         let Some(track) = self.queue.track() else {
             return Ok(());
         };
         loop {
-            let now = Instant::now();
-            self.restarts
-                .retain(|time| now.duration_since(*time) < Duration::from_secs(60));
-            if self.restarts.len() >= 3 {
-                self.stop_playback().await?;
-                self.emit(PlayerEvent::Error("mpv keeps crashing".into()));
-                return Ok(());
+            if crashed {
+                let now = Instant::now();
+                self.restarts
+                    .retain(|time| now.duration_since(*time) < Duration::from_secs(60));
+                if self.restarts.len() >= 3 {
+                    self.stop_playback().await?;
+                    self.emit(PlayerEvent::Error("mpv keeps crashing".into()));
+                    return Ok(());
+                }
+                self.restarts.push(now);
             }
-            self.restarts.push(now);
             self.cache_paused = false;
             self.core_idle = true;
             self.update_buffering();
             let result: Result<()> = async {
                 self.active =
-                    Some(Mpv::spawn(self.ipc_tx.clone(), self.config.volume, &self.af()).await?);
+                    Some(Mpv::spawn(self.ipc_tx.clone(), &self.launch(self.volume())).await?);
                 self.active_send(json!(["set_property", "pause", paused]))
                     .await?;
                 self.active
@@ -397,7 +451,9 @@ impl Engine {
             .await;
             match result {
                 Ok(()) => {
-                    self.emit(PlayerEvent::Error("Playback engine restarted".into()));
+                    if crashed {
+                        self.emit(PlayerEvent::Error("Playback engine restarted".into()));
+                    }
                     return Ok(());
                 }
                 // This attempt owns even a child that died before spawn returned.
@@ -407,6 +463,7 @@ impl Engine {
                     self.standby = None;
                     self.pending = None;
                     self.pending_entry = None;
+                    crashed = true;
                 }
                 Err(error) => return Err(error),
             }
@@ -458,7 +515,7 @@ impl Engine {
             if let Some(mpv) = &mut self.standby {
                 mpv.send(json!(["stop"])).await?;
             }
-            self.active_send(json!(["set_property", "volume", self.config.volume]))
+            self.active_send(json!(["set_property", "volume", self.volume()]))
                 .await?;
         }
         Ok(())
@@ -477,8 +534,7 @@ impl Engine {
             return self.stop_playback().await;
         };
         if self.active.is_none() {
-            self.active =
-                Some(Mpv::spawn(self.ipc_tx.clone(), self.config.volume, &self.af()).await?);
+            self.active = Some(Mpv::spawn(self.ipc_tx.clone(), &self.launch(self.volume())).await?);
         }
         self.cache_paused = false;
         self.emit(PlayerEvent::Paused(self.paused));
@@ -490,13 +546,14 @@ impl Engine {
             .expect("active mpv")
             .load(&track.play_url, self.start_at.take())
             .await?;
-        self.active_send(json!(["set_property", "volume", self.config.volume]))
+        self.active_send(json!(["set_property", "volume", self.volume()]))
             .await?;
         self.sync_prefetch().await
     }
     async fn stop_playback(&mut self) -> Result<()> {
         self.cancel_fade().await?;
         self.pending = None;
+        self.quality = Quality::default();
         self.queue.current = None;
         self.paused = true;
         self.pos = 0.0;
@@ -521,7 +578,7 @@ impl Engine {
         }
         self.active_send(json!(["playlist-clear"])).await?;
         if self.config.gapless
-            && self.config.crossfade_secs == 0.0
+            && !self.crossfading()
             && let Some(index) = self.queue.next(self.config.repeat, true)
         {
             let track = self.queue.at(index).expect("queue index");
@@ -656,7 +713,7 @@ impl Engine {
                 if self.fade.is_some() {
                     self.apply_fade_volumes().await?;
                 } else {
-                    self.active_send(json!(["set_property", "volume", self.config.volume]))
+                    self.active_send(json!(["set_property", "volume", self.volume()]))
                         .await?;
                 }
                 self.emit(PlayerEvent::Volume(self.config.volume));
@@ -693,7 +750,13 @@ impl Engine {
             Cmd::Equalizer(equalizer) => {
                 if equalizer != self.config.equalizer {
                     self.config.equalizer = equalizer;
-                    for command in equalizer.commands() {
+                    // Bit-perfect runs without the filter; it comes back on respawn.
+                    let commands = if self.config.bit_perfect {
+                        Vec::new()
+                    } else {
+                        equalizer.commands()
+                    };
+                    for command in commands {
                         self.active_send(command.clone()).await?;
                         if let Some(mpv) = &mut self.standby {
                             mpv.send(command).await?;
@@ -704,6 +767,51 @@ impl Engine {
             Cmd::Gapless(on) => {
                 self.config.gapless = on;
                 self.sync_prefetch().await?;
+            }
+            Cmd::AudioDevice(name) => {
+                if name != self.config.audio_device {
+                    self.config.audio_device = name;
+                    let device = match self.config.audio_device.as_str() {
+                        "" => "auto".to_string(),
+                        name => name.to_string(),
+                    };
+                    self.active_send(json!(["set_property", "audio-device", device.clone()]))
+                        .await?;
+                    if let Some(mpv) = &mut self.standby {
+                        mpv.send(json!(["set_property", "audio-device", device]))
+                            .await?;
+                    }
+                }
+            }
+            Cmd::ReplayGain(on) => {
+                if on != self.config.replaygain {
+                    self.config.replaygain = on;
+                    if !self.config.bit_perfect {
+                        let mode = if on { "album" } else { "no" };
+                        self.active_send(json!(["set_property", "replaygain", mode]))
+                            .await?;
+                        if let Some(mpv) = &mut self.standby {
+                            mpv.send(json!(["set_property", "replaygain", mode]))
+                                .await?;
+                        }
+                        if self.config.normalize && self.rg_tagged {
+                            self.active_send(json!(["set_property", "af", self.af()]))
+                                .await?;
+                        }
+                    }
+                }
+            }
+            Cmd::BitPerfect(on) => {
+                if on != self.config.bit_perfect {
+                    self.config.bit_perfect = on;
+                    self.reload(false).await?;
+                }
+            }
+            Cmd::Devices => {
+                let events = self.events.clone();
+                tokio::spawn(async move {
+                    let _ = events.send(PlayerEvent::Devices(mpv::audio_devices().await));
+                });
             }
             Cmd::YtdlOptions => {
                 let options = crate::sources::ytdl_raw_options();
@@ -842,7 +950,9 @@ impl Engine {
                     self.update_buffering();
                 }
                 Some("volume") => {
+                    // Bit-perfect pins mpv at 100; the user's level waits for its return.
                     if self.fade.is_none()
+                        && !self.config.bit_perfect
                         && let Some(volume) = value["data"].as_f64()
                         && (volume - self.config.volume).abs() > 0.01
                     {
@@ -862,8 +972,24 @@ impl Engine {
                     self.gapless_position = true;
                     self.complete_gapless().await?;
                 }
-                _ => {}
+                Some("metadata") => self.replaygain_tags(&value["data"]).await?,
+                Some("audio-device-list") => {
+                    let devices = mpv::devices_from_list(&value["data"]);
+                    if !devices.is_empty() && devices != self.devices {
+                        self.devices = devices.clone();
+                        self.emit(PlayerEvent::Devices(devices));
+                    }
+                }
+                Some(name) => {
+                    if self.queue.current.is_some()
+                        && let Some(tag) = self.quality.update(name, &value["data"])
+                    {
+                        self.emit(PlayerEvent::Quality(tag));
+                    }
+                }
+                None => {}
             },
+            Some("start-file") => self.quality.reset(),
             Some("file-loaded") => {}
             Some("end-file") if value["reason"] == "eof" => {
                 if self.fade.is_some() {
@@ -919,13 +1045,86 @@ impl Engine {
         }
         Ok(())
     }
+    /// The filter chain for the playing file. Bit-perfect has none. When a file has
+    /// ReplayGain tags and ReplayGain is on, its static gain replaces dynaudnorm:
+    /// the mastered dynamics stay intact and loud and quiet songs still match.
+    /// Untagged files keep the dynamic normaliser.
     fn af(&self) -> String {
-        filters(self.config.normalize, &self.config.equalizer)
+        if self.config.bit_perfect {
+            return String::new();
+        }
+        let normalize = self.config.normalize && !(self.config.replaygain && self.rg_tagged);
+        filters(normalize, &self.config.equalizer)
+    }
+    fn launch(&self, volume: f64) -> Launch {
+        Launch {
+            volume,
+            af: self.af(),
+            device: self.config.audio_device.clone(),
+            replaygain: self.config.replaygain,
+            bit_perfect: self.config.bit_perfect,
+        }
+    }
+    /// What mpv's volume is set to. Bit-perfect leaves the level to the device.
+    fn volume(&self) -> f64 {
+        if self.config.bit_perfect {
+            100.0
+        } else {
+            self.config.volume
+        }
+    }
+    /// Two streams can't share an exclusive device, and mixing isn't bit-perfect.
+    fn crossfading(&self) -> bool {
+        self.config.crossfade_secs > 0.0 && !self.config.bit_perfect
+    }
+    async fn replaygain_tags(&mut self, metadata: &Value) -> Result<()> {
+        if metadata.is_null() {
+            return Ok(());
+        }
+        let tagged = quality::has_replaygain(metadata);
+        if tagged != self.rg_tagged {
+            let before = self.af();
+            self.rg_tagged = tagged;
+            let after = self.af();
+            if after != before {
+                self.active_send(json!(["set_property", "af", after]))
+                    .await?;
+            }
+        }
+        Ok(())
+    }
+    /// After a crossfade the new active mpv reported its format while it was the
+    /// standby, so ask again.
+    async fn refresh_quality(&mut self) -> Result<()> {
+        self.quality.forget();
+        for name in [
+            "audio-codec-name",
+            "file-format",
+            "audio-params",
+            "current-tracks/audio",
+            "audio-bitrate",
+            "metadata",
+        ] {
+            let Some(mpv) = &mut self.active else {
+                return Ok(());
+            };
+            let data = match mpv.request(json!(["get_property", name])).await {
+                Ok(data) => data,
+                Err(error) if error.is::<Disconnected>() => return Err(error),
+                Err(_) => continue,
+            };
+            if name == "metadata" {
+                self.replaygain_tags(&data).await?;
+            } else if let Some(tag) = self.quality.update(name, &data) {
+                self.emit(PlayerEvent::Quality(tag));
+            }
+        }
+        Ok(())
     }
 
     async fn maybe_fade(&mut self) -> Result<()> {
         let remaining = self.duration - self.pos;
-        if self.config.crossfade_secs <= 0.0
+        if !self.crossfading()
             || self.fade.is_some()
             || self.paused
             || self.duration <= 0.0
@@ -944,7 +1143,7 @@ impl Engine {
         let track_duration = track.duration_secs.unwrap_or(0.0);
         let next = self.queue.key_at(index).expect("queue index");
         if self.standby.is_none() {
-            self.standby = Some(Mpv::spawn(self.ipc_tx.clone(), 0.0, &self.af()).await?);
+            self.standby = Some(Mpv::spawn(self.ipc_tx.clone(), &self.launch(0.0)).await?);
         }
         let mpv = self.standby.as_mut().expect("standby mpv");
         mpv.send(json!(["set_property", "volume", 0])).await?;
@@ -969,16 +1168,12 @@ impl Engine {
         self.active_send(json!([
             "set_property",
             "volume",
-            self.config.volume * (1.0 - fraction)
+            self.volume() * (1.0 - fraction)
         ]))
         .await?;
+        let volume = self.volume() * fraction;
         if let Some(mpv) = &mut self.standby {
-            mpv.send(json!([
-                "set_property",
-                "volume",
-                self.config.volume * fraction
-            ]))
-            .await?;
+            mpv.send(json!(["set_property", "volume", volume])).await?;
         }
         Ok(())
     }
@@ -1011,8 +1206,9 @@ impl Engine {
         self.announce();
         self.pos = fade.position;
         self.duration = fade.track_duration;
-        self.active_send(json!(["set_property", "volume", self.config.volume]))
+        self.active_send(json!(["set_property", "volume", self.volume()]))
             .await?;
+        self.refresh_quality().await?;
         self.sync_prefetch().await
     }
 }

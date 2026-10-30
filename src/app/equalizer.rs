@@ -40,11 +40,17 @@ pub(super) fn headroom(gains: &[f64; 6]) -> f64 {
 
 impl Controller {
     pub(super) fn eq_init(&self, window: &AppWindow) {
-        let (gains, preset) = {
+        let (gains, preset, bit_perfect) = {
             let mut s = self.state.lock();
             s.settings.eq_preamp = headroom(&s.settings.eq_gains);
-            (s.settings.eq_gains, s.settings.eq_preset.clone())
+            (
+                s.settings.eq_gains,
+                s.settings.eq_preset.clone(),
+                s.settings.bit_perfect,
+            )
         };
+        let gains = if bit_perfect { [0.0; 6] } else { gains };
+        window.set_bit_perfect(bit_perfect);
         CURVE.with(|c| c.borrow_mut().shown = gains);
         window.set_eq_gains(ModelRc::new(VecModel::from(
             gains.iter().map(|g| *g as f32).collect::<Vec<_>>(),
@@ -92,14 +98,21 @@ impl Controller {
         self.eq_changed(true);
     }
 
+    /// Bit-perfect went on or off: the curve eases to flat or back.
+    pub(super) fn eq_refresh(&self) {
+        self.eq_changed(true);
+    }
+
     /// Sends the settings to mpv, eases the curve towards them and saves a moment later.
+    /// Bit-perfect keeps the settings (mpv skips the filter) and draws the curve flat.
     fn eq_changed(&self, ease: bool) {
-        let (gains, preamp, preset) = {
+        let (gains, preamp, preset, bit_perfect) = {
             let s = self.state.lock();
             (
                 s.settings.eq_gains,
                 s.settings.eq_preamp,
                 s.settings.eq_preset.clone(),
+                s.settings.bit_perfect,
             )
         };
         let comparing = CURVE.with(|c| c.borrow().comparing);
@@ -114,7 +127,8 @@ impl Controller {
         };
         window.set_eq_preset(preset.into());
         window.set_eq_comparing(comparing);
-        let goal = heard.gains;
+        window.set_bit_perfect(bit_perfect);
+        let goal = if bit_perfect { [0.0; 6] } else { heard.gains };
         let weak = window.as_weak();
         CURVE.with(|c| {
             let mut c = c.borrow_mut();
@@ -144,8 +158,7 @@ impl Controller {
     fn eq_save(&self) {
         let settings = self.state.lock().settings.clone();
         if self.result(self.library.save_settings(&settings)).is_some() {
-            let rows = models::settings(&settings);
-            self.ui(move |w| models::update(w.get_settings(), rows));
+            self.ui(move |w| models::update(w.get_settings(), models::settings(&settings)));
         }
     }
 }

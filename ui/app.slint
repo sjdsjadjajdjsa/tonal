@@ -76,6 +76,8 @@ export component AppWindow inherits Window {
     in property <bool> can-forward;
     in property <[string]> now-artists;
     in property <bool> now-album;
+    in property <string> now-quality;
+    in property <bool> bit-perfect;
     in property <string> artist-name;
     in property <image> artist-image;
     in property <string> artist-source;
@@ -475,6 +477,7 @@ export component AppWindow inherits Window {
                             gains: root.eq-gains;
                             preset: root.eq-preset;
                             comparing: root.eq-comparing;
+                            bypassed: root.bit-perfect;
                             backdrop: root.eq-backdrop;
                             fill: root.eq-fill;
                             haze: root.eq-haze;
@@ -523,6 +526,8 @@ export component AppWindow inherits Window {
                 wave-resting: root.wave-resting;
                 artists: root.now-artists;
                 has-album: root.now-album;
+                quality: root.now-quality;
+                fixed-volume: root.bit-perfect;
                 open-artist(i) => { root.open-artist("now", 0, i); }
                 open-album => { root.open-album("now", 0); }
                 command(c) => { root.command(c); }

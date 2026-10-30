@@ -45,6 +45,9 @@ pub fn run() -> anyhow::Result<()> {
                 gains: settings.eq_gains,
                 preamp: equalizer::headroom(&settings.eq_gains),
             },
+            audio_device: settings.audio_device.clone(),
+            replaygain: settings.replaygain,
+            bit_perfect: settings.bit_perfect,
         },
         tx,
     )?;
@@ -201,6 +204,7 @@ pub fn run() -> anyhow::Result<()> {
     let c = app.clone();
     window.on_command(move |command| c.command(&command));
     app.eq_init(&window);
+    app.player.refresh_devices();
     let c = app.clone();
     window.on_eq_choose(move |name| c.eq_choose(&name));
     let c = app.clone();

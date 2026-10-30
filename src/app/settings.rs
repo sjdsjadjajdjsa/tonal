@@ -4,6 +4,9 @@ use slint::ComponentHandle;
 impl Controller {
     pub fn setting(&self, key: &str, value: &str) {
         self.apply_setting(key, value);
+        if key == "bit_perfect" {
+            self.eq_refresh();
+        }
         if key == "visualizer" {
             let (on, paused) = {
                 let s = self.state.lock();
@@ -58,6 +61,21 @@ impl Controller {
                     s.visualizer = v;
                 }
             }
+            "replaygain" => {
+                if let Ok(v) = value.parse() {
+                    s.replaygain = v;
+                }
+            }
+            "bit_perfect" => {
+                if let Ok(v) = value.parse() {
+                    s.bit_perfect = v;
+                }
+            }
+            "audio_device" => {
+                if let Some(name) = models::device_named(value) {
+                    s.audio_device = name;
+                }
+            }
             "youtube_cookies" => s.youtube_cookies = value.trim().to_lowercase(),
             "accent" => s.accent = value.into(),
             "spotify_client_id" => s.spotify_client_id = value.into(),
@@ -74,15 +92,18 @@ impl Controller {
             self.player.set_crossfade(settings.crossfade_secs);
             self.player.set_normalize(settings.normalize);
             self.player.set_gapless(settings.gapless);
+            // Each is a no-op in the engine unless it changed.
+            self.player.set_audio_device(&settings.audio_device);
+            self.player.set_replaygain(settings.replaygain);
+            self.player.set_bit_perfect(settings.bit_perfect);
             crate::sources::set_cookies_browser(&settings.youtube_cookies);
             self.player.refresh_ytdl_options();
             let color = parse_color(&settings.accent);
-            let rows = models::settings(&settings);
             self.ui(move |w| {
                 if let Some(color) = color {
                     w.global::<crate::Theme>().set_accent(color);
                 }
-                models::update(w.get_settings(), rows);
+                models::update(w.get_settings(), models::settings(&settings));
             });
         }
     }

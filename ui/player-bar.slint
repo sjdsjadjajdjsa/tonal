@@ -53,6 +53,12 @@ export component PlayerBar inherits Rectangle {
     out property <length> wave-height: root.mini ? root.height * 0.5 : 64px;
     in property <[string]> artists;
     in property <bool> has-album;
+    /// Format of what plays, like "FLAC 24/96". Empty hides the tag.
+    in property <string> quality;
+    /// Bit-perfect: mpv plays at full level and the device sets the volume.
+    in property <bool> fixed-volume;
+    private property <bool> show-quality: root.has-track && root.quality != "";
+    private property <length> quality-width: quality-measure.preferred-width + 16px;
     callback command(string);
     callback open-artist(int);
     callback open-album();
@@ -72,6 +78,13 @@ export component PlayerBar inherits Rectangle {
     callback volume-change(float);
     background: Theme.bar;
     min-height: root.mini ? 150px : 96px;
+
+    quality-measure := Label {
+        visible: false;
+        text: root.quality;
+        font-size: 10.5px;
+        font-weight: 500;
+    }
     preferred-height: root.mini ? 170px : 96px;
 
     Rectangle {
@@ -148,7 +161,29 @@ export component PlayerBar inherits Rectangle {
                 spacing: 10px;
                 Label { text: root.elapsed; width: 40px; horizontal-alignment: right; font-size: 11px; color: Theme.muted; }
                 Scrubber { value: root.position; maximum: root.duration; changed(v) => { root.seek(v); } }
-                Label { text: root.total; width: 40px; font-size: 11px; color: Theme.muted; }
+                total-box := Rectangle {
+                    width: 40px;
+                    total-text := Label { text: root.total; font-size: 11px; color: Theme.muted; }
+                    // Hangs past the column so the scrubber stays centred under the play
+                    // button, and only shows when it clears the buttons on the right.
+                    if root.show-quality
+                        && total-box.absolute-position.x + total-text.preferred-width + 10px + root.quality-width
+                            <= eq-slot.absolute-position.x - 12px: Rectangle {
+                        x: total-text.preferred-width + 10px;
+                        y: (parent.height - self.height) / 2;
+                        width: root.quality-width;
+                        height: 18px;
+                        border-radius: 9px;
+                        background: Theme.surface;
+                        Label {
+                            text: root.quality;
+                            font-size: 10.5px;
+                            font-weight: 500;
+                            color: Theme.muted;
+                            horizontal-alignment: center;
+                        }
+                    }
+                }
             }
         }
         HorizontalLayout {
@@ -157,20 +192,21 @@ export component PlayerBar inherits Rectangle {
             preferred-width: 0px;
             alignment: end;
             spacing: 4px;
-            VerticalLayout { alignment: center; IconButton { icon: Icons.equalizer; active: root.panel == "eq"; icon-size: 17px; clicked => { root.command("eq"); } } }
+            eq-slot := VerticalLayout { alignment: center; IconButton { icon: Icons.equalizer; active: root.panel == "eq"; icon-size: 17px; clicked => { root.command("eq"); } } }
             VerticalLayout { alignment: center; IconButton { icon: Icons.lyrics; active: root.panel == "lyrics"; icon-size: 17px; clicked => { root.command("lyrics"); } } }
             VerticalLayout { alignment: center; IconButton { icon: Icons.queue; active: root.panel == "queue"; icon-size: 17px; clicked => { root.command("queue"); } } }
             VerticalLayout {
                 alignment: center;
                 IconButton {
-                    icon: root.volume <= 0 ? Icons.volume-off : root.volume < 50 ? Icons.volume-low : Icons.volume;
+                    icon: root.fixed-volume ? Icons.volume : root.volume <= 0 ? Icons.volume-off : root.volume < 50 ? Icons.volume-low : Icons.volume;
                     icon-size: 17px;
+                    enabled: !root.fixed-volume;
                     clicked => { root.command("mute"); }
                 }
             }
             VerticalLayout {
                 alignment: center;
-                Scrubber { width: 84px; live: true; value: root.volume; maximum: 100; changed(v) => { root.volume-change(v); } }
+                Scrubber { width: 84px; live: true; enabled: !root.fixed-volume; value: root.fixed-volume ? 100 : root.volume; maximum: 100; changed(v) => { root.volume-change(v); } }
             }
             Rectangle { width: 6px; }
             VerticalLayout { alignment: center; IconButton { icon: Icons.mini; icon-size: 17px; clicked => { root.command("mini"); } } }
