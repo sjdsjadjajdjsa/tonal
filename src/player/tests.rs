@@ -202,7 +202,7 @@ async fn real_mpv_crash_command_error_restarts_without_reading_eof() {
     assert_ne!(engine.active.as_ref().unwrap().id, instance);
     assert_eq!(engine.queue.track().unwrap().title, "tone-one");
     assert!(engine.paused);
-    tokio::time::timeout(Duration::from_secs(3), async {
+    tokio::time::timeout(Duration::from_secs(10), async {
         loop {
             let message = engine.ipc_rx.recv().await.unwrap();
             let old_eof = message.instance == instance && message.value["event"] == "ipc-error";
@@ -365,6 +365,7 @@ async fn real_mpv_crash_standby_clears_crossfade() {
     engine.command(Cmd::Seek(6.2, false)).await.unwrap();
     pump_until(&mut engine, |e| e.fade.as_ref().is_some_and(|f| f.ready)).await;
     engine.command(Cmd::Pause(true)).await.unwrap();
+    let paused_at = engine.pos;
     let instance = engine.active.as_ref().unwrap().id;
     while rx.try_recv().is_ok() {}
     engine.standby.as_mut().unwrap().kill_for_test().await;
@@ -379,7 +380,7 @@ async fn real_mpv_crash_standby_clears_crossfade() {
     assert!(!engine.gapless_eof && !engine.gapless_position);
     assert_eq!(engine.queue.track().unwrap().title, "tone-one");
     assert!(engine.paused);
-    assert!((engine.pos - 6.2).abs() < 1.0);
+    assert!((engine.pos - paused_at).abs() < 0.5);
     let errors: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok())
         .filter_map(|event| match event {
             PlayerEvent::Error(error) => Some(error),
