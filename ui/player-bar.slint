@@ -18,7 +18,6 @@ component PlayButton inherits Rectangle {
         filled: true;
         width: root.size * 0.42;
         height: root.size * 0.42;
-        x: (root.width - self.width) / 2 + (root.paused ? 1.5px : 0px);
         tint: Theme.on-accent;
     }
     touch := TouchArea {
