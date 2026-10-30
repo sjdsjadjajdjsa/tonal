@@ -1,4 +1,4 @@
-import { Theme, Icons, Label, Icon, Scrubber } from "theme.slint";
+import { Theme, Label } from "theme.slint";
 
 component Chip inherits Rectangle {
     in property <string> text;
@@ -25,11 +25,10 @@ component Chip inherits Rectangle {
     }
 }
 
-/// The equalizer: preset chips, a curve with one handle per band, and a preamp.
+/// The equalizer: preset chips, and a curve with one handle per band.
 export component EqPanel inherits VerticalLayout {
     in property <[float]> gains;
     in property <string> preset;
-    in property <float> preamp;
     in property <bool> comparing;
     in property <string> backdrop;
     in property <string> fill;
@@ -42,7 +41,6 @@ export component EqPanel inherits VerticalLayout {
     callback drag(int, float);
     callback release();
     callback reset(int);
-    callback preamp-change(float);
 
     private property <length> pad: 22px;
     private property <int> band: -1;
@@ -193,26 +191,6 @@ export component EqPanel inherits VerticalLayout {
             font-size: 10.5px;
             color: Theme.faint;
             text: label;
-        }
-    }
-
-    HorizontalLayout {
-        padding-left: 6px;
-        padding-right: 6px;
-        spacing: 12px;
-        height: 30px;
-        VerticalLayout {
-            alignment: center;
-            Icon { data: Icons.volume-low; width: 16px; height: 16px; tint: Theme.faint; }
-        }
-        VerticalLayout {
-            alignment: center;
-            Scrubber {
-                value: root.preamp + 12;
-                maximum: 12;
-                live: true;
-                changed(v) => { root.preamp-change(round((v - 12) * 2) / 2); }
-            }
         }
     }
 }

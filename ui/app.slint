@@ -90,7 +90,6 @@ export component AppWindow inherits Window {
     in property <image> album-cover;
     in property <[float]> eq-gains;
     in property <string> eq-preset: "Flat";
-    in property <float> eq-preamp;
     in property <bool> eq-comparing;
     in property <string> eq-backdrop;
     in property <string> eq-fill;
@@ -134,7 +133,6 @@ export component AppWindow inherits Window {
     callback eq-drag(int, float);
     callback eq-release();
     callback eq-reset(int);
-    callback eq-preamp-change(float);
     callback eq-compare(bool);
     callback eq-resized();
     callback nav(int);
@@ -476,7 +474,6 @@ export component AppWindow inherits Window {
                             }
                             gains: root.eq-gains;
                             preset: root.eq-preset;
-                            preamp: root.eq-preamp;
                             comparing: root.eq-comparing;
                             backdrop: root.eq-backdrop;
                             fill: root.eq-fill;
@@ -487,7 +484,6 @@ export component AppWindow inherits Window {
                             drag(i, g) => { root.eq-drag(i, g); }
                             release => { root.eq-release(); }
                             reset(i) => { root.eq-reset(i); }
-                            preamp-change(v) => { root.eq-preamp-change(v); }
                         }
                         if root.panel == "eq": Rectangle { vertical-stretch: 1; }
                         if root.panel == "lyrics": LyricsView {

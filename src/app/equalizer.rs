@@ -33,26 +33,22 @@ thread_local! {
     static CURVE: RefCell<Curve> = RefCell::new(Curve::default());
 }
 
-/// Room for boosts so a preset doesn't clip: half the largest boost, taken off the top.
-fn headroom(gains: &[f64; 6]) -> f64 {
+/// Room for boosts so the sound doesn't clip: half the largest boost, taken off the top.
+pub(super) fn headroom(gains: &[f64; 6]) -> f64 {
     -(gains.iter().cloned().fold(0.0, f64::max) / 2.0)
 }
 
 impl Controller {
     pub(super) fn eq_init(&self, window: &AppWindow) {
-        let (gains, preamp, preset) = {
-            let s = self.state.lock();
-            (
-                s.settings.eq_gains,
-                s.settings.eq_preamp,
-                s.settings.eq_preset.clone(),
-            )
+        let (gains, preset) = {
+            let mut s = self.state.lock();
+            s.settings.eq_preamp = headroom(&s.settings.eq_gains);
+            (s.settings.eq_gains, s.settings.eq_preset.clone())
         };
         CURVE.with(|c| c.borrow_mut().shown = gains);
         window.set_eq_gains(ModelRc::new(VecModel::from(
             gains.iter().map(|g| *g as f32).collect::<Vec<_>>(),
         )));
-        window.set_eq_preamp(preamp as f32);
         window.set_eq_preset(preset.into());
     }
 
@@ -76,6 +72,7 @@ impl Controller {
                 return;
             };
             *slot = gain.clamp(-MAX, MAX);
+            s.settings.eq_preamp = headroom(&s.settings.eq_gains);
             s.settings.eq_preset = "Custom".into();
         }
         self.eq_changed(false);
@@ -88,11 +85,6 @@ impl Controller {
             self.state.lock().settings.eq_preset = "Flat".into();
             self.eq_changed(true);
         }
-    }
-
-    pub(super) fn eq_preamp(&self, preamp: f64) {
-        self.state.lock().settings.eq_preamp = preamp.clamp(-MAX, 0.0);
-        self.eq_changed(false);
     }
 
     pub(super) fn eq_compare(&self, on: bool) {
@@ -121,7 +113,6 @@ impl Controller {
             return;
         };
         window.set_eq_preset(preset.into());
-        window.set_eq_preamp(preamp as f32);
         window.set_eq_comparing(comparing);
         let goal = heard.gains;
         let weak = window.as_weak();

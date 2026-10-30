@@ -43,7 +43,7 @@ pub fn run() -> anyhow::Result<()> {
             repeat: settings.repeat,
             equalizer: player::Equalizer {
                 gains: settings.eq_gains,
-                preamp: settings.eq_preamp,
+                preamp: equalizer::headroom(&settings.eq_gains),
             },
         },
         tx,
@@ -207,8 +207,6 @@ pub fn run() -> anyhow::Result<()> {
     window.on_eq_drag(move |band, gain| c.eq_drag(band as usize, gain as f64));
     let c = app.clone();
     window.on_eq_reset(move |band| c.eq_reset(band as usize));
-    let c = app.clone();
-    window.on_eq_preamp_change(move |v| c.eq_preamp(v as f64));
     let c = app.clone();
     window.on_eq_compare(move |on| c.eq_compare(on));
     let weak = window.as_weak();

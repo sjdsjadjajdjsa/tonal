@@ -5,7 +5,7 @@ All notable changes to Tonal. Versions follow [Semantic Versioning](https://semv
 ## Unreleased
 
 ### Added
-- Equalizer: six bands on a curve you drag, six presets, a preamp and a hold-to-compare button. It opens from the player bar or Settings and changes the sound live.
+- Equalizer: six bands on a curve you drag, six presets and a hold-to-compare button; volume headroom is handled automatically. It opens from the player bar or Settings and changes the sound live.
 
 ## 0.2.0 - 2026-10-30
 
