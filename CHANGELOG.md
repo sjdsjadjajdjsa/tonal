@@ -8,7 +8,7 @@ All notable changes to Tonal. Versions follow [Semantic Versioning](https://semv
 - macOS: Tonal.app and a `.dmg` for Apple Silicon (macOS 14.4 or newer), with the title bar blended into the window.
 - The visualizer works on all three systems: a Core Audio process tap on macOS and WASAPI process loopback on Windows.
 - Portable Windows zip that keeps its library, settings and cache next to `tonal.exe`.
-- AUR package `tonal`.
+- Arch Linux PKGBUILD in `packaging/aur/tonal`.
 - Benchmarks against Spotify, Riff, YouTube Music (Pear), Strawberry, Amberol and Tauon, with the script that measures them.
 - When a YouTube song won't play, the message shows yt-dlp's reason.
 - Artist pages: photo, popular songs, albums, singles and EPs, and similar artists, with play, shuffle and radio.

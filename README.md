@@ -58,7 +58,7 @@ Download the newest version from [Releases](https://github.com/sjdsjadjajdjsa/to
 | --- | --- | --- |
 | **Linux** | `tonal-x86_64.AppImage` | Mark it executable (`chmod +x tonal-x86_64.AppImage`) and run it. yt-dlp is inside; install [mpv](https://mpv.io) from your package manager. Needs glibc 2.35 or newer (Ubuntu 22.04, Fedora 36, Arch and so on). `tonal-linux-x86_64.tar.gz` is the same as a plain folder. |
 | **Windows** | `tonal-setup-x86_64.exe` | Run it. Installs for your user only, with no admin rights, and adds a Start menu entry. mpv and yt-dlp are inside. `tonal-windows-x86_64.zip` is the portable version: unzip it anywhere (a USB stick works) and run `tonal.exe`. It keeps the library, settings and cache in `data` and `cache` folders next to it. |
-| **Arch Linux** | AUR: `tonal` | `yay -S tonal` or any AUR helper. Builds from source and uses your system's mpv and yt-dlp. |
+| **Arch Linux** | `packaging/aur/tonal/PKGBUILD` | From a clone of this repo: `cd packaging/aur/tonal && makepkg -si`. Builds from source and uses your system's mpv and yt-dlp. |
 | **macOS** | `tonal-macos-arm64.dmg` | Open it and drag Tonal to Applications. The first time, right-click Tonal and pick Open, as the app isn't signed. Install the tools with `brew install mpv yt-dlp deno`. For Apple Silicon Macs on macOS 14.4 or newer. |
 
 Windows will say the publisher is unknown, as the installer isn't signed: click "More info", then "Run anyway". The visualizer works on Linux, Windows and macOS; on Windows it needs Windows 10 21H2 or Windows 11 or newer.
