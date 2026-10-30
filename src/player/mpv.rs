@@ -89,6 +89,8 @@ impl Mpv {
             "--no-terminal",
             "--ytdl-format=bestaudio/best",
             "--cache=yes",
+            "--demuxer-max-bytes=16MiB",
+            "--demuxer-max-back-bytes=8MiB",
             "--gapless-audio=weak",
             "--prefetch-playlist=yes",
         ]);
