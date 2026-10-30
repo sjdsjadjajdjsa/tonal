@@ -38,6 +38,9 @@ jobs:
       - name: Tests
         if: runner.os != 'Windows'
         run: cargo test
+      - name: App bundle
+        if: runner.os == 'macOS'
+        run: sh packaging/macos/build-app.sh && codesign --verify /Applications/Tonal.app && plutil -lint /Applications/Tonal.app/Contents/Info.plist
       - name: Tests (no mpv)
         if: runner.os == 'Windows'
         run: cargo test -- --skip real_mpv

@@ -20,6 +20,9 @@ fn bundled_tools_on_path() {
         return;
     };
     let mut paths = vec![dir];
+    // Apps opened from Finder or the Dock don't get the shell's PATH, so add Homebrew's.
+    #[cfg(target_os = "macos")]
+    paths.extend(["/opt/homebrew/bin", "/usr/local/bin"].map(std::path::PathBuf::from));
     paths.extend(
         std::env::var_os("PATH")
             .map(|p| std::env::split_paths(&p).collect::<Vec<_>>())
