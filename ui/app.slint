@@ -51,6 +51,9 @@ export component AppWindow inherits Window {
     in property <bool> waves;
     in property <string> wave-back;
     in property <string> wave-front;
+    in property <string> wave-back-line;
+    in property <string> wave-haze;
+    in property <string> wave-glow;
     in property <string> wave-line;
     in property <bool> wave-resting: true;
     out property <length> wave-width: bar.width;
@@ -449,6 +452,9 @@ export component AppWindow inherits Window {
                 waves: root.waves;
                 wave-back: root.wave-back;
                 wave-front: root.wave-front;
+                wave-back-line: root.wave-back-line;
+                wave-haze: root.wave-haze;
+                wave-glow: root.wave-glow;
                 wave-line: root.wave-line;
                 wave-resting: root.wave-resting;
                 artists: root.now-artists;

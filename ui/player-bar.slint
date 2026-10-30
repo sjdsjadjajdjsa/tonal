@@ -46,6 +46,9 @@ export component PlayerBar inherits Rectangle {
     in property <bool> waves;
     in property <string> wave-back;
     in property <string> wave-front;
+    in property <string> wave-back-line;
+    in property <string> wave-haze;
+    in property <string> wave-glow;
     in property <string> wave-line;
     in property <bool> wave-resting: true;
     out property <length> wave-height: root.mini ? root.height * 0.5 : 64px;
@@ -86,6 +89,9 @@ export component PlayerBar inherits Rectangle {
         height: root.wave-height;
         back: root.wave-back;
         front: root.wave-front;
+        back-line: root.wave-back-line;
+        haze: root.wave-haze;
+        glow: root.wave-glow;
         line: root.wave-line;
         resting: root.wave-resting;
         accent: Theme.text;

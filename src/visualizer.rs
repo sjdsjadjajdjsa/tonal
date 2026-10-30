@@ -19,6 +19,9 @@ const HIGH_HZ: f32 = 12_000.0;
 pub struct WaveFrame {
     pub back: String,
     pub front: String,
+    pub back_line: String,
+    pub haze: String,
+    pub glow: String,
     pub line: String,
 }
 
@@ -316,6 +319,10 @@ impl Visualizer {
             self.gain = self.gain.clamp(0.2, 60.0);
             target.iter_mut().for_each(|v| *v = v.min(1.0));
         }
+        self.shape(target, dt)
+    }
+
+    fn shape(&mut self, target: [f32; BANDS], dt: f32) -> WaveFrame {
         let rise = 1.0 - (-dt * 12.0).exp();
         let fall = 1.0 - (-dt * 3.5).exp();
         let mut energy = 0.0;
@@ -336,25 +343,22 @@ impl Visualizer {
         }
         let t = self.time;
         self.presence = (self.energy * 8.0).min(1.0);
+        let back = self.points(&blurred, t * 0.7, 0.82, 0.8);
+        let front = self.points(&blurred, t * 1.6 + 4.2, 1.0, 1.5);
         WaveFrame {
-            back: self.layer(&blurred, t * 0.7, 0.82, 0.8, true),
-            front: self.layer(&blurred, t * 1.6 + 4.2, 1.0, 1.5, true),
-            line: self.layer(&blurred, t * 1.6 + 4.2, 1.0, 1.5, false),
+            back: area(&back, self.height + 1.0),
+            front: area(&front, self.height + 1.0),
+            back_line: ribbon(&back, 0.6, 0.6),
+            haze: ribbon(&front, 5.0, 3.0),
+            glow: ribbon(&front, 2.2, 1.6),
+            line: ribbon(&front, 0.7, 0.7),
         }
     }
 
-    fn layer(
-        &self,
-        levels: &[f32; BANDS],
-        phase: f32,
-        scale: f32,
-        ripple: f32,
-        closed: bool,
-    ) -> String {
+    fn points(&self, levels: &[f32; BANDS], phase: f32, scale: f32, ripple: f32) -> Points {
         use std::f32::consts::TAU;
         let over = self.width * 0.04;
         let span = self.width + 2.0 * over;
-        let floor = self.height + 1.0;
         let range = self.height * 0.8;
         let mut points = [(0.0f32, self.height); POINTS];
         for (i, point) in points.iter_mut().enumerate() {
@@ -372,37 +376,79 @@ impl Visualizer {
             let value = (level * swell * (0.78 + 0.22 * flow)
                 + self.presence * (0.04 + 0.06 * flow))
                 * scale;
-            *point = (-over + x * span, floor - value.clamp(0.0, 1.0) * range);
-        }
-        let mut path = String::with_capacity(POINTS * 48);
-        use std::fmt::Write;
-        if closed {
-            let _ = write!(
-                path,
-                "M {:.1} {:.1} L {:.1} {:.1}",
-                points[0].0, floor, points[0].0, points[0].1
-            );
-        } else {
-            let _ = write!(path, "M {:.1} {:.1}", points[0].0, points[0].1);
-        }
-        for i in 0..POINTS - 1 {
-            let p0 = points[i.saturating_sub(1)];
-            let p1 = points[i];
-            let p2 = points[i + 1];
-            let p3 = points[(i + 2).min(POINTS - 1)];
-            let c1 = (p1.0 + (p2.0 - p0.0) / 6.0, p1.1 + (p2.1 - p0.1) / 6.0);
-            let c2 = (p2.0 - (p3.0 - p1.0) / 6.0, p2.1 - (p3.1 - p1.1) / 6.0);
-            let _ = write!(
-                path,
-                " C {:.1} {:.1} {:.1} {:.1} {:.1} {:.1}",
-                c1.0, c1.1, c2.0, c2.1, p2.0, p2.1
+            *point = (
+                -over + x * span,
+                self.height - value.clamp(0.0, 1.0) * range,
             );
         }
-        if closed {
-            let _ = write!(path, " L {:.1} {:.1} Z", points[POINTS - 1].0, floor);
-        }
-        path
+        points
     }
+}
+
+type Points = [(f32, f32); POINTS];
+
+/// Smooth curve through every point (Catmull-Rom as cubic Béziers), continuing from the
+/// current position, which must already be at points[0].
+fn curve(path: &mut String, points: &[(f32, f32)]) {
+    use std::fmt::Write;
+    let last = points.len() - 1;
+    for i in 0..last {
+        let p0 = points[i.saturating_sub(1)];
+        let p1 = points[i];
+        let p2 = points[i + 1];
+        let p3 = points[(i + 2).min(last)];
+        let _ = write!(
+            path,
+            " C {:.2} {:.2} {:.2} {:.2} {:.2} {:.2}",
+            p1.0 + (p2.0 - p0.0) / 6.0,
+            p1.1 + (p2.1 - p0.1) / 6.0,
+            p2.0 - (p3.0 - p1.0) / 6.0,
+            p2.1 - (p3.1 - p1.1) / 6.0,
+            p2.0,
+            p2.1
+        );
+    }
+}
+
+/// The wave filled down to `floor`.
+fn area(points: &Points, floor: f32) -> String {
+    use std::fmt::Write;
+    let (first, last) = (points[0], points[POINTS - 1]);
+    let mut path = format!(
+        "M {:.2} {floor:.2} L {:.2} {:.2}",
+        first.0, first.0, first.1
+    );
+    curve(&mut path, points);
+    let _ = write!(path, " L {:.2} {floor:.2} Z", last.0);
+    path
+}
+
+/// A closed band of even thickness along the wave's crest, `up` above it and `down`
+/// below, measured along the curve's normal. Filled bands render identically on
+/// every backend, unlike open stroked paths.
+fn ribbon(points: &Points, up: f32, down: f32) -> String {
+    use std::fmt::Write;
+    let normal = |i: usize| {
+        let a = points[i.saturating_sub(1)];
+        let b = points[(i + 1).min(POINTS - 1)];
+        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+        let len = (dx * dx + dy * dy).sqrt().max(f32::EPSILON);
+        (dy / len, -dx / len)
+    };
+    let mut top = [(0.0f32, 0.0f32); POINTS];
+    let mut bottom = [(0.0f32, 0.0f32); POINTS];
+    for i in 0..POINTS {
+        let (nx, ny) = normal(i);
+        let (x, y) = points[i];
+        top[i] = (x + nx * up, y + ny * up);
+        bottom[POINTS - 1 - i] = (x - nx * down, y - ny * down);
+    }
+    let mut path = format!("M {:.2} {:.2}", top[0].0, top[0].1);
+    curve(&mut path, &top);
+    let _ = write!(path, " L {:.2} {:.2}", bottom[0].0, bottom[0].1);
+    curve(&mut path, &bottom);
+    path.push_str(" Z");
+    path
 }
 
 impl Default for Visualizer {

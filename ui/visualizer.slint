@@ -1,6 +1,19 @@
+component Layer inherits Path {
+    in property <length> area-width;
+    in property <length> area-height;
+    width: 100%;
+    height: 100%;
+    viewbox-width: root.area-width / 1px;
+    viewbox-height: root.area-height / 1px;
+    stroke-width: 0px;
+}
+
 export component Waves inherits Rectangle {
     in property <string> back;
     in property <string> front;
+    in property <string> back-line;
+    in property <string> haze;
+    in property <string> glow;
     in property <string> line;
     in property <bool> resting: true;
     in property <color> accent: #ffffff;
@@ -8,46 +21,46 @@ export component Waves inherits Rectangle {
     opacity: root.resting ? 0.5 : 1;
     animate opacity { duration: 700ms; easing: ease-out; }
 
-    Path {
-        width: 100%;
-        height: 100%;
-        viewbox-width: root.width / 1px;
-        viewbox-height: root.height / 1px;
+    Layer {
+        area-width: root.width;
+        area-height: root.height;
         commands: root.back;
         fill: @linear-gradient(180deg, root.accent.with-alpha(0.012) 0%, root.accent.with-alpha(0.07) 100%);
-        stroke-width: 0px;
     }
 
-    Path {
-        width: 100%;
-        height: 100%;
-        viewbox-width: root.width / 1px;
-        viewbox-height: root.height / 1px;
+    Layer {
+        area-width: root.width;
+        area-height: root.height;
         commands: root.front;
         fill: @linear-gradient(180deg, root.accent.with-alpha(0.025) 0%, root.accent.with-alpha(0.13) 100%);
-        stroke-width: 0px;
     }
 
-    Path {
-        width: 100%;
-        height: 100%;
-        viewbox-width: root.width / 1px;
-        viewbox-height: root.height / 1px;
-        commands: root.line;
-        stroke: root.accent.with-alpha(0.035);
-        stroke-width: 9px;
-        stroke-line-cap: round;
+    Layer {
+        area-width: root.width;
+        area-height: root.height;
+        commands: root.back-line;
+        fill: root.accent.with-alpha(0.06);
     }
 
-    Path {
-        width: 100%;
-        height: 100%;
-        viewbox-width: root.width / 1px;
-        viewbox-height: root.height / 1px;
+    Layer {
+        area-width: root.width;
+        area-height: root.height;
+        commands: root.haze;
+        fill: root.accent.with-alpha(0.022);
+    }
+
+    Layer {
+        area-width: root.width;
+        area-height: root.height;
+        commands: root.glow;
+        fill: root.accent.with-alpha(0.045);
+    }
+
+    Layer {
+        area-width: root.width;
+        area-height: root.height;
         commands: root.line;
-        stroke: root.accent.with-alpha(0.07);
-        stroke-width: 3.5px;
-        stroke-line-cap: round;
+        fill: root.accent.with-alpha(0.14);
     }
 
     if root.line == "": Rectangle {

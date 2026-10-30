@@ -62,11 +62,17 @@ fn tick(window: &AppWindow) {
             window.set_wave_resting(true);
             window.set_wave_back(Default::default());
             window.set_wave_front(Default::default());
+            window.set_wave_back_line(Default::default());
+            window.set_wave_haze(Default::default());
+            window.set_wave_glow(Default::default());
             window.set_wave_line(Default::default());
             return;
         }
         window.set_wave_back(frame.back.into());
         window.set_wave_front(frame.front.into());
+        window.set_wave_back_line(frame.back_line.into());
+        window.set_wave_haze(frame.haze.into());
+        window.set_wave_glow(frame.glow.into());
         window.set_wave_line(frame.line.into());
     });
 }
