@@ -53,6 +53,32 @@ jobs:
           cp ui/fonts/Inter-LICENSE.txt dist/Tonal/FONTS-LICENSE.txt
           hdiutil create -volname Tonal -srcfolder dist/Tonal -ov -format UDZO tonal-macos-arm64.dmg
           hdiutil verify tonal-macos-arm64.dmg
+      - name: Stable signing
+        if: runner.os == 'macOS'
+        env:
+          TONAL_KEYCHAIN: ${{ runner.temp }}/tonal-ci.keychain-db
+          TONAL_KEYCHAIN_PASSWORD: ci
+        run: |
+          security create-keychain -p "$TONAL_KEYCHAIN_PASSWORD" "$TONAL_KEYCHAIN"
+          security set-keychain-settings "$TONAL_KEYCHAIN"
+          security unlock-keychain -p "$TONAL_KEYCHAIN_PASSWORD" "$TONAL_KEYCHAIN"
+          security list-keychains -d user -s "$TONAL_KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          sh packaging/macos/setup-signing.sh
+          sh packaging/macos/setup-signing.sh
+          security find-identity -p codesigning
+          sh packaging/macos/build-app.sh
+          first=$(codesign -d -r- /Applications/Tonal.app 2>&1 | grep '^designated')
+          codesign --verify --deep --strict /Applications/Tonal.app
+          sh packaging/macos/build-app.sh
+          second=$(codesign -d -r- /Applications/Tonal.app 2>&1 | grep '^designated')
+          codesign --verify --deep --strict /Applications/Tonal.app
+          codesign -dvv /Applications/Tonal.app 2>&1 | grep -E '^(Identifier|Authority|CDHash)'
+          echo "first:  $first"
+          echo "second: $second"
+          [ "$first" = "$second" ]
+          case "$first" in *cdhash*) exit 1 ;; esac
+          case "$first" in *'identifier "io.github.sjdsjadjajdjsa.tonal"'*certificate*) ;; *) exit 1 ;; esac
+          security delete-keychain "$TONAL_KEYCHAIN"
       - name: Tests (no mpv)
         if: runner.os == 'Windows'
         run: cargo test -- --skip real_mpv

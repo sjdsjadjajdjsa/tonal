@@ -66,7 +66,7 @@ Windows will say the publisher is unknown, as the installer isn't signed: click 
 
 Any build turns portable when a file named `portable` or a folder named `data` sits next to the program: the library and settings then go to `data` and the cache to `cache` in that folder.
 
-To build Tonal.app on macOS yourself, run `sh packaging/macos/build-app.sh` from a clone of this repo. It builds the app and puts it in Applications. The first time a song plays, macOS asks to let Tonal listen to its audio for the visualizer.
+To build Tonal.app on macOS yourself, run `sh packaging/macos/build-app.sh` from a clone of this repo. It builds the app and puts it in Applications. Run `sh packaging/macos/setup-signing.sh` once before that, so macOS keeps Tonal's permissions (Full Disk Access, audio, Keychain) after each rebuild. The first time a song plays, macOS asks to let Tonal listen to its audio for the visualizer.
 
 For full YouTube support yt-dlp needs a JavaScript runtime: install [Deno](https://deno.com) or Node.js. Tonal picks up whichever it finds. The visualizer on Linux needs PipeWire (`pw-record`, `pw-dump`).
 
