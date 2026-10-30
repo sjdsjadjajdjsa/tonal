@@ -20,5 +20,6 @@ pkgbase = tonal
 	options = !lto
 	options = !debug
 	source = tonal-0.2.0.tar.gz::https://github.com/sjdsjadjajdjsa/tonal/archive/refs/tags/v0.2.0.tar.gz
+	sha256sums = 05a453aa93bef3ce5cf094bd51a7d9fa853f018ea4b4c1fb34f5627e282b1567
 
 pkgname = tonal
