@@ -1,0 +1,47 @@
+# Maintainer: sjdsjadjajdjsa <https://github.com/sjdsjadjajdjsa>
+pkgname=tonal
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='A lightweight native music player. Rust, Slint, mpv.'
+arch=('x86_64' 'aarch64')
+url='https://github.com/sjdsjadjajdjsa/tonal'
+license=('MIT')
+depends=('mpv' 'yt-dlp' 'sqlite' 'dbus' 'fontconfig' 'libxkbcommon' 'gcc-libs' 'glibc')
+makedepends=('cargo')
+optdepends=('deno: YouTube challenge solving'
+            'pipewire: visualizer')
+# The release profile already strips and runs LTO, so skip makepkg's
+# LTO flags and the (empty) debug package.
+options=('!lto' '!debug')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+# Filled on release with `updpkgsums` once the v$pkgver tag exists.
+sha256sums=()
+
+prepare() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo build --frozen --release
+}
+
+check() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  # real_mpv tests need an audio device.
+  cargo test --frozen -- --skip real_mpv
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 target/release/tonal "$pkgdir/usr/bin/tonal"
+  install -Dm644 packaging/linux/tonal.desktop "$pkgdir/usr/share/applications/tonal.desktop"
+  install -Dm644 ui/icon.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/tonal.png"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

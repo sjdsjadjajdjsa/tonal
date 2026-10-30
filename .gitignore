@@ -2,3 +2,6 @@
 /.empryo
 /*.AppImage
 /*.AppImage.zsync
+/packaging/aur/*/src/
+/packaging/aur/*/pkg/
+/packaging/aur/*/*.tar.*
