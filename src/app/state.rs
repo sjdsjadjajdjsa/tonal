@@ -27,6 +27,10 @@ pub struct State {
     pub muted_from: Option<f64>,
     pub toast: u64,
     pub warned_youtube_runtime: bool,
+    /// YouTube songs in a row that were bot-blocked with no fallback found.
+    pub bot_failures: u32,
+    /// Track ids already given their one fallback attempt.
+    pub fallback_tried: std::collections::HashSet<String>,
     pub nav: Vec<super::browse::Nav>,
     pub nav_at: usize,
     pub artist_page: Option<crate::model::ArtistPage>,
@@ -58,6 +62,8 @@ impl State {
             muted_from: None,
             toast: 0,
             warned_youtube_runtime: false,
+            bot_failures: 0,
+            fallback_tried: Default::default(),
             nav: Vec::new(),
             nav_at: 0,
             artist_page: None,

@@ -36,6 +36,30 @@ fn queue_shuffle_keeps_played_prefix_for_prev() {
     }
 }
 
+#[test]
+fn queue_set_replaces_in_place_and_keeps_order() {
+    let mut queue = Queue::default();
+    queue.replace(
+        vec![
+            track("A", "unused"),
+            track("B", "unused"),
+            track("C", "unused"),
+        ],
+        1,
+    );
+    let key = queue.key();
+    let mut fallback = track("B2", "https://soundcloud.com/x/b");
+    fallback.source = SourceKind::SoundCloud;
+    assert!(queue.set(1, fallback));
+    assert!(!queue.set(9, track("Z", "unused")));
+    let titles: Vec<_> = queue.tracks().into_iter().map(|t| t.title).collect();
+    assert_eq!(titles, ["A", "B2", "C"]);
+    assert_eq!(queue.current, Some(1));
+    assert_eq!(queue.key(), key);
+    assert_eq!(queue.track().unwrap().source, SourceKind::SoundCloud);
+    assert_eq!(queue.next(RepeatMode::Off, false), Some(2));
+}
+
 async fn pump_until(engine: &mut Engine, predicate: impl Fn(&Engine) -> bool) {
     tokio::time::timeout(Duration::from_secs(10), async {
         while !predicate(engine) {

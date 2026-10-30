@@ -99,6 +99,10 @@ pub async fn update_ytdlp() -> anyhow::Result<String> {
 
 /// Asks yt-dlp why a URL won't play and returns its error line.
 pub async fn playback_error(url: &str) -> Option<String> {
+    #[cfg(feature = "debug-hooks")]
+    if fake_bot(url) {
+        return Some("Sign in to confirm you’re not a bot (TONAL_DEBUG_FAKE_BOT)".into());
+    }
     let output = tokio::time::timeout(
         Duration::from_secs(60),
         ytdlp()
@@ -258,12 +262,49 @@ pub async fn radio(seed: &Track, limit: usize) -> anyhow::Result<Vec<Track>> {
     }
 }
 
+/// Best match for a song on `source` (duration within ~5s preferred). Used for
+/// Spotify import (YouTube) and for playback fallback when YouTube blocks a song.
 pub async fn match_track(
+    source: SourceKind,
     title: &str,
     artist: &str,
     duration_secs: Option<f64>,
 ) -> anyhow::Result<Option<Track>> {
-    let candidates = search(SourceKind::YouTube, &format!("{artist} {title}"), 20).await?;
+    Ok(match_tracks(source, title, artist, duration_secs)
+        .await?
+        .into_iter()
+        .next())
+}
+
+/// Every acceptable match on `source`, best first.
+pub async fn match_tracks(
+    source: SourceKind,
+    title: &str,
+    artist: &str,
+    duration_secs: Option<f64>,
+) -> anyhow::Result<Vec<Track>> {
+    let candidates = search(source, &format!("{artist} {title}"), 20).await?;
+    Ok(ranked_matches(candidates, title, artist, duration_secs))
+}
+
+#[cfg(test)]
+fn best_match(
+    candidates: Vec<Track>,
+    title: &str,
+    artist: &str,
+    duration_secs: Option<f64>,
+) -> Option<Track> {
+    ranked_matches(candidates, title, artist, duration_secs)
+        .into_iter()
+        .next()
+}
+
+fn ranked_matches(
+    candidates: Vec<Track>,
+    title: &str,
+    artist: &str,
+    duration_secs: Option<f64>,
+) -> Vec<Track> {
     fn words(s: &str) -> std::collections::HashSet<String> {
         s.to_lowercase()
             .split(|c: char| !c.is_alphanumeric())
@@ -279,11 +320,18 @@ pub async fn match_track(
         }
         2.0 * a.intersection(&b).count() as f64 / (a.len() + b.len()) as f64
     }
-    Ok(candidates
+    let artist_words = words(artist);
+    let mut scored: Vec<_> = candidates
         .into_iter()
         .filter_map(|track| {
             let title_score = similarity(title, &track.title);
-            let artist_score = similarity(artist, &track.artist);
+            // Uploads often name the artist in the title ("Artist - Song").
+            let artist_score =
+                if !artist_words.is_empty() && artist_words.is_subset(&words(&track.title)) {
+                    1.0
+                } else {
+                    similarity(artist, &track.artist)
+                };
             if title_score < 0.4 || artist_score < 0.3 {
                 return None;
             }
@@ -295,8 +343,34 @@ pub async fn match_track(
             let score = title_score * 0.65 + artist_score * 0.35 + duration_score;
             Some((score, track))
         })
-        .max_by(|a, b| a.0.total_cmp(&b.0))
-        .map(|(_, track)| track))
+        .collect();
+    scored.sort_by(|a, b| b.0.total_cmp(&a.0));
+    scored.into_iter().map(|(_, track)| track).collect()
+}
+
+/// True for yt-dlp's "Sign in to confirm you're not a bot" refusal.
+pub fn is_bot_block(reason: &str) -> bool {
+    reason.contains("not a bot") || reason.contains("Sign in to confirm")
+}
+
+pub fn is_youtube_url(url: &str) -> bool {
+    url.contains("youtube.com/") || url.contains("youtu.be/")
+}
+
+/// Debug hook: TONAL_DEBUG_FAKE_BOT=1 makes every YouTube load fail as if bot-blocked.
+#[cfg(feature = "debug-hooks")]
+fn fake_bot(url: &str) -> bool {
+    is_youtube_url(url) && std::env::var_os("TONAL_DEBUG_FAKE_BOT").is_some_and(|v| v == "1")
+}
+
+/// The URL mpv loads for a track. Only the debug hook changes it, to an
+/// unloadable path so YouTube fails the way a bot block does.
+pub fn mpv_url(url: &str) -> String {
+    #[cfg(feature = "debug-hooks")]
+    if fake_bot(url) {
+        return "/nonexistent/tonal-debug-fake-bot-block".into();
+    }
+    url.to_string()
 }
 
 pub fn missing_tools() -> Vec<String> {
@@ -347,6 +421,45 @@ mod tests {
             assert_send(search(source, "Song", 5));
         }
         assert_send(radio(&track, 5));
-        assert_send(match_track("Song", "Artist", None));
+        assert_send(match_track(SourceKind::SoundCloud, "Song", "Artist", None));
+    }
+
+    fn candidate(title: &str, artist: &str, duration: f64) -> Track {
+        Track {
+            id: format!("soundcloud:{title}"),
+            title: title.into(),
+            artist: artist.into(),
+            duration_secs: Some(duration),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn uploads_with_artist_in_title_match() {
+        let found = best_match(
+            vec![
+                candidate("Something else", "Daft Punk", 320.0),
+                candidate("Daft Punk - One More Time", "some uploader", 321.0),
+            ],
+            "One More Time",
+            "Daft Punk",
+            Some(320.0),
+        );
+        assert_eq!(found.unwrap().title, "Daft Punk - One More Time");
+        let none = best_match(
+            vec![candidate("Other", "Nobody", 10.0)],
+            "One More Time",
+            "Daft Punk",
+            None,
+        );
+        assert!(none.is_none());
+    }
+
+    #[test]
+    fn bot_block_reason_is_recognized() {
+        assert!(is_bot_block(
+            "Sign in to confirm you’re not a bot. Use --cookies"
+        ));
+        assert!(!is_bot_block("Video unavailable"));
     }
 }

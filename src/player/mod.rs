@@ -20,6 +20,13 @@ pub enum PlayerEvent {
     TrackFinished(Track),
     NearQueueEnd,
     Error(String),
+    /// A YouTube track failed to load. The engine holds on it (no skip) until
+    /// the app answers with `replace` (a fallback) or `skip_failed`.
+    LoadFailed {
+        index: usize,
+        track: Track,
+        error: String,
+    },
     /// Short format tag of what plays, like "FLAC 24/96" or "Opus 160k".
     Quality(String),
     /// Output devices of the audio backend mpv uses.
@@ -168,6 +175,8 @@ enum Cmd {
     Restore(Vec<Track>, usize, f64),
     Enqueue(Vec<Track>, bool),
     Remove(usize),
+    Replace(usize, Track),
+    SkipFailed,
     Move(usize, usize),
     Clear,
     Jump(usize),
@@ -219,6 +228,14 @@ impl PlayerHandle {
     }
     pub fn remove(&self, index: usize) {
         let _ = self.tx.send(Cmd::Remove(index));
+    }
+    /// Swaps the queue entry at `index` in place; plays it if it is current.
+    pub fn replace(&self, index: usize, track: Track) {
+        let _ = self.tx.send(Cmd::Replace(index, track));
+    }
+    /// Moves on after a `LoadFailed` the app could not recover.
+    pub fn skip_failed(&self) {
+        let _ = self.tx.send(Cmd::SkipFailed);
     }
     pub fn move_track(&self, from: usize, to: usize) {
         let _ = self.tx.send(Cmd::Move(from, to));
@@ -482,7 +499,7 @@ impl Engine {
                 self.active
                     .as_mut()
                     .expect("replacement mpv")
-                    .load(&track.play_url, Some(position))
+                    .load(&crate::sources::mpv_url(&track.play_url), Some(position))
                     .await?;
                 self.last_playhead = None;
                 self.sync_prefetch().await
@@ -583,7 +600,10 @@ impl Engine {
         self.active
             .as_mut()
             .expect("active mpv")
-            .load(&track.play_url, self.start_at.take())
+            .load(
+                &crate::sources::mpv_url(&track.play_url),
+                self.start_at.take(),
+            )
             .await?;
         self.active_send(json!(["set_property", "volume", self.volume()]))
             .await?;
@@ -621,7 +641,7 @@ impl Engine {
             && let Some(index) = self.queue.next(self.config.repeat, true)
         {
             let track = self.queue.at(index).expect("queue index");
-            let url = track.play_url.clone();
+            let url = crate::sources::mpv_url(&track.play_url);
             self.pending = self.queue.key_at(index);
             let mpv = self.active.as_mut().expect("active mpv");
             mpv.request(json!(["loadfile", url, "append"])).await?;
@@ -711,6 +731,27 @@ impl Engine {
                 } else {
                     self.queue_changed();
                     self.sync_prefetch().await?;
+                }
+            }
+            Cmd::Replace(index, track) => {
+                self.cancel_fade().await?;
+                if self.queue.set(index, track) && self.queue.current == Some(index) {
+                    self.paused = false;
+                    self.start_current().await?;
+                } else {
+                    self.queue_changed();
+                    self.sync_prefetch().await?;
+                }
+            }
+            Cmd::SkipFailed => {
+                if self.queue.current.is_some() {
+                    self.paused = false;
+                    if self.failures >= self.queue.len() {
+                        self.stop_playback().await?;
+                    } else {
+                        self.queue.current = self.queue.next(self.config.repeat, false);
+                        self.start_current().await?;
+                    }
                 }
             }
             Cmd::Move(from, to) => {
@@ -1059,13 +1100,32 @@ impl Engine {
                 }
             }
             Some("end-file") if value["reason"] == "error" => {
+                self.failures += 1;
+                self.pending = None;
+                if let (Some(index), Some(track)) = (self.queue.current, self.queue.track())
+                    && crate::sources::is_youtube_url(&track.play_url)
+                {
+                    // Hold here while the app looks for the song elsewhere, so a
+                    // blocked YouTube does not race through the whole queue.
+                    self.pending_entry = None;
+                    if let Some(mpv) = &mut self.active {
+                        mpv.entry_id = None;
+                    }
+                    self.active_send(json!(["stop"])).await?;
+                    self.buffering = true;
+                    self.emit(PlayerEvent::Buffering(true));
+                    self.emit(PlayerEvent::LoadFailed {
+                        index,
+                        track,
+                        error: value["file_error"].to_string(),
+                    });
+                    return Ok(());
+                }
                 self.emit(PlayerEvent::Error(format!(
                     "mpv could not load {}: {}",
                     self.queue.track().map_or_else(String::new, |t| t.title),
                     value["file_error"]
                 )));
-                self.failures += 1;
-                self.pending = None;
                 if self.failures >= self.queue.len() {
                     self.stop_playback().await?;
                 } else {

@@ -81,6 +81,17 @@ impl Queue {
         self.entries.splice(index..index, entries);
     }
 
+    /// Swaps the track at `index`, keeping its place, key and shuffle order.
+    pub fn set(&mut self, index: usize, track: Track) -> bool {
+        match self.entries.get_mut(index) {
+            Some(entry) => {
+                entry.track = track;
+                true
+            }
+            None => false,
+        }
+    }
+
     pub fn remove(&mut self, index: usize) -> bool {
         if index >= self.entries.len() {
             return false;

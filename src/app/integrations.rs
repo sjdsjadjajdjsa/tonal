@@ -13,7 +13,13 @@ impl Controller {
         let mut matched = Vec::new();
         let mut failures = 0;
         let tasks = stream::iter(tracks.into_iter().enumerate().map(|(index, t)| async move {
-            let result = crate::sources::match_track(&t.title, &t.artist, t.duration_secs).await;
+            let result = crate::sources::match_track(
+                crate::model::SourceKind::YouTube,
+                &t.title,
+                &t.artist,
+                t.duration_secs,
+            )
+            .await;
             (index, t, result)
         }))
         .buffer_unordered(4);

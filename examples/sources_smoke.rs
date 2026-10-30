@@ -140,7 +140,14 @@ async fn main() {
         }
     }
     let start = Instant::now();
-    match sources::match_track("One More Time", "Daft Punk", Some(320.0)).await {
+    match sources::match_track(
+        SourceKind::YouTube,
+        "One More Time",
+        "Daft Punk",
+        Some(320.0),
+    )
+    .await
+    {
         Ok(track) => println!(
             "Match in {:.2?}: {}",
             start.elapsed(),
