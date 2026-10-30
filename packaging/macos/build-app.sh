@@ -1,5 +1,6 @@
 #!/bin/sh
 # Builds Tonal.app and installs it to /Applications.
+# With TONAL_NO_INSTALL=1 it only builds target/release/Tonal.app.
 set -eu
 cd "$(dirname "$0")/../.."
 
@@ -21,6 +22,10 @@ done
 iconutil -c icns "$iconset" -o "$app/Contents/Resources/tonal.icns"
 
 codesign --force --sign - "$app"
+if [ "${TONAL_NO_INSTALL:-}" = 1 ]; then
+    echo "Built $app"
+    exit 0
+fi
 rm -rf /Applications/Tonal.app
 cp -R "$app" /Applications/
 echo "Installed /Applications/Tonal.app"

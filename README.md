@@ -58,10 +58,11 @@ Download the newest version from [Releases](https://github.com/sjdsjadjajdjsa/to
 | --- | --- | --- |
 | **Linux** | `tonal-x86_64.AppImage` | Mark it executable (`chmod +x tonal-x86_64.AppImage`) and run it. yt-dlp is inside; install [mpv](https://mpv.io) from your package manager. Needs glibc 2.35 or newer (Ubuntu 22.04, Fedora 36, Arch and so on). `tonal-linux-x86_64.tar.gz` is the same as a plain folder. |
 | **Windows** | `tonal-setup-x86_64.exe` | Run it. Installs for your user only, with no admin rights, and adds a Start menu entry. mpv and yt-dlp are inside. `tonal-windows-x86_64.zip` is the same without an installer. |
+| **macOS** | `tonal-macos-arm64.dmg` | Open it and drag Tonal to Applications. The first time, right-click Tonal and pick Open, as the app isn't signed. Install the tools with `brew install mpv yt-dlp deno`. For Apple Silicon Macs on macOS 14.4 or newer. |
 
 Windows will say the publisher is unknown, as the installer isn't signed: click "More info", then "Run anyway". The visualizer works on Linux and macOS for now.
 
-**macOS** (14.4 or newer): install the tools with `brew install mpv yt-dlp deno`, then from a clone of this repo run `sh packaging/macos/build-app.sh`. It builds Tonal.app and puts it in Applications. The first time a song plays, macOS asks to let Tonal listen to its audio for the visualizer.
+To build Tonal.app on macOS yourself, run `sh packaging/macos/build-app.sh` from a clone of this repo. It builds the app and puts it in Applications. The first time a song plays, macOS asks to let Tonal listen to its audio for the visualizer.
 
 For full YouTube support yt-dlp needs a JavaScript runtime: install [Deno](https://deno.com) or Node.js. Tonal picks up whichever it finds. The visualizer on Linux needs PipeWire (`pw-record`, `pw-dump`).
 

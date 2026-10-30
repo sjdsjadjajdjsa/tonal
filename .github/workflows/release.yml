@@ -1,6 +1,6 @@
 name: release
 
-# Push a tag like v0.1.0 and this builds Tonal for Linux and Windows and puts
+# Push a tag like v0.1.0 and this builds Tonal for Linux, Windows and macOS and puts
 # the downloads on the GitHub release for that tag. The tag must match the
 # version in Cargo.toml.
 on:
@@ -28,6 +28,10 @@ jobs:
             assets: |
               tonal-setup-x86_64.exe
               tonal-windows-x86_64.zip
+          # Apple Silicon. Uses the system SQLite.
+          - os: macos-latest
+            assets: |
+              tonal-macos-arm64.dmg
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
     env:
@@ -53,7 +57,9 @@ jobs:
             echo "Tag $TAG but Cargo.toml says $version"
             exit 1
           fi
-      - run: cargo build --release --features bundled-sqlite
+      - name: Build
+        if: runner.os != 'macOS'
+        run: cargo build --release --features bundled-sqlite
       - name: AppImage
         if: runner.os == 'Linux'
         run: packaging/linux/build-appimage.sh
@@ -77,6 +83,16 @@ jobs:
           $version = $env:TAG.TrimStart("v")
           iscc /Q "/DVersion=$version" "/DSource=$env:GITHUB_WORKSPACE\dist\tonal" packaging\windows\tonal.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Pack (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          TONAL_NO_INSTALL=1 sh packaging/macos/build-app.sh
+          mkdir -p dist/Tonal
+          cp -R target/release/Tonal.app dist/Tonal/
+          ln -s /Applications dist/Tonal/Applications
+          cp README.md LICENSE THIRD-PARTY-NOTICES.md dist/Tonal/
+          cp ui/fonts/Inter-LICENSE.txt dist/Tonal/FONTS-LICENSE.txt
+          hdiutil create -volname Tonal -srcfolder dist/Tonal -ov -format UDZO tonal-macos-arm64.dmg
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.os }}

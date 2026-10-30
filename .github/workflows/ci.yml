@@ -40,7 +40,19 @@ jobs:
         run: cargo test
       - name: App bundle
         if: runner.os == 'macOS'
-        run: sh packaging/macos/build-app.sh && codesign --verify /Applications/Tonal.app && plutil -lint /Applications/Tonal.app/Contents/Info.plist
+        run: |
+          sh packaging/macos/build-app.sh
+          codesign --verify /Applications/Tonal.app
+          plutil -lint /Applications/Tonal.app/Contents/Info.plist
+          # Same steps as the macOS pack in release.yml.
+          TONAL_NO_INSTALL=1 sh packaging/macos/build-app.sh
+          mkdir -p dist/Tonal
+          cp -R target/release/Tonal.app dist/Tonal/
+          ln -s /Applications dist/Tonal/Applications
+          cp README.md LICENSE THIRD-PARTY-NOTICES.md dist/Tonal/
+          cp ui/fonts/Inter-LICENSE.txt dist/Tonal/FONTS-LICENSE.txt
+          hdiutil create -volname Tonal -srcfolder dist/Tonal -ov -format UDZO tonal-macos-arm64.dmg
+          hdiutil verify tonal-macos-arm64.dmg
       - name: Tests (no mpv)
         if: runner.os == 'Windows'
         run: cargo test -- --skip real_mpv
