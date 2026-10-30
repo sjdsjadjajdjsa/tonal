@@ -288,7 +288,24 @@ impl Controller {
                 .strip_prefix("mpv could not load ")
                 .and_then(|rest| rest.split_once(": "))
             {
-                Some((title, _)) => self.status(format!("Couldn't play {title}")),
+                Some((title, _)) => {
+                    let title = title.to_string();
+                    self.status(format!("Couldn't play {title}"));
+                    let url = self
+                        .state
+                        .lock()
+                        .current
+                        .as_ref()
+                        .map(|t| t.play_url.clone());
+                    if let Some(url) = url.filter(|u| u.contains("youtube.com/")) {
+                        let this = self.clone();
+                        tokio::spawn(async move {
+                            if let Some(reason) = crate::sources::playback_error(&url).await {
+                                this.status(format!("Couldn't play {title}: {reason}"));
+                            }
+                        });
+                    }
+                }
                 None => self.status(error),
             },
         }

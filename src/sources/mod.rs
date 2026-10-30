@@ -97,6 +97,36 @@ pub async fn update_ytdlp() -> anyhow::Result<String> {
         .to_string())
 }
 
+/// Asks yt-dlp why a URL won't play and returns its error line.
+pub async fn playback_error(url: &str) -> Option<String> {
+    let output = tokio::time::timeout(
+        Duration::from_secs(60),
+        ytdlp()
+            .args([
+                "--simulate",
+                "--no-warnings",
+                "--no-playlist",
+                "-f",
+                "bestaudio/best",
+                url,
+            ])
+            .kill_on_drop(true)
+            .output(),
+    )
+    .await
+    .ok()?
+    .ok()?;
+    String::from_utf8_lossy(&output.stderr)
+        .lines()
+        .find_map(|l| l.strip_prefix("ERROR: "))
+        .map(|l| {
+            l.split_once(": ")
+                .map_or(l, |(_, rest)| rest)
+                .trim()
+                .to_string()
+        })
+}
+
 fn ytdlp_plain() -> tokio::process::Command {
     let mut command = tokio::process::Command::new("yt-dlp");
     #[cfg(windows)]
