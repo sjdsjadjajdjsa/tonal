@@ -15,7 +15,7 @@ optdepends=('deno: YouTube challenge solving'
 options=('!lto' '!debug')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 # Filled on release with `updpkgsums` once the v$pkgver tag exists.
-sha256sums=()
+sha256sums=('1d6022eb6595fde77df646c159c0d53ec51cdf8a6d8dcbc4365604b1c6bb8737')
 
 prepare() {
   cd "$pkgname-$pkgver"
