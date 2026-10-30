@@ -9,6 +9,8 @@ pub struct State {
     pub settings: Settings,
     pub display: Vec<Track>,
     pub queue: Vec<Track>,
+    /// The engine's stable key for each `queue` entry.
+    pub queue_keys: Vec<u64>,
     pub current: Option<Track>,
     pub index: Option<usize>,
     pub position: f64,
@@ -44,6 +46,7 @@ impl State {
             settings,
             display: Vec::new(),
             queue: Vec::new(),
+            queue_keys: Vec::new(),
             current: None,
             index: None,
             position: 0.0,

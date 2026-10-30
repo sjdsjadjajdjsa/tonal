@@ -31,6 +31,9 @@ impl Queue {
     pub fn key(&self) -> Option<u64> {
         self.current.and_then(|i| self.key_at(i))
     }
+    pub fn keys(&self) -> Vec<u64> {
+        self.entries.iter().map(|e| e.key).collect()
+    }
     pub fn key_at(&self, index: usize) -> Option<u64> {
         self.entries.get(index).map(|e| e.key)
     }

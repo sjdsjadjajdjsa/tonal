@@ -5,6 +5,8 @@ use tokio::sync::mpsc::UnboundedSender;
 pub enum PlayerEvent {
     QueueChanged {
         tracks: Vec<Track>,
+        /// Stable queue key of each entry in `tracks`, unchanged by moves and shuffle.
+        keys: Vec<u64>,
         current: Option<usize>,
     },
     NowPlaying(Option<Track>),
@@ -21,9 +23,10 @@ pub enum PlayerEvent {
     NearQueueEnd,
     Error(String),
     /// A YouTube track failed to load. The engine holds on it (no skip) until
-    /// the app answers with `replace` (a fallback) or `skip_failed`.
+    /// the app answers with `replace` (a fallback), `skip_failed` or `stop_failed`,
+    /// each naming the entry by `key` so a late answer never hits another song.
     LoadFailed {
-        index: usize,
+        key: u64,
         track: Track,
         error: String,
     },
@@ -175,8 +178,9 @@ enum Cmd {
     Restore(Vec<Track>, usize, f64),
     Enqueue(Vec<Track>, bool),
     Remove(usize),
-    Replace(usize, Track),
-    SkipFailed,
+    Replace(u64, Track),
+    SkipFailed(u64),
+    StopFailed(u64),
     Move(usize, usize),
     Clear,
     Jump(usize),
@@ -229,13 +233,20 @@ impl PlayerHandle {
     pub fn remove(&self, index: usize) {
         let _ = self.tx.send(Cmd::Remove(index));
     }
-    /// Swaps the queue entry at `index` in place; plays it if it is current.
-    pub fn replace(&self, index: usize, track: Track) {
-        let _ = self.tx.send(Cmd::Replace(index, track));
+    /// Answers a `LoadFailed` for entry `key`: swaps in `track` and plays it.
+    /// Ignored when `key` is no longer the held, current entry.
+    pub fn replace(&self, key: u64, track: Track) {
+        let _ = self.tx.send(Cmd::Replace(key, track));
     }
-    /// Moves on after a `LoadFailed` the app could not recover.
-    pub fn skip_failed(&self) {
-        let _ = self.tx.send(Cmd::SkipFailed);
+    /// Answers a `LoadFailed` for entry `key` the app could not recover: moves on.
+    /// Ignored when `key` is no longer the held, current entry.
+    pub fn skip_failed(&self, key: u64) {
+        let _ = self.tx.send(Cmd::SkipFailed(key));
+    }
+    /// Answers a `LoadFailed` for entry `key` by stopping playback.
+    /// Ignored when `key` is no longer the held, current entry.
+    pub fn stop_failed(&self, key: u64) {
+        let _ = self.tx.send(Cmd::StopFailed(key));
     }
     pub fn move_track(&self, from: usize, to: usize) {
         let _ = self.tx.send(Cmd::Move(from, to));
@@ -351,6 +362,8 @@ struct Engine {
     devices: Vec<AudioDevice>,
     /// The playing file has ReplayGain tags, so they replace dynaudnorm.
     rg_tagged: bool,
+    /// Queue key of the failed YouTube entry waiting for the app's answer.
+    held: Option<u64>,
 }
 
 impl Engine {
@@ -389,6 +402,7 @@ impl Engine {
             quality: Quality::default(),
             devices: Vec::new(),
             rg_tagged: false,
+            held: None,
         }
     }
 
@@ -532,6 +546,7 @@ impl Engine {
     fn queue_changed(&self) {
         self.emit(PlayerEvent::QueueChanged {
             tracks: self.queue.tracks(),
+            keys: self.queue.keys(),
             current: self.queue.current,
         });
     }
@@ -576,7 +591,18 @@ impl Engine {
         }
         Ok(())
     }
+    /// Ends the hold for `key`. True when `key` was held and is still current, so
+    /// the app's answer applies; a stale answer is dropped.
+    fn release(&mut self, key: u64) -> bool {
+        let held = self.held == Some(key);
+        if held {
+            self.held = None;
+        }
+        held && self.queue.key() == Some(key)
+    }
     async fn start_current(&mut self) -> Result<()> {
+        // Any new load (user skip, jump, an answer) ends a hold on a failed entry.
+        self.held = None;
         // Commit the target track/position before any transport operation, so a
         // failed cancellation, spawn, pause or load recovers the requested track.
         self.announce();
@@ -610,6 +636,7 @@ impl Engine {
         self.sync_prefetch().await
     }
     async fn stop_playback(&mut self) -> Result<()> {
+        self.held = None;
         self.cancel_fade().await?;
         self.pending = None;
         self.quality = Quality::default();
@@ -733,18 +760,22 @@ impl Engine {
                     self.sync_prefetch().await?;
                 }
             }
-            Cmd::Replace(index, track) => {
-                self.cancel_fade().await?;
-                if self.queue.set(index, track) && self.queue.current == Some(index) {
+            Cmd::Replace(key, track) => {
+                if self.release(key)
+                    && let Some(index) = self.queue.index_of(key)
+                {
+                    self.queue.set(index, track);
                     self.paused = false;
                     self.start_current().await?;
-                } else {
-                    self.queue_changed();
-                    self.sync_prefetch().await?;
                 }
             }
-            Cmd::SkipFailed => {
-                if self.queue.current.is_some() {
+            Cmd::StopFailed(key) => {
+                if self.release(key) {
+                    self.stop_playback().await?;
+                }
+            }
+            Cmd::SkipFailed(key) => {
+                if self.release(key) {
                     self.paused = false;
                     if self.failures >= self.queue.len() {
                         self.stop_playback().await?;
@@ -1102,7 +1133,8 @@ impl Engine {
             Some("end-file") if value["reason"] == "error" => {
                 self.failures += 1;
                 self.pending = None;
-                if let (Some(index), Some(track)) = (self.queue.current, self.queue.track())
+                // Every YouTube load error is held for a fallback, not only bot blocks, on purpose: music should always play.
+                if let (Some(key), Some(track)) = (self.queue.key(), self.queue.track())
                     && crate::sources::is_youtube_url(&track.play_url)
                 {
                     // Hold here while the app looks for the song elsewhere, so a
@@ -1111,11 +1143,12 @@ impl Engine {
                     if let Some(mpv) = &mut self.active {
                         mpv.entry_id = None;
                     }
+                    self.held = Some(key);
                     self.active_send(json!(["stop"])).await?;
                     self.buffering = true;
                     self.emit(PlayerEvent::Buffering(true));
                     self.emit(PlayerEvent::LoadFailed {
-                        index,
+                        key,
                         track,
                         error: value["file_error"].to_string(),
                     });

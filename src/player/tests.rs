@@ -60,6 +60,119 @@ fn queue_set_replaces_in_place_and_keeps_order() {
     assert_eq!(queue.next(RepeatMode::Off, false), Some(2));
 }
 
+#[tokio::test]
+async fn failed_answer_with_stale_key_is_ignored_and_hold_released() {
+    let (tx, _rx) = unbounded_channel();
+    let mut engine = Engine::new(config(), tx);
+    engine
+        .queue
+        .replace(vec![track("A", "unused"), track("B", "unused")], 0);
+    let failed = engine.queue.key().unwrap();
+    let other = engine.queue.key_at(1).unwrap();
+    engine.held = Some(failed);
+    // Answers for another entry never touch the held song or its hold.
+    for command in [
+        Cmd::Replace(other, track("X", "unused")),
+        Cmd::SkipFailed(other),
+        Cmd::StopFailed(other),
+    ] {
+        engine.command(command).await.unwrap();
+    }
+    assert_eq!(engine.held, Some(failed));
+    assert_eq!(engine.queue.current, Some(0));
+    let titles: Vec<_> = engine.queue.tracks().into_iter().map(|t| t.title).collect();
+    assert_eq!(titles, ["A", "B"]);
+    // The matching answer releases the hold; a late duplicate is then ignored.
+    engine.command(Cmd::StopFailed(failed)).await.unwrap();
+    assert_eq!(engine.held, None);
+    assert_eq!(engine.queue.current, None);
+    engine
+        .command(Cmd::Replace(failed, track("X", "unused")))
+        .await
+        .unwrap();
+    assert_eq!(engine.held, None);
+    assert_eq!(engine.queue.current, None);
+    assert_eq!(engine.queue.at(0).unwrap().title, "A");
+}
+
+/// Makes the current entry a YouTube song and fails its load the way mpv does,
+/// returning the queue key the engine reports in `LoadFailed`.
+async fn fail_current_youtube(engine: &mut Engine, rx: &mut UnboundedReceiver<PlayerEvent>) -> u64 {
+    let index = engine.queue.current.unwrap();
+    let mut youtube = engine.queue.at(index).unwrap().clone();
+    youtube.play_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ".into();
+    engine.queue.set(index, youtube);
+    while rx.try_recv().is_ok() {}
+    let mpv = engine.active.as_mut().unwrap();
+    let playlist = mpv
+        .request(json!(["get_property", "playlist"]))
+        .await
+        .unwrap();
+    let entry_id = playlist[0]["id"].as_i64().unwrap();
+    let instance = mpv.id;
+    engine.message(Message { instance, value: json!({"event":"end-file", "reason":"error", "file_error":"blocked", "playlist_entry_id":entry_id}) }).await.unwrap();
+    let key = std::iter::from_fn(|| rx.try_recv().ok())
+        .find_map(|e| match e {
+            PlayerEvent::LoadFailed { key, .. } => Some(key),
+            _ => None,
+        })
+        .expect("LoadFailed");
+    assert_eq!(engine.held, Some(key));
+    key
+}
+
+#[tokio::test]
+async fn real_mpv_replace_after_user_skip_is_ignored() {
+    let tone = Tone::new();
+    let (mut engine, mut rx) = tone_engine(&tone).await;
+    let failed = fail_current_youtube(&mut engine, &mut rx).await;
+    // The user skips while the app is still looking for a fallback.
+    engine.command(Cmd::Next).await.unwrap();
+    assert_eq!(engine.held, None);
+    while rx.try_recv().is_ok() {}
+    let path = tone.0.to_str().unwrap();
+    engine
+        .command(Cmd::Replace(failed, track("fallback", path)))
+        .await
+        .unwrap();
+    engine.command(Cmd::SkipFailed(failed)).await.unwrap();
+    assert_eq!(engine.held, None);
+    assert_eq!(engine.queue.current, Some(1));
+    assert_eq!(engine.queue.track().unwrap().title, "tone-two");
+    assert!(engine.queue.at(0).unwrap().play_url.contains("youtube"));
+    assert!(
+        !std::iter::from_fn(|| rx.try_recv().ok()).any(|e| matches!(e, PlayerEvent::NowPlaying(_))),
+        "a stale answer must not restart playback"
+    );
+}
+
+#[tokio::test]
+async fn real_mpv_replace_follows_moved_failed_entry() {
+    let tone = Tone::new();
+    let (mut engine, mut rx) = tone_engine(&tone).await;
+    let failed = fail_current_youtube(&mut engine, &mut rx).await;
+    // The user drags the failed song down while the lookup runs.
+    engine.command(Cmd::Move(0, 1)).await.unwrap();
+    assert_eq!(engine.queue.current, Some(1));
+    assert_eq!(engine.held, Some(failed));
+    while rx.try_recv().is_ok() {}
+    let path = tone.0.to_str().unwrap();
+    engine
+        .command(Cmd::Replace(failed, track("fallback", path)))
+        .await
+        .unwrap();
+    assert_eq!(engine.held, None);
+    let titles: Vec<_> = engine.queue.tracks().into_iter().map(|t| t.title).collect();
+    assert_eq!(titles, ["tone-two", "fallback"]);
+    assert_eq!(engine.queue.current, Some(1));
+    assert_eq!(engine.queue.key(), Some(failed));
+    assert!(
+        std::iter::from_fn(|| rx.try_recv().ok())
+            .any(|e| matches!(e, PlayerEvent::NowPlaying(Some(t)) if t.title == "fallback"))
+    );
+    pump_until(&mut engine, |e| e.pos > 0.1).await;
+}
+
 async fn pump_until(engine: &mut Engine, predicate: impl Fn(&Engine) -> bool) {
     tokio::time::timeout(Duration::from_secs(10), async {
         while !predicate(engine) {
@@ -898,7 +1011,9 @@ async fn wait_for(
         loop {
             let event = rx.recv().await.expect("player task exited");
             match &event {
-                PlayerEvent::QueueChanged { tracks, current } => {
+                PlayerEvent::QueueChanged {
+                    tracks, current, ..
+                } => {
                     println!("QueueChanged(len={}, current={current:?})", tracks.len())
                 }
                 PlayerEvent::NowPlaying(track) => {

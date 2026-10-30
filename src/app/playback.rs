@@ -47,10 +47,15 @@ impl Controller {
     }
     pub fn event(&self, event: PlayerEvent) {
         match event {
-            PlayerEvent::QueueChanged { tracks, current } => {
+            PlayerEvent::QueueChanged {
+                tracks,
+                keys,
+                current,
+            } => {
                 {
                     let mut s = self.state.lock();
                     s.queue = tracks.clone();
+                    s.queue_keys = keys;
                     s.index = current;
                 }
                 let library = self.library.clone();
@@ -304,45 +309,49 @@ impl Controller {
                 }
                 None => self.status(error),
             },
-            PlayerEvent::LoadFailed {
-                index,
-                track,
-                error,
-            } => self.youtube_fallback(index, track, error),
+            PlayerEvent::LoadFailed { key, track, error } => {
+                self.youtube_fallback(key, track, error)
+            }
         }
     }
-    /// A YouTube song failed to load and the engine is holding on it. Asks yt-dlp
-    /// why, looks for the same song on SoundCloud then Audius (once per track), and
-    /// either swaps it in place or moves on. Three bot blocks in a row stop skipping.
-    fn youtube_fallback(&self, index: usize, track: Track, error: String) {
+    /// True while queue entry `key` is still the current song. The entry is found
+    /// by its stable key, so moving it or toggling shuffle does not lose it.
+    fn is_current(&self, key: u64) -> bool {
+        let s = self.state.lock();
+        let index = s.queue_keys.iter().position(|k| *k == key);
+        index.is_some() && s.index == index
+    }
+    /// A YouTube song failed to load and the engine is holding on queue entry `key`.
+    /// Asks yt-dlp why, looks for the same song on SoundCloud then Audius (once per
+    /// track), and either swaps it in place or moves on. Three bot blocks in a row
+    /// stop skipping. Every answer names `key`, so the engine drops it if the user
+    /// has moved on meanwhile, and a stale result records nothing.
+    fn youtube_fallback(&self, key: u64, track: Track, error: String) {
         log::warn!("YouTube load failed for {}: {error}", track.title);
-        // One try per track at getting past the block on YouTube itself (PO token,
-        // other clients, IPv4, cookies) before looking on other sources.
-        let unblock = crate::sources::is_youtube_url(&track.play_url)
-            && self
-                .state
-                .lock()
-                .fallback_tried
-                .insert(format!("unblock:{}", track.id));
         let this = self.clone();
         tokio::spawn(async move {
-            let still_current = |this: &Self| {
-                let s = this.state.lock();
-                s.index == Some(index) && s.queue.get(index).is_some_and(|t| t.id == track.id)
-            };
+            // One try per track at getting past the block on YouTube itself (PO token,
+            // other clients, IPv4, cookies) before looking on other sources.
+            let unblock_id = format!("unblock:{}", track.id);
+            let unblock = crate::sources::is_youtube_url(&track.play_url)
+                && !this.state.lock().fallback_tried.contains(&unblock_id);
             if unblock {
-                match crate::sources::unblock_youtube(&track.play_url).await {
+                let result = crate::sources::unblock_youtube(&track.play_url).await;
+                if !this.is_current(key) {
+                    this.player.skip_failed(key);
+                    return;
+                }
+                this.state.lock().fallback_tried.insert(unblock_id);
+                match result {
                     Ok(how) => {
-                        if still_current(&this) {
-                            log::info!("Retrying {} on YouTube with {how}", track.title);
-                            this.player.replace(index, track.clone());
-                        }
+                        log::info!("Retrying {} on YouTube with {how}", track.title);
+                        this.player.replace(key, track.clone());
                         return;
                     }
                     Err(why) => log::info!("YouTube stays blocked for {}: {why}", track.title),
                 }
             }
-            let first = this.state.lock().fallback_tried.insert(track.id.clone());
+            let first = !this.state.lock().fallback_tried.contains(&track.id);
             let (reason, found) =
                 tokio::join!(crate::sources::playback_error(&track.play_url), async {
                     if !first {
@@ -381,10 +390,13 @@ impl Controller {
                 log::warn!("yt-dlp: {reason}");
             }
             let bot = reason.as_deref().is_some_and(crate::sources::is_bot_block);
-            // The user may have moved on while this resolved.
-            if !still_current(&this) {
+            // The user may have moved on while this resolved: drop the result without
+            // recording anything; the engine ignores this answer and ends its hold.
+            if !this.is_current(key) {
+                this.player.skip_failed(key);
                 return;
             }
+            this.state.lock().fallback_tried.insert(track.id.clone());
             if let Some(found) = found {
                 log::info!(
                     "Fallback for {} — {}: {} {}",
@@ -397,7 +409,7 @@ impl Controller {
                 let label = found.source.label();
                 let mut tracks = vec![found];
                 this.playable(&mut tracks);
-                this.player.replace(index, tracks.remove(0));
+                this.player.replace(key, tracks.remove(0));
                 this.status(format!("Playing from {label}"));
                 return;
             }
@@ -408,13 +420,13 @@ impl Controller {
             };
             if blocked {
                 this.state.lock().bot_failures = 0;
-                this.player.stop();
+                this.player.stop_failed(key);
                 this.status(
                     "YouTube is blocking playback. Try SoundCloud or set Use browser login in Settings",
                 );
             } else {
                 this.status(format!("Couldn't play {}", track.title));
-                this.player.skip_failed();
+                this.player.skip_failed(key);
             }
         });
     }

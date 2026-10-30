@@ -370,8 +370,22 @@ pub fn is_bot_block(reason: &str) -> bool {
     reason.contains("not a bot") || reason.contains("Sign in to confirm")
 }
 
+/// True when `url` is hosted on YouTube, judged by its parsed host, so a
+/// "youtube.com/" inside another site's path or query does not count.
 pub fn is_youtube_url(url: &str) -> bool {
-    url.contains("youtube.com/") || url.contains("youtu.be/")
+    url::Url::parse(url)
+        .ok()
+        .and_then(|url| url.host_str().map(str::to_ascii_lowercase))
+        .is_some_and(|host| {
+            matches!(
+                host.as_str(),
+                "youtube.com"
+                    | "www.youtube.com"
+                    | "music.youtube.com"
+                    | "m.youtube.com"
+                    | "youtu.be"
+            )
+        })
 }
 
 /// Debug hook: TONAL_DEBUG_FAKE_BOT=1 makes every YouTube load fail as if bot-blocked.
