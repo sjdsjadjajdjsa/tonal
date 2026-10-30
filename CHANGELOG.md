@@ -2,7 +2,7 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
-## Unreleased
+## 0.3.0 - 2026-10-31
 
 ### Added
 - Equalizer: six bands on a curve you drag, six presets and a hold-to-compare button; volume headroom is handled automatically. It opens from the player bar or Settings and changes the sound live.
