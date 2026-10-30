@@ -79,10 +79,12 @@ jobs:
           Copy-Item target/release/tonal.exe, README.md, LICENSE, THIRD-PARTY-NOTICES.md dist/tonal/
           Copy-Item ui/fonts/Inter-LICENSE.txt dist/tonal/FONTS-LICENSE.txt
           ./packaging/windows/fetch-tools.ps1 dist/tonal
-          Compress-Archive -Path dist/tonal -DestinationPath tonal-windows-x86_64.zip
           $version = $env:TAG.TrimStart("v")
           iscc /Q "/DVersion=$version" "/DSource=$env:GITHUB_WORKSPACE\dist\tonal" packaging\windows\tonal.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Only the zip is portable: it keeps its data next to tonal.exe.
+          New-Item -ItemType File dist/tonal/portable | Out-Null
+          Compress-Archive -Path dist/tonal -DestinationPath tonal-windows-x86_64.zip
       - name: Pack (macOS)
         if: runner.os == 'macOS'
         run: |

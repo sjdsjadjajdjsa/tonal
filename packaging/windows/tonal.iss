@@ -4,7 +4,9 @@
 ;   iscc /DVersion=0.1.0 /DSource=C:\full\path\to\dist\tonal packaging\windows\tonal.iss
 ;
 ; mpv.exe and yt-dlp.exe ship next to tonal.exe. The library and settings live
-; in %APPDATA%\tonal, so they stay on uninstall.
+; in %APPDATA%\tonal, so they stay on uninstall. The zip is portable instead: a
+; file named "portable" next to tonal.exe keeps everything in data\ and cache\
+; beside it. The installer must never ship that marker, so it is excluded here.
 
 #ifndef Version
   #define Version "0.0.0"
@@ -49,7 +51,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; Flags: unchecked
 
 [Files]
-Source: "{#Source}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
+Source: "{#Source}\*"; DestDir: "{app}"; Excludes: "\portable,\data,\cache"; Flags: ignoreversion recursesubdirs
 
 [Icons]
 Name: "{userprograms}\Tonal"; Filename: "{app}\tonal.exe"; WorkingDir: "{app}"; Comment: "Music player"

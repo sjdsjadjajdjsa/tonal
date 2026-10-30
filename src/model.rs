@@ -203,19 +203,60 @@ impl Default for Settings {
 pub mod paths {
     use std::path::PathBuf;
 
+    use std::path::Path;
+    use std::sync::OnceLock;
+
     fn dirs() -> directories::ProjectDirs {
         directories::ProjectDirs::from("", "", "tonal").expect("no home directory")
     }
 
+    /// Portable mode: a file named `portable` or a folder named `data` next to the
+    /// program keeps the library and cache in `data` and `cache` beside it.
+    fn portable_root() -> Option<&'static Path> {
+        static ROOT: OnceLock<Option<PathBuf>> = OnceLock::new();
+        ROOT.get_or_init(|| {
+            let exe = std::env::current_exe().ok()?;
+            portable_in(exe.parent()?)
+        })
+        .as_deref()
+    }
+
+    fn portable_in(dir: &Path) -> Option<PathBuf> {
+        (dir.join("portable").is_file() || dir.join("data").is_dir()).then(|| dir.to_path_buf())
+    }
+
     pub fn data_dir() -> PathBuf {
-        let p = dirs().data_dir().to_path_buf();
+        let p = match portable_root() {
+            Some(root) => root.join("data"),
+            None => dirs().data_dir().to_path_buf(),
+        };
         let _ = std::fs::create_dir_all(&p);
         p
     }
 
     pub fn cache_dir() -> PathBuf {
-        let p = dirs().cache_dir().to_path_buf();
+        let p = match portable_root() {
+            Some(root) => root.join("cache"),
+            None => dirs().cache_dir().to_path_buf(),
+        };
         let _ = std::fs::create_dir_all(&p);
         p
+    }
+
+    #[cfg(test)]
+    mod tests {
+        #[test]
+        fn portable_marker_or_data_folder_switches_mode() {
+            let dir = std::env::temp_dir().join(format!("tonal-portable-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            assert_eq!(super::portable_in(&dir), None);
+            std::fs::write(dir.join("portable"), b"").unwrap();
+            assert_eq!(super::portable_in(&dir).as_deref(), Some(dir.as_path()));
+            std::fs::remove_file(dir.join("portable")).unwrap();
+            std::fs::create_dir(dir.join("data")).unwrap();
+            assert_eq!(super::portable_in(&dir).as_deref(), Some(dir.as_path()));
+            let _ = std::fs::remove_dir_all(&dir);
+        }
     }
 }
