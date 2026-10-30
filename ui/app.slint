@@ -10,12 +10,14 @@ export { TrackRow, PlaylistRow, SettingRow, LyricRow, CardRow, Theme }
 
 export component AppWindow inherits Window {
     in property <string> window-title: "Tonal";
+    in property <length> titlebar-inset: 0px;
+    callback start-drag();
     title: root.window-title;
     icon: @image-url("icon.png");
     preferred-width: 1240px;
     preferred-height: 780px;
     min-width: root.mini ? 340px : 860px;
-    min-height: root.mini ? 150px : 520px;
+    min-height: (root.mini ? 150px : 520px) + root.titlebar-inset;
     background: Theme.background;
     default-font-family: "Inter";
 
@@ -167,11 +169,24 @@ export component AppWindow inherits Window {
             return reject;
         }
 
+        if root.titlebar-inset > 0: TouchArea {
+            x: 0;
+            y: 0;
+            width: parent.width;
+            height: root.titlebar-inset;
+            pointer-event(event) => {
+                if event.kind == PointerEventKind.down && event.button == PointerEventButton.left {
+                    root.start-drag();
+                }
+            }
+        }
         VerticalLayout {
             spacing: 0px;
+            padding-top: root.mini ? root.titlebar-inset : 0px;
             if !root.mini: HorizontalLayout {
                 spacing: 0px;
                 Sidebar {
+                    top-inset: root.titlebar-inset;
                     compact: root.slim;
                     page: root.page;
                     playlists: root.playlists;

@@ -43,9 +43,33 @@ pub fn run() -> anyhow::Result<()> {
         },
         tx,
     )?;
+    #[cfg(target_os = "macos")]
+    slint::BackendSelector::new()
+        .backend_name("winit".into())
+        .with_winit_window_attributes_hook(|attributes| {
+            use slint::winit_030::winit::platform::macos::WindowAttributesExtMacOS;
+            attributes
+                .with_titlebar_transparent(true)
+                .with_title_hidden(true)
+                .with_fullsize_content_view(true)
+        })
+        .select()?;
     log::info!("Creating Tonal window");
     let window = AppWindow::new()?;
     log::info!("Window created");
+    #[cfg(target_os = "macos")]
+    {
+        use slint::winit_030::WinitWindowAccessor;
+        window.set_titlebar_inset(28.0);
+        let weak = window.as_weak();
+        window.on_start_drag(move || {
+            if let Some(w) = weak.upgrade() {
+                w.window().with_winit_window(|w| {
+                    let _ = w.drag_window();
+                });
+            }
+        });
+    }
     window.set_tracks(ModelRc::new(VecModel::<TrackRow>::default()));
     window.set_queue(ModelRc::new(VecModel::<TrackRow>::default()));
     window.set_albums(ModelRc::new(VecModel::<crate::CardRow>::default()));

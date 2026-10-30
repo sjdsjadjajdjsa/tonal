@@ -55,6 +55,7 @@ export component Sidebar inherits Rectangle {
     in property <string> page;
     in property <int> active-playlist: -1;
     in property <bool> compact;
+    in property <length> top-inset;
     in property <bool> can-back;
     in property <bool> can-forward;
     callback nav(int);
@@ -65,7 +66,7 @@ export component Sidebar inherits Rectangle {
     background: Theme.sidebar;
     VerticalLayout {
         padding: 14px;
-        padding-top: 18px;
+        padding-top: max(18px, root.top-inset + 6px);
         spacing: 2px;
         HorizontalLayout {
             height: 40px;
