@@ -4,6 +4,9 @@
 
 #![allow(dead_code)]
 
+#[cfg(windows)]
+#[path = "../src/job.rs"]
+mod job;
 #[path = "../src/model.rs"]
 mod model;
 #[path = "../src/sources/mod.rs"]
