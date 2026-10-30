@@ -57,6 +57,7 @@ jobs:
         if: runner.os == 'macOS'
         env:
           TONAL_KEYCHAIN: ${{ runner.temp }}/tonal-ci.keychain-db
+          TONAL_SIGN_LOCAL: "1"
           KEYCHAIN_PASSWORD: ci
         run: |
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$TONAL_KEYCHAIN"
