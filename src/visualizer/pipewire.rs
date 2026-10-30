@@ -204,10 +204,9 @@ fn record(name: &str) -> Option<Stream> {
 }
 
 pub fn available() -> bool {
-    cfg!(target_os = "linux")
-        && ["pw-record", "pw-dump"].iter().all(|tool| {
-            std::env::var_os("PATH")
-                .map(|paths| std::env::split_paths(&paths).any(|dir| dir.join(tool).is_file()))
-                .unwrap_or(false)
-        })
+    ["pw-record", "pw-dump"].iter().all(|tool| {
+        std::env::var_os("PATH")
+            .map(|paths| std::env::split_paths(&paths).any(|dir| dir.join(tool).is_file()))
+            .unwrap_or(false)
+    })
 }

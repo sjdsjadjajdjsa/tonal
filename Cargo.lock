@@ -5084,6 +5084,8 @@ dependencies = [
  "tokio",
  "url",
  "walkdir",
+ "windows",
+ "windows-core",
  "winresource",
 ]
 

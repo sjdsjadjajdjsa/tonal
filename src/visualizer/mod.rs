@@ -4,16 +4,22 @@ use std::sync::Arc;
 
 #[cfg(target_os = "macos")]
 mod macos;
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", windows)))]
 mod pipewire;
+#[cfg(windows)]
+mod windows;
 
+#[cfg(windows)]
+use self::windows::Capture;
+#[cfg(windows)]
+pub use self::windows::available;
 #[cfg(target_os = "macos")]
 use macos::Capture;
 #[cfg(target_os = "macos")]
 pub use macos::available;
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", windows)))]
 use pipewire::Capture;
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", windows)))]
 pub use pipewire::available;
 
 const RATE: f32 = 48_000.0;
