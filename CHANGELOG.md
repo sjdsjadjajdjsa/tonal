@@ -2,6 +2,18 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
+## Unreleased
+
+### Added
+- Living themes: 15 animated background scenes (aurora, dunes, tide, misty pines, ink mountains, sakura, deep space, soft bloom, liquid glass, synthwave, contours, halftone, paper cut, city rain, ribbons) in 18 palettes, with mist and near layers for depth.
+- Themes page: a gallery with live previews on hover, Surprise me, Peek, and your own saved themes. Pick the scene, palette, panel style (Clear, Glass, Neon, Solid), how it reacts to music, motion, dim, grain and smoothness.
+- Every look has numbered variants; Rotate crossfades to the next one every 1, 5, 15 or 60 minutes.
+- Waves take two colours from the theme, the back wave trails the front one, and both brighten on kick drums.
+
+### Changed
+- The default Classic look paints nothing, so Tonal costs the same as before unless a scene is picked. A moving scene uses about 13% of one core at 15 fps.
+- Release builds use optimization level 2: the binary is 24.0 MB instead of 24.6 MB at the same CPU.
+
 ## 0.3.0 - 2026-10-31
 
 ### Added
