@@ -241,15 +241,13 @@ fn lights(k: &Ctx, count: u32, size: f32) -> Vec<(f32, f32, f32, C)> {
 }
 
 fn mesh(u: f32, v: f32, a: f32, deep: C, lights: &[(f32, f32, f32, C)]) -> C {
-    let mut sum = scale(deep, 0.7);
-    let mut weight = 0.7;
+    let mut sum = scale(deep, 0.55 + 0.25 * v);
     for &(cx, cy, inv, color) in lights {
         let q = (((u - cx) * a).powi(2) + (v - cy).powi(2)) * inv;
         let wgt = 1.0 / (1.0 + q * q * 3.0);
-        sum = add(sum, color, wgt);
-        weight += wgt;
+        sum = add(sum, color, wgt * 0.85);
     }
-    scale(sum, 1.0 / weight)
+    sum.map(|c| 1.0 - (-c * 1.25).exp())
 }
 
 pub fn bloom(c: &mut Canvas, k: &Ctx) {
@@ -542,7 +540,10 @@ pub fn paper(c: &mut Canvas, k: &Ctx) {
         let front = match layer {
             Some(i) => {
                 let depth = i as f32 / 5.0;
-                col = mix(mix(p[3], p[2], 0.5), scale(p[0], 1.15), depth.powf(0.9));
+                let sky = mix(p[3], p[4], 0.3);
+                col = mix(ramp(p, 0.8 - 0.75 * depth), sky, (1.0 - depth) * 0.45);
+                let rim = (1.0 - (v - hills[i][x]) * h as f32 / 2.0).max(0.0);
+                col = add(col, p[4], rim * (0.18 - 0.1 * depth));
                 i + 1
             }
             None => 0,

@@ -399,9 +399,18 @@ pub struct Renderer {
     frame: u32,
 }
 
-/// Canvas size for an output size: about half of it, smoothed back up on output.
-fn canvas_size(w: u32, h: u32) -> (usize, usize) {
-    let cw = (w as usize / 2).clamp(120, 640);
+/// How much canvas a scene gets: the costly soft ones paint fewer pixels.
+fn detail(scene: Scene) -> f32 {
+    match scene {
+        Scene::Nebula => 0.66,
+        Scene::Halftone | Scene::Ribbons | Scene::Topo => 0.78,
+        _ => 1.0,
+    }
+}
+
+/// Canvas size for an output size: about half of it times `detail`, smoothed back up on output.
+fn canvas_size(w: u32, h: u32, detail: f32) -> (usize, usize) {
+    let cw = ((w as f32 / 2.0 * detail) as usize).clamp(120, 640);
     let ch = (cw * h as usize / w.max(1) as usize).max(68);
     (cw, ch)
 }
@@ -421,7 +430,8 @@ impl Renderer {
         size: (u32, u32),
     ) -> Frame {
         let (w, h) = (size.0.max(1), size.1.max(1));
-        let (cw, ch) = canvas_size(w, h);
+        let fine = from.map_or(1.0, |(old, _)| detail(old.scene));
+        let (cw, ch) = canvas_size(w, h, detail(look.scene).min(fine));
         self.front.resize(cw, ch);
         paint_look(&mut self.front, look, time, audio);
         if let Some((old, mix)) = from {
