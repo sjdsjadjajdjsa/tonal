@@ -179,7 +179,7 @@ impl Controller {
                     s.position = pos;
                     s.duration = duration;
                     if pos > 2.0 {
-                        s.bot_failures = 0;
+                        s.stall = 0;
                     }
                     let active = s
                         .lyrics
@@ -310,7 +310,13 @@ impl Controller {
                 None => self.status(error),
             },
             PlayerEvent::LoadFailed { key, track, error } => {
-                self.youtube_fallback(key, track, error)
+                self.recover(key, track, error)
+            }
+            PlayerEvent::CheckNext { key, track } => {
+                let this = self.clone();
+                tokio::spawn(async move {
+                    this.precheck(key, track).await;
+                });
             }
         }
     }
@@ -321,114 +327,173 @@ impl Controller {
         let index = s.queue_keys.iter().position(|k| *k == key);
         index.is_some() && s.index == index
     }
-    /// A YouTube song failed to load and the engine is holding on queue entry `key`.
-    /// Asks yt-dlp why, looks for the same song on SoundCloud then Audius (once per
-    /// track), and either swaps it in place or moves on. Three bot blocks in a row
-    /// stop skipping. Every answer names `key`, so the engine drops it if the user
-    /// has moved on meanwhile, and a stale result records nothing.
-    fn youtube_fallback(&self, key: u64, track: Track, error: String) {
-        log::warn!("YouTube load failed for {}: {error}", track.title);
+    /// How long a failed song may hold the queue silent while the raced
+    /// fallback looks for a playable copy of it.
+    const FALLBACK_GRACE: Duration = Duration::from_secs(4);
+
+    /// A song failed to load. Every source is searched at once and the first
+    /// playable copy either plays or repairs the entry, so the queue is never
+    /// silent for longer than `FALLBACK_GRACE`.
+    fn recover(&self, key: u64, track: Track, error: String) {
+        log::warn!("Load failed for {}: {error}", track.title);
+        crate::sources::resolve::forget(&track.play_url);
+        let tried = self.state.lock().fallback_tried.contains(&track.id);
         let this = self.clone();
         tokio::spawn(async move {
-            // One try per track at getting past the block on YouTube itself (PO token,
-            // other clients, IPv4, cookies) before looking on other sources.
-            let unblock_id = format!("unblock:{}", track.id);
-            let unblock = crate::sources::is_youtube_url(&track.play_url)
-                && !this.state.lock().fallback_tried.contains(&unblock_id);
-            if unblock {
-                let result = crate::sources::unblock_youtube(&track.play_url).await;
-                if !this.is_current(key) {
-                    this.player.skip_failed(key);
-                    return;
-                }
-                this.state.lock().fallback_tried.insert(unblock_id);
-                match result {
-                    Ok(how) => {
-                        log::info!("Retrying {} on YouTube with {how}", track.title);
-                        this.player.replace(key, track.clone());
-                        return;
-                    }
-                    Err(why) => log::info!("YouTube stays blocked for {}: {why}", track.title),
-                }
-            }
-            let first = !this.state.lock().fallback_tried.contains(&track.id);
-            let (reason, found) =
-                tokio::join!(crate::sources::playback_error(&track.play_url), async {
-                    if !first {
-                        return None;
-                    }
-                    for source in [SourceKind::SoundCloud, SourceKind::Audius] {
-                        let matches = match crate::sources::match_tracks(
-                            source,
-                            &track.title,
-                            &track.artist,
-                            track.duration_secs,
-                        )
-                        .await
-                        {
-                            Ok(matches) => matches,
-                            Err(e) => {
-                                log::debug!("{} fallback search: {e:#}", source.label());
-                                continue;
-                            }
-                        };
-                        // SoundCloud lists DRM-only uploads that yt-dlp cannot play,
-                        // so check the best few before swapping one in.
-                        for found in matches.into_iter().take(3) {
-                            if source != SourceKind::SoundCloud {
-                                return Some(found);
-                            }
-                            match crate::sources::playback_error(&found.play_url).await {
-                                None => return Some(found),
-                                Some(why) => log::debug!("Skipping {}: {why}", found.play_url),
-                            }
-                        }
-                    }
-                    None
-                });
-            if let Some(reason) = &reason {
-                log::warn!("yt-dlp: {reason}");
-            }
-            let bot = reason.as_deref().is_some_and(crate::sources::is_bot_block);
-            // The user may have moved on while this resolved: drop the result without
-            // recording anything; the engine ignores this answer and ends its hold.
-            if !this.is_current(key) {
+            if tried {
                 this.player.skip_failed(key);
-                return;
-            }
-            this.state.lock().fallback_tried.insert(track.id.clone());
-            if let Some(found) = found {
-                log::info!(
-                    "Fallback for {} — {}: {} {}",
-                    track.artist,
-                    track.title,
-                    found.source.label(),
-                    found.play_url
-                );
-                this.state.lock().bot_failures = 0;
-                let label = found.source.label();
-                let mut tracks = vec![found];
-                this.playable(&mut tracks);
-                this.player.replace(key, tracks.remove(0));
-                this.status(format!("Playing from {label}"));
-                return;
-            }
-            let blocked = {
-                let mut s = this.state.lock();
-                s.bot_failures = if bot { s.bot_failures + 1 } else { 0 };
-                s.bot_failures >= 3
-            };
-            if blocked {
-                this.state.lock().bot_failures = 0;
-                this.player.stop_failed(key);
-                this.status(
-                    "YouTube is blocking playback. Try SoundCloud or set Use browser login in Settings",
-                );
-            } else {
                 this.status(format!("Couldn't play {}", track.title));
-                this.player.skip_failed(key);
+                return;
+            }
+            let stall = {
+                let mut s = this.state.lock();
+                s.stall += 1;
+                s.stall
+            };
+            let mut race = this.start_race(&track);
+            let winner = if stall < 5 {
+                match tokio::select! {
+                    found = race.recv() => found,
+                    _ = tokio::time::sleep(Self::FALLBACK_GRACE) => None,
+                } {
+                    Some(found) => Some(found),
+                    None => {
+                        this.player.skip_failed(key);
+                        race.recv().await
+                    }
+                }
+            } else {
+                // Nothing has played for five songs in a row: give the lookup a
+                // real chance instead of racing through the queue, but not
+                // forever — a dead network must still stop within half a minute.
+                let found = tokio::select! {
+                    found = race.recv() => found,
+                    _ = tokio::time::sleep(Duration::from_secs(30)) => None,
+                };
+                if found.is_none() {
+                    this.player.skip_failed(key);
+                }
+                found
+            };
+            match winner {
+                Some(found) => this.apply_fallback(key, &track.id, found),
+                None => this.status(format!("Couldn't play {}", track.title)),
             }
         });
+    }
+
+    /// The engine says `track` plays next. Makes sure it can: a fresh stream
+    /// URL is cached for an instant start, and a song that will not load gets
+    /// its fallback swapped in before the gap instead of after it.
+    async fn precheck(&self, key: u64, track: Track) {
+        if std::path::Path::new(&track.play_url).is_file()
+            || !crate::sources::is_streamed_url(&track.play_url)
+        {
+            return;
+        }
+        if crate::sources::resolve::lookup(&track.play_url).is_some() {
+            self.player.refresh_prefetch();
+            return;
+        }
+        match crate::sources::resolve::resolve(&track.play_url).await {
+            Ok(_) => {
+                // mpv prefetched the original URL; re-sync so the cached one plays.
+                self.player.refresh_prefetch();
+            }
+            Err(why) => {
+                log::debug!("Pre-check failed for {}: {why}", track.title);
+                if self.state.lock().fallback_tried.contains(&track.id) {
+                    return;
+                }
+                let mut race = self.start_race(&track);
+                if let Some(found) = race.recv().await {
+                    self.apply_fallback(key, &track.id, found);
+                }
+            }
+        }
+    }
+
+    /// Searches every source for `track` at once and returns the channel the
+    /// first playable copy arrives on. YouTube's own retry keeps running after
+    /// the race is over, so any access strategy it finds is remembered either way.
+    fn start_race(&self, track: &Track) -> tokio::sync::mpsc::UnboundedReceiver<Track> {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let unblock_id = format!("unblock:{}", track.id);
+        let retry_youtube = {
+            let mut s = self.state.lock();
+            let retry = crate::sources::is_youtube_url(&track.play_url)
+                && !s.fallback_tried.contains(&unblock_id);
+            s.fallback_tried.insert(unblock_id);
+            retry
+        };
+        if retry_youtube {
+            let tx = tx.clone();
+            let url = track.play_url.clone();
+            let original = track.clone();
+            tokio::spawn(async move {
+                match crate::sources::unblock_youtube(&url).await {
+                    Ok((how, direct)) => {
+                        log::info!("YouTube retry for {} ({how})", original.title);
+                        if let Some(direct) = direct {
+                            crate::sources::resolve::remember(&url, &direct);
+                        }
+                        let _ = tx.send(original);
+                    }
+                    Err(why) => log::info!("YouTube stays blocked for {}: {why}", original.title),
+                }
+            });
+        }
+        for source in [SourceKind::SoundCloud, SourceKind::Audius] {
+            let tx = tx.clone();
+            let title = track.title.clone();
+            let artist = track.artist.clone();
+            let duration = track.duration_secs;
+            tokio::spawn(async move {
+                let matches = match crate::sources::match_tracks(source, &title, &artist, duration)
+                    .await
+                {
+                    Ok(matches) => matches,
+                    Err(e) => {
+                        log::debug!("{} fallback search: {e:#}", source.label());
+                        return;
+                    }
+                };
+                for found in matches.into_iter().take(3) {
+                    if source != SourceKind::SoundCloud {
+                        let _ = tx.send(found);
+                        return;
+                    }
+                    // SoundCloud lists DRM-only uploads yt-dlp cannot play, so
+                    // check the best few before offering one; the check also
+                    // caches the stream URL so the swap starts instantly.
+                    match crate::sources::resolve::resolve(&found.play_url).await {
+                        Ok(_) => {
+                            let _ = tx.send(found);
+                            return;
+                        }
+                        Err(why) => log::debug!("Skipping {}: {why}", found.title),
+                    }
+                }
+            });
+        }
+        rx
+    }
+
+    /// Swaps a fallback into queue entry `key`: the engine plays it while the
+    /// entry is still the held, current one, and otherwise repairs the slot.
+    /// The original song marks its one fallback attempt as used only now that a
+    /// copy was actually found, so a transient search failure does not spend it.
+    fn apply_fallback(&self, key: u64, original_id: &str, found: Track) {
+        self.state.lock().fallback_tried.insert(original_id.to_owned());
+        let label = found.source.label();
+        let mut tracks = vec![found];
+        self.playable(&mut tracks);
+        let found = tracks.remove(0);
+        let current = self.is_current(key);
+        self.player.replace(key, found);
+        if current {
+            self.status(format!("Playing from {label}"));
+        }
     }
     pub fn save_session(&self) {
         let s = self.state.lock();

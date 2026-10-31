@@ -401,17 +401,17 @@ fn same(a: Strategy, b: Strategy, have_cookies: bool) -> bool {
     a.clients == b.clients && a.ipv4 == b.ipv4 && (!have_cookies || a.cookies == b.cookies)
 }
 
-async fn probe(url: &str, strategy: Strategy) -> Result<(), String> {
+async fn probe(url: &str, strategy: Strategy) -> Result<String, String> {
     let mut command = command("yt-dlp");
     if let Some(runtime) = super::js_runtime() {
         command.args(["--js-runtimes", runtime]);
     }
     command.args(args(strategy)).args([
-        "--simulate",
-        "--no-playlist",
-        "--no-warnings",
         "-f",
         "bestaudio/best",
+        "-g",
+        "--no-playlist",
+        "--no-warnings",
         url,
     ]);
     let output = tokio::time::timeout(Duration::from_secs(60), command.output())
@@ -419,7 +419,12 @@ async fn probe(url: &str, strategy: Strategy) -> Result<(), String> {
         .map_err(|_| "yt-dlp timed out".to_string())?
         .map_err(|e| e.to_string())?;
     if output.status.success() {
-        return Ok(());
+        return String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .map(str::trim)
+            .rfind(|l| !l.is_empty())
+            .map(str::to_string)
+            .ok_or_else(|| "yt-dlp printed no stream URL".to_string());
     }
     let stderr = String::from_utf8_lossy(&output.stderr);
     Err(stderr
@@ -436,9 +441,10 @@ static GATE: tokio::sync::Mutex<Option<Instant>> = tokio::sync::Mutex::const_new
 
 /// Finds a way past a YouTube refusal for `url`, trying each layer in turn.
 /// On success the strategy is remembered (and mpv's config rewritten) and its
-/// description returned; otherwise the last yt-dlp error. Runs one at a time,
-/// waits out a recent rate limit, and gives up after two minutes.
-pub async fn unblock(url: &str) -> Result<String, String> {
+/// description and the stream URL it resolved returned; otherwise the last
+/// yt-dlp error. Runs one at a time, waits out a recent rate limit, and gives
+/// up after two minutes.
+pub async fn unblock(url: &str) -> Result<(String, Option<String>), String> {
     prepare();
     let setup_done = SETUP_DONE.notified();
     if SETTING_UP.load(Ordering::SeqCst) {
@@ -462,10 +468,10 @@ pub async fn unblock(url: &str) -> Result<String, String> {
             tokio::time::sleep_until(until.into()).await;
         }
         match probe(url, strategy).await {
-            Ok(()) => {
+            Ok(direct) => {
                 log::info!("YouTube access: {} works", strategy.describe());
                 remember(strategy);
-                return Ok(strategy.describe());
+                return Ok((strategy.describe(), Some(direct)));
             }
             Err(error) => {
                 log::info!("YouTube access: {} failed: {error}", strategy.describe());

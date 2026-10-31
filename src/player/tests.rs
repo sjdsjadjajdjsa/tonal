@@ -70,29 +70,68 @@ async fn failed_answer_with_stale_key_is_ignored_and_hold_released() {
     let failed = engine.queue.key().unwrap();
     let other = engine.queue.key_at(1).unwrap();
     engine.held = Some(failed);
-    // Answers for another entry never touch the held song or its hold.
-    for command in [
-        Cmd::Replace(other, track("X", "unused")),
-        Cmd::SkipFailed(other),
-        Cmd::StopFailed(other),
-    ] {
-        engine.command(command).await.unwrap();
-    }
+    // Answers for another entry never touch the held song or its hold; a
+    // replace only repairs that entry's own slot.
+    engine.command(Cmd::SkipFailed(other)).await.unwrap();
+    engine
+        .command(Cmd::Replace(other, track("X", "unused")))
+        .await
+        .unwrap();
     assert_eq!(engine.held, Some(failed));
     assert_eq!(engine.queue.current, Some(0));
     let titles: Vec<_> = engine.queue.tracks().into_iter().map(|t| t.title).collect();
-    assert_eq!(titles, ["A", "B"]);
+    assert_eq!(titles, ["A", "X"]);
     // The matching answer releases the hold; a late duplicate is then ignored.
-    engine.command(Cmd::StopFailed(failed)).await.unwrap();
+    engine.command(Cmd::SkipFailed(failed)).await.unwrap();
     assert_eq!(engine.held, None);
-    assert_eq!(engine.queue.current, None);
+    assert_eq!(engine.queue.current, Some(1));
     engine
         .command(Cmd::Replace(failed, track("X", "unused")))
         .await
         .unwrap();
     assert_eq!(engine.held, None);
-    assert_eq!(engine.queue.current, None);
-    assert_eq!(engine.queue.at(0).unwrap().title, "A");
+    assert_eq!(engine.queue.current, Some(1));
+    assert_eq!(engine.queue.at(0).unwrap().title, "X");
+}
+
+#[tokio::test]
+async fn real_mpv_replace_for_playing_entry_is_ignored() {
+    let tone = Tone::new();
+    let (mut engine, mut rx) = tone_engine(&tone).await;
+    let playing = engine.queue.key().unwrap();
+    while rx.try_recv().is_ok() {}
+    let path = tone.0.to_str().unwrap();
+    engine
+        .command(Cmd::Replace(playing, track("fallback", path)))
+        .await
+        .unwrap();
+    assert_eq!(engine.queue.track().unwrap().title, "tone-one");
+    assert!(
+        !std::iter::from_fn(|| rx.try_recv().ok()).any(|e| matches!(e, PlayerEvent::NowPlaying(_))),
+        "a late answer must not touch the playing song"
+    );
+}
+
+#[tokio::test]
+async fn real_mpv_failed_prefetched_entry_recovers() {
+    let tone = Tone::new();
+    let (tx, mut rx) = unbounded_channel();
+    let mut engine = Engine::new(config(), tx);
+    let mut tracks = tone.tracks();
+    tracks[1].play_url = "/nonexistent/tonal-test-broken".into();
+    engine.command(Cmd::Play(tracks, 0)).await.unwrap();
+    pump_until(&mut engine, |e| e.pos > 0.1).await;
+    // The first tone ends and the prefetched broken entry must not wedge the
+    // queue: the failure is handled and playback moves on or stops cleanly.
+    pump_until(&mut engine, |e| e.queue.current.is_none()).await;
+    let mut seen = Vec::new();
+    while let Ok(e) = rx.try_recv() {
+        seen.push(format!("{e:?}"));
+    }
+    assert!(
+        seen.iter().any(|e| e.starts_with("Error") || e.starts_with("LoadFailed")),
+        "the broken prefetched entry reports its failure"
+    );
 }
 
 /// Makes the current entry a YouTube song and fails its load the way mpv does,
@@ -122,7 +161,7 @@ async fn fail_current_youtube(engine: &mut Engine, rx: &mut UnboundedReceiver<Pl
 }
 
 #[tokio::test]
-async fn real_mpv_replace_after_user_skip_is_ignored() {
+async fn real_mpv_replace_after_user_skip_repairs_slot() {
     let tone = Tone::new();
     let (mut engine, mut rx) = tone_engine(&tone).await;
     let failed = fail_current_youtube(&mut engine, &mut rx).await;
@@ -139,7 +178,8 @@ async fn real_mpv_replace_after_user_skip_is_ignored() {
     assert_eq!(engine.held, None);
     assert_eq!(engine.queue.current, Some(1));
     assert_eq!(engine.queue.track().unwrap().title, "tone-two");
-    assert!(engine.queue.at(0).unwrap().play_url.contains("youtube"));
+    // The late answer repaired the failed entry instead of restarting it.
+    assert_eq!(engine.queue.at(0).unwrap().title, "fallback");
     assert!(
         !std::iter::from_fn(|| rx.try_recv().ok()).any(|e| matches!(e, PlayerEvent::NowPlaying(_))),
         "a stale answer must not restart playback"
@@ -171,6 +211,32 @@ async fn real_mpv_replace_follows_moved_failed_entry() {
             .any(|e| matches!(e, PlayerEvent::NowPlaying(Some(t)) if t.title == "fallback"))
     );
     pump_until(&mut engine, |e| e.pos > 0.1).await;
+}
+
+#[tokio::test]
+async fn real_mpv_check_next_fires_once_near_the_end() {
+    let tone = Tone::with_secs(70);
+    let (mut engine, mut rx) = tone_engine(&tone).await;
+    engine.command(Cmd::Seek(30.0, false)).await.unwrap();
+    pump_until(&mut engine, |e| e.precheck_key.is_some()).await;
+    let next = engine.queue.key_at(1).unwrap();
+    let (key, track) = std::iter::from_fn(|| rx.try_recv().ok())
+        .find_map(|event| match event {
+            PlayerEvent::CheckNext { key, track } => Some((key, track)),
+            _ => None,
+        })
+        .expect("CheckNext");
+    assert_eq!(key, next);
+    assert_eq!(track.title, "tone-two");
+    // Seeking back and near the end again does not fire it a second time.
+    engine.command(Cmd::Seek(10.0, false)).await.unwrap();
+    pump_until(&mut engine, |e| e.pos > 9.0 && e.pos < 30.0).await;
+    engine.command(Cmd::Seek(40.0, false)).await.unwrap();
+    pump_until(&mut engine, |e| e.pos >= 40.0).await;
+    assert!(
+        !std::iter::from_fn(|| rx.try_recv().ok())
+            .any(|e| matches!(e, PlayerEvent::CheckNext { .. }))
+    );
 }
 
 async fn pump_until(engine: &mut Engine, predicate: impl Fn(&Engine) -> bool) {
@@ -970,6 +1036,9 @@ fn config() -> PlayerConfig {
 struct Tone(PathBuf);
 impl Tone {
     fn new() -> Self {
+        Self::with_secs(8)
+    }
+    fn with_secs(secs: u32) -> Self {
         static NEXT_TONE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let path = std::env::temp_dir().join(format!(
             "tonal-test-{}-{}.wav",
@@ -977,7 +1046,7 @@ impl Tone {
             NEXT_TONE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ));
         let mut file = std::fs::File::create(&path).unwrap();
-        let samples = 44_100_u32 * 8;
+        let samples = 44_100_u32 * secs;
         file.write_all(b"RIFF").unwrap();
         file.write_all(&(36 + samples * 2).to_le_bytes()).unwrap();
         file.write_all(b"WAVEfmt \x10\0\0\0\x01\0\x01\0").unwrap();

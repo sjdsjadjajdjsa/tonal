@@ -2,6 +2,7 @@ mod audius;
 pub mod download;
 pub mod local;
 mod pot;
+pub(crate) mod resolve;
 mod soundcloud;
 mod youtube;
 mod youtube_browse;
@@ -72,9 +73,9 @@ pub fn ytdl_raw_options() -> String {
 }
 
 /// Tries each YouTube access layer until yt-dlp resolves `url`, remembering the
-/// one that worked for every later yt-dlp and mpv load. Returns a description of
-/// the working layer, or yt-dlp's last error.
-pub async fn unblock_youtube(url: &str) -> Result<String, String> {
+/// one that worked for every later yt-dlp and mpv load. Returns a description
+/// of the working layer and the stream URL it resolved, or yt-dlp's last error.
+pub async fn unblock_youtube(url: &str) -> Result<(String, Option<String>), String> {
     pot::unblock(url).await
 }
 
@@ -112,40 +113,6 @@ pub async fn update_ytdlp() -> anyhow::Result<String> {
         .unwrap_or("yt-dlp updated")
         .trim()
         .to_string())
-}
-
-/// Asks yt-dlp why a URL won't play and returns its error line.
-pub async fn playback_error(url: &str) -> Option<String> {
-    #[cfg(feature = "debug-hooks")]
-    if fake_bot(url) {
-        return Some("Sign in to confirm you’re not a bot (TONAL_DEBUG_FAKE_BOT)".into());
-    }
-    let output = tokio::time::timeout(
-        Duration::from_secs(60),
-        ytdlp()
-            .args([
-                "--simulate",
-                "--no-warnings",
-                "--no-playlist",
-                "-f",
-                "bestaudio/best",
-                url,
-            ])
-            .kill_on_drop(true)
-            .output(),
-    )
-    .await
-    .ok()?
-    .ok()?;
-    String::from_utf8_lossy(&output.stderr)
-        .lines()
-        .find_map(|l| l.strip_prefix("ERROR: "))
-        .map(|l| {
-            l.split_once(": ")
-                .map_or(l, |(_, rest)| rest)
-                .trim()
-                .to_string()
-        })
 }
 
 fn ytdlp_plain() -> tokio::process::Command {
@@ -365,11 +332,6 @@ fn ranked_matches(
     scored.into_iter().map(|(_, track)| track).collect()
 }
 
-/// True for yt-dlp's "Sign in to confirm you're not a bot" refusal.
-pub fn is_bot_block(reason: &str) -> bool {
-    reason.contains("not a bot") || reason.contains("Sign in to confirm")
-}
-
 /// True when `url` is hosted on YouTube, judged by its parsed host, so a
 /// "youtube.com/" inside another site's path or query does not count.
 pub fn is_youtube_url(url: &str) -> bool {
@@ -388,20 +350,31 @@ pub fn is_youtube_url(url: &str) -> bool {
         })
 }
 
+/// True for URLs mpv can only play after yt-dlp resolves them: YouTube and
+/// SoundCloud. Audius and local files load directly.
+pub fn is_streamed_url(url: &str) -> bool {
+    is_youtube_url(url)
+        || url::Url::parse(url)
+            .ok()
+            .and_then(|url| url.host_str().map(str::to_ascii_lowercase))
+            .is_some_and(|host| host == "soundcloud.com" || host == "www.soundcloud.com")
+}
+
 /// Debug hook: TONAL_DEBUG_FAKE_BOT=1 makes every YouTube load fail as if bot-blocked.
 #[cfg(feature = "debug-hooks")]
 fn fake_bot(url: &str) -> bool {
     is_youtube_url(url) && std::env::var_os("TONAL_DEBUG_FAKE_BOT").is_some_and(|v| v == "1")
 }
 
-/// The URL mpv loads for a track. Only the debug hook changes it, to an
+/// The URL mpv loads for a track: a cached stream URL when one is fresh, so
+/// plays start without yt-dlp. Only the debug hook changes it, to an
 /// unloadable path so YouTube fails the way a bot block does.
 pub fn mpv_url(url: &str) -> String {
     #[cfg(feature = "debug-hooks")]
     if fake_bot(url) {
         return "/nonexistent/tonal-debug-fake-bot-block".into();
     }
-    url.to_string()
+    resolve::lookup(url).unwrap_or_else(|| url.to_string())
 }
 
 pub fn missing_tools() -> Vec<String> {
@@ -486,11 +459,4 @@ mod tests {
         assert!(none.is_none());
     }
 
-    #[test]
-    fn bot_block_reason_is_recognized() {
-        assert!(is_bot_block(
-            "Sign in to confirm you’re not a bot. Use --cookies"
-        ));
-        assert!(!is_bot_block("Video unavailable"));
-    }
 }
