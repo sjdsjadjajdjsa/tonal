@@ -350,6 +350,8 @@ struct Engine {
     core_idle: bool,
     buffering: bool,
     last_position: Instant,
+    /// A seek while paused: report the new position even though the clock is stopped.
+    seeked: bool,
     failures: usize,
     restarts: Vec<Instant>,
     quality: Quality,
@@ -397,6 +399,7 @@ impl Engine {
             core_idle: true,
             buffering: false,
             last_position: Instant::now() - Duration::from_secs(1),
+            seeked: false,
             failures: 0,
             restarts: Vec::new(),
             quality: Quality::default(),
@@ -705,6 +708,7 @@ impl Engine {
         } else {
             "absolute+exact"
         };
+        self.seeked = self.paused;
         let result = async {
             self.cancel_fade().await?;
             self.active_send(json!(["seek", if relative { secs } else { target }, mode]))
@@ -1162,8 +1166,11 @@ impl Engine {
                         self.last_playhead = Some(pos);
                         self.pos = pos;
                         if self.queue.current.is_some()
-                            && (self.paused
-                                || self.last_position.elapsed() >= Duration::from_millis(250))
+                            && if self.paused {
+                                std::mem::take(&mut self.seeked)
+                            } else {
+                                self.last_position.elapsed() >= Duration::from_millis(250)
+                            }
                         {
                             self.last_position = Instant::now();
                             self.emit(PlayerEvent::Position {
