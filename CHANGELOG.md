@@ -2,7 +2,7 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
-## Unreleased
+## 0.4.0 - 2026-10-31
 
 ### Added
 - Living themes: 15 animated background scenes (aurora, dunes, tide, misty pines, ink mountains, sakura, deep space, soft bloom, liquid glass, synthwave, contours, halftone, paper cut, city rain, ribbons) in 18 palettes, with mist and near layers for depth.
