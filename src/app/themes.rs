@@ -42,6 +42,9 @@ static SAVES: AtomicU64 = AtomicU64::new(0);
 static DRAWS: AtomicU64 = AtomicU64::new(0);
 /// The painter is waiting for the window to draw again before it paints more.
 static STALLED: AtomicBool = AtomicBool::new(false);
+/// Apple builds draw from a display link that never reports a redraw, so only
+/// other platforms can tell a hidden window from its missing redraws.
+const WATCHES_DRAWS: bool = !cfg!(target_vendor = "apple");
 /// The playlist whose pinned theme is showing instead of the user's own, and that theme.
 static PINNED: Mutex<Option<(i64, Preset)>> = Mutex::new(None);
 
@@ -224,7 +227,10 @@ fn run(e: Arc<Engine>, weak: slint::Weak<AppWindow>) {
             drew = now_drew;
             unseen = None;
         }
-        if hover.is_none() && unseen.is_some_and(|t| t.elapsed() > Duration::from_millis(1500)) {
+        if WATCHES_DRAWS
+            && hover.is_none()
+            && unseen.is_some_and(|t| t.elapsed() > Duration::from_millis(1500))
+        {
             let mut w = e.wanted.lock();
             STALLED.store(true, Ordering::SeqCst);
             if w.generation == seen && DRAWS.load(Ordering::SeqCst) == drew {
