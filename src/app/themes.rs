@@ -38,6 +38,10 @@ struct Engine {
 
 static ENGINE: OnceLock<Arc<Engine>> = OnceLock::new();
 static SAVES: AtomicU64 = AtomicU64::new(0);
+/// Counts the window's redraws, so the painter can tell when the compositor stops showing it.
+static DRAWS: AtomicU64 = AtomicU64::new(0);
+/// The painter is waiting for the window to draw again before it paints more.
+static STALLED: AtomicBool = AtomicBool::new(false);
 /// The playlist whose pinned theme is showing instead of the user's own, and that theme.
 static PINNED: Mutex<Option<(i64, Preset)>> = Mutex::new(None);
 
@@ -58,6 +62,18 @@ fn update(change: impl FnOnce(&mut Wanted)) {
 pub fn set_occluded(occluded: bool) {
     if engine().is_some_and(|e| e.wanted.lock().occluded != occluded) {
         update(|w| w.occluded = occluded);
+    }
+}
+
+/// The window drew a frame. Wayland compositors stop asking hidden windows to draw,
+/// so frames posted without a redraw mean nobody can see the scene.
+pub fn drawn() {
+    DRAWS.fetch_add(1, Ordering::SeqCst);
+    if STALLED.swap(false, Ordering::SeqCst)
+        && let Some(e) = engine()
+    {
+        let _w = e.wanted.lock();
+        e.wake.notify_one();
     }
 }
 
@@ -144,6 +160,7 @@ fn run(e: Arc<Engine>, weak: slint::Weak<AppWindow>) {
     let (mut time, mut last) = (0.0f32, Instant::now());
     let (mut rotated, mut offset) = (Instant::now(), 0u32);
     let (mut cleared, mut fresh) = (true, true);
+    let (mut drew, mut unseen) = (DRAWS.load(Ordering::SeqCst), None::<Instant>);
     loop {
         let (mut look, generation, size, hover, hidden, paused, album) = {
             let w = e.wanted.lock();
@@ -202,6 +219,21 @@ fn run(e: Arc<Engine>, weak: slint::Weak<AppWindow>) {
             last = Instant::now();
             continue;
         }
+        let now_drew = DRAWS.load(Ordering::SeqCst);
+        if now_drew != drew {
+            drew = now_drew;
+            unseen = None;
+        }
+        if hover.is_none() && unseen.is_some_and(|t| t.elapsed() > Duration::from_millis(1500)) {
+            let mut w = e.wanted.lock();
+            STALLED.store(true, Ordering::SeqCst);
+            if w.generation == seen && DRAWS.load(Ordering::SeqCst) == drew {
+                e.wake.wait_for(&mut w, Duration::from_secs(5));
+            }
+            STALLED.store(false, Ordering::SeqCst);
+            last = Instant::now();
+            continue;
+        }
         let moving = look.fps > 0 || fade.is_some() || hover.is_some();
         if !moving && !fresh {
             let mut w = e.wanted.lock();
@@ -230,6 +262,7 @@ fn run(e: Arc<Engine>, weak: slint::Weak<AppWindow>) {
             if !post(&e, &weak, frame) {
                 return;
             }
+            unseen.get_or_insert_with(Instant::now);
             if done {
                 fade = None;
             }

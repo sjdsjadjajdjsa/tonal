@@ -184,6 +184,10 @@ pub fn run() -> anyhow::Result<()> {
                 c.nav(if *button == winit::event::MouseButton::Back { -1 } else { 1 });
                 EventResult::PreventDefault
             }
+            winit::event::WindowEvent::RedrawRequested => {
+                themes::drawn();
+                EventResult::Propagate
+            }
             winit::event::WindowEvent::Occluded(covered) => {
                 themes::set_occluded(*covered);
                 EventResult::Propagate
