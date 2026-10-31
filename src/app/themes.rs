@@ -370,6 +370,10 @@ impl Controller {
         mark(st.get_gallery(), &scenes::gallery(), look);
         mark(st.get_saved(), &saved, look);
         apply_style(w, look.style, accent);
+        let wave = w.global::<crate::WaveLook>();
+        let [r, g, b] = look.colors()[2].map(|c| (c.clamp(0.0, 1.0) * 255.0) as u8);
+        wave.set_second(Color::from_rgb_u8(r, g, b));
+        wave.set_two_tone(look.scene != Scene::Classic);
         let listening = look.scene != Scene::Classic
             && look.react != React::Off
             && crate::visualizer::available();

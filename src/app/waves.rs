@@ -76,6 +76,7 @@ fn tick(window: &AppWindow) {
             window.set_wave_glow(Default::default());
             window.set_wave_line(Default::default());
             window.set_eq_backdrop(Default::default());
+            window.global::<crate::WaveLook>().set_kick(0.0);
             return;
         }
         if !window.get_waves() {
@@ -88,5 +89,6 @@ fn tick(window: &AppWindow) {
         window.set_wave_glow(frame.glow.into());
         window.set_wave_line(frame.line.into());
         window.set_eq_backdrop(frame.backdrop.into());
+        window.global::<crate::WaveLook>().set_kick(frame.kick);
     });
 }

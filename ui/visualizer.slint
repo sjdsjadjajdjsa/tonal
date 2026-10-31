@@ -8,6 +8,13 @@ component Layer inherits Path {
     stroke-width: 0px;
 }
 
+/// Extra wave colour and the beat pulse, set from Rust.
+export global WaveLook {
+    in property <float> kick;
+    in property <color> second: #ffffff;
+    in property <bool> two-tone;
+}
+
 export component Waves inherits Rectangle {
     in property <string> back;
     in property <string> front;
@@ -18,6 +25,8 @@ export component Waves inherits Rectangle {
     in property <bool> resting: true;
     in property <color> accent: #ffffff;
     clip: true;
+    private property <color> deep: WaveLook.two-tone ? WaveLook.second : root.accent;
+    private property <float> kick: root.resting ? 0 : WaveLook.kick;
     opacity: root.resting ? 0.5 : 1;
     animate opacity { duration: 700ms; easing: ease-out; }
 
@@ -25,42 +34,42 @@ export component Waves inherits Rectangle {
         area-width: root.width;
         area-height: root.height;
         commands: root.back;
-        fill: @linear-gradient(180deg, root.accent.with-alpha(0.012) 0%, root.accent.with-alpha(0.07) 100%);
+        fill: @linear-gradient(180deg, root.deep.with-alpha(0.01) 0%, root.deep.with-alpha(0.075) 100%);
     }
 
     Layer {
         area-width: root.width;
         area-height: root.height;
         commands: root.front;
-        fill: @linear-gradient(180deg, root.accent.with-alpha(0.025) 0%, root.accent.with-alpha(0.13) 100%);
+        fill: @linear-gradient(180deg, root.accent.with-alpha(0.02 + 0.03 * root.kick) 0%, root.deep.with-alpha(0.15 + 0.05 * root.kick) 100%);
     }
 
     Layer {
         area-width: root.width;
         area-height: root.height;
         commands: root.back-line;
-        fill: root.accent.with-alpha(0.06);
+        fill: root.deep.with-alpha(0.05);
     }
 
     Layer {
         area-width: root.width;
         area-height: root.height;
         commands: root.haze;
-        fill: root.accent.with-alpha(0.022);
+        fill: root.accent.with-alpha(0.022 + 0.03 * root.kick);
     }
 
     Layer {
         area-width: root.width;
         area-height: root.height;
         commands: root.glow;
-        fill: root.accent.with-alpha(0.045);
+        fill: root.accent.with-alpha(0.045 + 0.06 * root.kick);
     }
 
     Layer {
         area-width: root.width;
         area-height: root.height;
         commands: root.line;
-        fill: root.accent.with-alpha(0.14);
+        fill: root.accent.with-alpha(0.16 + 0.16 * root.kick);
     }
 
     if root.line == "": Rectangle {

@@ -29,6 +29,8 @@ const BANDS: usize = 36;
 const POINTS: usize = 40;
 const LOW_HZ: f32 = 35.0;
 const HIGH_HZ: f32 = 12_000.0;
+/// Frames the back wave trails the front one by, about 100 ms at 30 fps.
+const TRAIL: usize = 3;
 
 static LEVELS: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
 
@@ -60,6 +62,8 @@ pub struct WaveFrame {
     pub line: String,
     /// The back wave redrawn for the equalizer's graph, when it is open.
     pub backdrop: String,
+    /// A kick drum just landed: 1 on the hit, fading to 0.
+    pub kick: f32,
 }
 
 pub struct Visualizer {
@@ -78,6 +82,9 @@ pub struct Visualizer {
     height: f32,
     presence: f32,
     backdrop: Option<(f32, f32)>,
+    trail: std::collections::VecDeque<[f32; BANDS]>,
+    bass: f32,
+    kick: f32,
 }
 
 impl Visualizer {
@@ -114,6 +121,9 @@ impl Visualizer {
             height: 60.0,
             presence: 0.0,
             backdrop: None,
+            trail: std::collections::VecDeque::with_capacity(TRAIL + 1),
+            bass: 0.0,
+            kick: 0.0,
         }
     }
 
@@ -181,9 +191,19 @@ impl Visualizer {
                 blurred[i] = 0.25 * l + 0.5 * src[i] + 0.25 * r;
             }
         }
+        let bass = self.levels[..6].iter().sum::<f32>() / 6.0;
+        let hit = bass - self.bass * 1.3 - 0.03;
+        self.bass += (bass - self.bass) * (1.0 - (-dt * 2.5).exp());
+        self.kick = (self.kick * (-dt * 7.0).exp()).max((hit * 4.0).clamp(0.0, 1.0));
+        self.trail.push_back(blurred);
+        let behind = if self.trail.len() > TRAIL {
+            self.trail.pop_front().unwrap_or(blurred)
+        } else {
+            self.trail[0]
+        };
         let t = self.time;
         self.presence = (self.energy * 8.0).min(1.0);
-        let back = self.points(&blurred, t * 0.7, 0.82, 0.8);
+        let back = self.points(&behind, t * 0.7, 0.82, 0.8);
         let front = self.points(&blurred, t * 1.6 + 4.2, 1.0, 1.5);
         let backdrop = match self.backdrop {
             Some((w, h)) => {
@@ -203,6 +223,7 @@ impl Visualizer {
             glow: ribbon(&front, 2.2, 1.6),
             line: ribbon(&front, 0.7, 0.7),
             backdrop,
+            kick: self.kick,
         }
     }
 
