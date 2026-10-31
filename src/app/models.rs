@@ -142,6 +142,23 @@ thread_local! {
         Default::default();
 }
 
+/// Beat flash choices and how much each one scales the waves' flash on a drum hit.
+pub const FLASH: [(&str, f32); 3] = [("Off", 0.0), ("Soft", 1.6), ("Strong", 3.0)];
+
+thread_local! {
+    static FLASH_MODEL: ModelRc<slint::SharedString> = ModelRc::new(slint::VecModel::from(
+        FLASH.iter().map(|(name, _)| slint::SharedString::from(*name)).collect::<Vec<_>>(),
+    ));
+}
+
+/// The flash strength for a Beat flash setting.
+pub fn flash(setting: &str) -> f32 {
+    FLASH
+        .iter()
+        .find(|(name, _)| *name == setting)
+        .map_or(1.6, |(_, k)| *k)
+}
+
 /// The same model while the options stay the same, so unchanged rows compare equal
 /// and `update` leaves them (and any open dropdown) alone. UI thread only.
 fn options_model(options: &[String]) -> ModelRc<slint::SharedString> {
@@ -303,6 +320,14 @@ pub fn settings(s: &Settings) -> Vec<SettingRow> {
                     "toggle",
                     false,
                 ),
+                (
+                    "beat_flash",
+                    "Beat flash",
+                    s.beat_flash.clone(),
+                    "How much the waves light up on each drum hit.",
+                    "choice",
+                    false,
+                ),
             ],
         ),
         (
@@ -390,7 +415,9 @@ pub fn settings(s: &Settings) -> Vec<SettingRow> {
                 value: value.into(),
                 hint: hint.into(),
                 kind: kind.into(),
-                options: if kind == "choice" {
+                options: if key == "beat_flash" {
+                    FLASH_MODEL.with(Clone::clone)
+                } else if kind == "choice" {
                     options_model(&outputs)
                 } else {
                     ModelRc::default()

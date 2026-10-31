@@ -13,6 +13,8 @@ export global WaveLook {
     in property <float> kick;
     in property <color> second: #ffffff;
     in property <bool> two-tone;
+    /// How strongly a drum hit brightens the waves: 0 is off.
+    in property <float> flash: 1.6;
 }
 
 export component Waves inherits Rectangle {
@@ -26,7 +28,7 @@ export component Waves inherits Rectangle {
     in property <color> accent: #ffffff;
     clip: true;
     private property <color> deep: WaveLook.two-tone ? WaveLook.second : root.accent;
-    private property <float> kick: root.resting ? 0 : WaveLook.kick;
+    private property <float> kick: root.resting ? 0 : WaveLook.kick * WaveLook.flash;
     opacity: root.resting ? 0.5 : 1;
     animate opacity { duration: 700ms; easing: ease-out; }
 

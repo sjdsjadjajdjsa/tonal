@@ -8,6 +8,10 @@ impl Controller {
             let on = self.state.lock().settings.album_colors;
             self.ui(move |w| w.set_album_colors(on));
         }
+        if key == "beat_flash" {
+            let k = models::flash(&self.state.lock().settings.beat_flash);
+            self.ui(move |w| w.global::<crate::WaveLook>().set_flash(k));
+        }
         if key == "bit_perfect" {
             self.eq_refresh();
         }
@@ -86,6 +90,9 @@ impl Controller {
                 }
             }
             "youtube_cookies" => s.youtube_cookies = value.trim().to_lowercase(),
+            "beat_flash" if models::FLASH.iter().any(|(name, _)| *name == value) => {
+                s.beat_flash = value.into()
+            }
             "accent" => s.accent = value.into(),
             "spotify_client_id" => s.spotify_client_id = value.into(),
             "lastfm_api_key" => s.lastfm_api_key = value.into(),
