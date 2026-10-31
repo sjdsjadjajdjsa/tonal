@@ -23,7 +23,7 @@ Most music apps are a web browser in disguise. Tonal draws its own window with [
 - **Artists and albums:** click any artist or album name to open its page: photo, popular songs, albums, singles and similar artists, or an album with every track. Back and forward work with the arrows, Alt+←/→ and the mouse side buttons.
 - **One search, four sources:** YouTube Music, SoundCloud, Audius and your local files. YouTube results come straight from YouTube Music, in under a second.
 - **Your library:** liked songs, playlists, play history, most played, and a queue you can reorder. The queue and position come back when you reopen the app.
-- **Spotify import:** paste a public playlist or album link and Tonal finds every song on YouTube Music (up to 100 songs). Log in with a free Spotify developer app for bigger playlists and your liked songs. Spotify audio itself is never used.
+- **Spotify import:** paste a public playlist or album link and Tonal finds every song on YouTube Music (up to 100 songs). For bigger playlists and your liked songs, log in with your own Spotify developer app (Spotify only allows these for accounts with Premium). Spotify audio itself is never used.
 - **Now playing:** click the cover in the player bar (or `Ctrl` `N`) for a big cover, the waves and synced lyrics.
 - **Album grid:** browse your local files as albums, sorted by artist, year or recently added.
 - **Listening stats:** your top artists and albums this month and of all time, on Home. They never leave your computer.
@@ -55,6 +55,10 @@ Most music apps are a web browser in disguise. Tonal draws its own window with [
 | Settings | Mini player |
 | --- | --- |
 | ![Settings grouped into Playback and Library cards](docs/images/settings.webp) | ![The mini player with artwork, controls, progress and the wave visualizer](docs/images/mini.webp) |
+
+| Equalizer |
+| --- |
+| ![The six band equalizer on the Bass preset over Lavender haze](docs/images/equalizer.webp) |
 
 ## Install
 
@@ -118,19 +122,25 @@ Every player was measured the same way by [`bench/bench.py`](bench/bench.py): st
 
 | | Memory playing | CPU playing | CPU before playing | Plays |
 | --- | --- | --- | --- | --- |
-| **Tonal (waves off)** | 117 MB | 0.5% | 0.0% | same as Tonal |
-| **Tonal** | 120 MB | 6.2% | 0.1% | YouTube, SoundCloud, Audius, local |
-| Strawberry | 133 MB | 1.8% | 0.6% | local files |
+| **Tonal (waves off)** | 118 MB | 0.5% | 0.1% | same as Tonal |
+| **Tonal** | 128 MB | 5.9% | 0.1% | YouTube, SoundCloud, Audius, local |
+| **Tonal (live theme)** | 134 MB | 20.1% | 12.0% | same as Tonal |
+| Strawberry | 133 MB | 1.8% | 0.6% | local files, Subsonic servers, internet radio; Tidal and Qobuz with a paid plan, Spotify with Premium |
 | Amberol | 182 MB | 0.8% | 0.9% | local files |
-| Tauon | 228 MB | 3.0% | 0.6% | local files |
-| Riff | 495 MB | 60.8% | 32.2% | YouTube Music, SoundCloud, local |
+| Tauon | 228 MB | 3.0% | 0.6% | local files, Plex, Jellyfin and Airsonic servers |
+| Riff | 495 MB | 60.8% | 32.2% | YouTube Music, YouTube, SoundCloud, local; imports Spotify playlists (its Spotify login needs Premium) |
 | YouTube Music (Pear) | 805 MB | 10.4% | 12.7% | YouTube Music |
-| Spotify | 1282 MB | 2.7% | 49.0% | Spotify |
+| Spotify | 1282 MB | 2.7% | 49.0% | Spotify (free with ads, Premium without) |
 | Spotifast | 100–250 MB (their claim) | not measured | not measured | Spotify, Premium only |
+| *"I vibe-coded a Spotify killer in a weekend" (from a TikTok)* | *500–1000 MB* | *10%, and 100% while the fan sounds like a jet* | *yes* | *the demo video, on a loop* |
 
-- Versions: Tonal 0.2.0 (this repo), Spotify 1.3.4, Riff 43.2.2 and YouTube Music (Pear) 3.12.0 from their AppImages, Strawberry 1.2.31, Amberol 2026.1 and Tauon 13.1.0 from Flathub.
+The last row is a joke. Nobody measured it, and nobody could find the download link.
+
+- Versions: Tonal 0.3.0 (this repo, 24.0 MB binary), Spotify 1.3.4, Riff 43.2.2 and YouTube Music (Pear) 3.12.0 from their AppImages, Strawberry 1.2.31, Amberol 2026.1 and Tauon 13.1.0 from Flathub.
 - Strawberry, Amberol and Tauon play a local MP3. The others stream, which costs more.
+- "Plays" is checked against each project's own README, release notes and source, October 2026. Tauon removed Spotify in v10. Riff only imports Spotify playlists; it never plays Spotify audio.
 - Tonal's waves cost about 5.5% of one core, because the window is redrawn by the CPU 30 times a second. Turn them off in Settings and Tonal is the lightest player measured here.
+- "Live theme" is Northern lights (Aurora scene, Glass style, Pulse) at 15 fps. A moving scene costs about 12% of one core, more while it reacts to music. The default Classic look paints nothing.
 - [Spotifast](https://github.com/crmne/spotifast) states "100–250 MB of RAM" in its README, and playback needs Spotify Premium, so it isn't measured here.
 - "Before playing" is the 15 seconds right after the 30-second wait, with the app open and nothing playing.
 

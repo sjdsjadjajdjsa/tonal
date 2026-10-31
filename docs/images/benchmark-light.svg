@@ -1,74 +1,82 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="820" height="674" viewBox="0 0 820 674" font-family="Inter, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="734" viewBox="0 0 820 734" font-family="Inter, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
 <text x="0" y="22" font-size="19" font-weight="700" fill="#1f2328">Music players while playing a song</text>
 <text x="0" y="44" font-size="12.5" fill="#59636e">Lower is better. Memory is PSS over every process the app starts; CPU is share of one core. Linux, Ryzen 5 7600.</text>
 <text x="0" y="82" font-size="15" font-weight="600" fill="#1f2328">Memory</text>
 <text x="178" y="115" font-size="13" text-anchor="end" font-weight="600" fill="#1f2328">Tonal (waves off)</text>
 <rect x="190" y="103" width="540" height="16" rx="4" fill="#d8dee4" opacity="0.35"/>
-<rect x="190" y="103" width="46.8" height="16" rx="4" fill="#1a7f37"/>
-<text x="244.8" y="115" font-size="12" font-weight="600" fill="#1f2328">117 MB</text>
+<rect x="190" y="103" width="47.3" height="16" rx="4" fill="#1a7f37"/>
+<text x="245.3" y="115" font-size="12" font-weight="600" fill="#1f2328">118 MB</text>
 <text x="178" y="145" font-size="13" text-anchor="end" font-weight="600" fill="#1f2328">Tonal</text>
 <rect x="190" y="133" width="540" height="16" rx="4" fill="#d8dee4" opacity="0.35"/>
-<rect x="190" y="133" width="48.0" height="16" rx="4" fill="#1a7f37"/>
-<text x="246.0" y="145" font-size="12" font-weight="600" fill="#1f2328">120 MB</text>
+<rect x="190" y="133" width="51.2" height="16" rx="4" fill="#1a7f37"/>
+<text x="249.2" y="145" font-size="12" font-weight="600" fill="#1f2328">128 MB</text>
 <text x="178" y="175" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">Strawberry</text>
 <rect x="190" y="163" width="540" height="16" rx="4" fill="#d8dee4" opacity="0.35"/>
 <rect x="190" y="163" width="53.3" height="16" rx="4" fill="#9aa1a9"/>
 <text x="251.3" y="175" font-size="12" font-weight="400" fill="#59636e">133 MB</text>
-<text x="178" y="205" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">Amberol</text>
+<text x="178" y="205" font-size="13" text-anchor="end" font-weight="600" fill="#1f2328">Tonal (live theme)</text>
 <rect x="190" y="193" width="540" height="16" rx="4" fill="#d8dee4" opacity="0.35"/>
-<rect x="190" y="193" width="73.0" height="16" rx="4" fill="#9aa1a9"/>
-<text x="271.0" y="205" font-size="12" font-weight="400" fill="#59636e">182 MB</text>
-<text x="178" y="235" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">Tauon</text>
+<rect x="190" y="193" width="53.7" height="16" rx="4" fill="#1a7f37"/>
+<text x="251.7" y="205" font-size="12" font-weight="600" fill="#1f2328">134 MB</text>
+<text x="178" y="235" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">Amberol</text>
 <rect x="190" y="223" width="540" height="16" rx="4" fill="#d8dee4" opacity="0.35"/>
-<rect x="190" y="223" width="91.6" height="16" rx="4" fill="#9aa1a9"/>
-<text x="289.6" y="235" font-size="12" font-weight="400" fill="#59636e">228 MB</text>
-<text x="178" y="265" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">Riff</text>
+<rect x="190" y="223" width="73.0" height="16" rx="4" fill="#9aa1a9"/>
+<text x="271.0" y="235" font-size="12" font-weight="400" fill="#59636e">182 MB</text>
+<text x="178" y="265" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">Tauon</text>
 <rect x="190" y="253" width="540" height="16" rx="4" fill="#d8dee4" opacity="0.35"/>
-<rect x="190" y="253" width="198.5" height="16" rx="4" fill="#9aa1a9"/>
-<text x="396.5" y="265" font-size="12" font-weight="400" fill="#59636e">495 MB</text>
-<text x="178" y="295" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">YouTube Music (Pear)</text>
+<rect x="190" y="253" width="91.6" height="16" rx="4" fill="#9aa1a9"/>
+<text x="289.6" y="265" font-size="12" font-weight="400" fill="#59636e">228 MB</text>
+<text x="178" y="295" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">Riff</text>
 <rect x="190" y="283" width="540" height="16" rx="4" fill="#d8dee4" opacity="0.35"/>
-<rect x="190" y="283" width="323.0" height="16" rx="4" fill="#9aa1a9"/>
-<text x="521.0" y="295" font-size="12" font-weight="400" fill="#59636e">805 MB</text>
-<text x="178" y="325" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">Spotify</text>
+<rect x="190" y="283" width="198.5" height="16" rx="4" fill="#9aa1a9"/>
+<text x="396.5" y="295" font-size="12" font-weight="400" fill="#59636e">495 MB</text>
+<text x="178" y="325" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">YouTube Music (Pear)</text>
 <rect x="190" y="313" width="540" height="16" rx="4" fill="#d8dee4" opacity="0.35"/>
-<rect x="190" y="313" width="514.3" height="16" rx="4" fill="#9aa1a9"/>
-<text x="712.3" y="325" font-size="12" font-weight="400" fill="#59636e">1282 MB</text>
-<text x="178" y="355" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">Spotifast</text>
+<rect x="190" y="313" width="323.0" height="16" rx="4" fill="#9aa1a9"/>
+<text x="521.0" y="325" font-size="12" font-weight="400" fill="#59636e">805 MB</text>
+<text x="178" y="355" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">Spotify</text>
 <rect x="190" y="343" width="540" height="16" rx="4" fill="#d8dee4" opacity="0.35"/>
-<rect x="230.1" y="343" width="60.2" height="16" rx="4" fill="none" stroke="#9aa1a9" stroke-dasharray="4 3"/>
-<text x="298.3" y="355" font-size="12" fill="#59636e">100–250 MB (their claim, needs Premium)</text>
-<text x="0" y="404" font-size="15" font-weight="600" fill="#1f2328">CPU</text>
-<text x="178" y="437" font-size="13" text-anchor="end" font-weight="600" fill="#1f2328">Tonal (waves off)</text>
-<rect x="190" y="425" width="540" height="16" rx="4" fill="#d8dee4" opacity="0.35"/>
-<rect x="190" y="425" width="4.2" height="16" rx="4" fill="#1a7f37"/>
-<text x="202.2" y="437" font-size="12" font-weight="600" fill="#1f2328">0.5 %</text>
-<text x="178" y="467" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">Amberol</text>
+<rect x="190" y="343" width="514.3" height="16" rx="4" fill="#9aa1a9"/>
+<text x="712.3" y="355" font-size="12" font-weight="400" fill="#59636e">1282 MB</text>
+<text x="178" y="385" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">Spotifast</text>
+<rect x="190" y="373" width="540" height="16" rx="4" fill="#d8dee4" opacity="0.35"/>
+<rect x="230.1" y="373" width="60.2" height="16" rx="4" fill="none" stroke="#9aa1a9" stroke-dasharray="4 3"/>
+<text x="298.3" y="385" font-size="12" fill="#59636e">100–250 MB (their claim, needs Premium)</text>
+<text x="0" y="434" font-size="15" font-weight="600" fill="#1f2328">CPU</text>
+<text x="178" y="467" font-size="13" text-anchor="end" font-weight="600" fill="#1f2328">Tonal (waves off)</text>
 <rect x="190" y="455" width="540" height="16" rx="4" fill="#d8dee4" opacity="0.35"/>
-<rect x="190" y="455" width="7.0" height="16" rx="4" fill="#9aa1a9"/>
-<text x="205.0" y="467" font-size="12" font-weight="400" fill="#59636e">0.8 %</text>
-<text x="178" y="497" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">Strawberry</text>
+<rect x="190" y="455" width="4.6" height="16" rx="4" fill="#1a7f37"/>
+<text x="202.6" y="467" font-size="12" font-weight="600" fill="#1f2328">0.5 %</text>
+<text x="178" y="497" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">Amberol</text>
 <rect x="190" y="485" width="540" height="16" rx="4" fill="#d8dee4" opacity="0.35"/>
-<rect x="190" y="485" width="15.1" height="16" rx="4" fill="#9aa1a9"/>
-<text x="213.1" y="497" font-size="12" font-weight="400" fill="#59636e">1.8 %</text>
-<text x="178" y="527" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">Spotify</text>
+<rect x="190" y="485" width="7.0" height="16" rx="4" fill="#9aa1a9"/>
+<text x="205.0" y="497" font-size="12" font-weight="400" fill="#59636e">0.8 %</text>
+<text x="178" y="527" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">Strawberry</text>
 <rect x="190" y="515" width="540" height="16" rx="4" fill="#d8dee4" opacity="0.35"/>
-<rect x="190" y="515" width="22.9" height="16" rx="4" fill="#9aa1a9"/>
-<text x="220.9" y="527" font-size="12" font-weight="400" fill="#59636e">2.7 %</text>
-<text x="178" y="557" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">Tauon</text>
+<rect x="190" y="515" width="15.1" height="16" rx="4" fill="#9aa1a9"/>
+<text x="213.1" y="527" font-size="12" font-weight="400" fill="#59636e">1.8 %</text>
+<text x="178" y="557" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">Spotify</text>
 <rect x="190" y="545" width="540" height="16" rx="4" fill="#d8dee4" opacity="0.35"/>
-<rect x="190" y="545" width="25.5" height="16" rx="4" fill="#9aa1a9"/>
-<text x="223.5" y="557" font-size="12" font-weight="400" fill="#59636e">3.0 %</text>
-<text x="178" y="587" font-size="13" text-anchor="end" font-weight="600" fill="#1f2328">Tonal</text>
+<rect x="190" y="545" width="22.9" height="16" rx="4" fill="#9aa1a9"/>
+<text x="220.9" y="557" font-size="12" font-weight="400" fill="#59636e">2.7 %</text>
+<text x="178" y="587" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">Tauon</text>
 <rect x="190" y="575" width="540" height="16" rx="4" fill="#d8dee4" opacity="0.35"/>
-<rect x="190" y="575" width="52.0" height="16" rx="4" fill="#1a7f37"/>
-<text x="250.0" y="587" font-size="12" font-weight="600" fill="#1f2328">6.2 %</text>
-<text x="178" y="617" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">YouTube Music (Pear)</text>
+<rect x="190" y="575" width="25.5" height="16" rx="4" fill="#9aa1a9"/>
+<text x="223.5" y="587" font-size="12" font-weight="400" fill="#59636e">3.0 %</text>
+<text x="178" y="617" font-size="13" text-anchor="end" font-weight="600" fill="#1f2328">Tonal</text>
 <rect x="190" y="605" width="540" height="16" rx="4" fill="#d8dee4" opacity="0.35"/>
-<rect x="190" y="605" width="88.3" height="16" rx="4" fill="#9aa1a9"/>
-<text x="286.3" y="617" font-size="12" font-weight="400" fill="#59636e">10.4 %</text>
-<text x="178" y="647" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">Riff</text>
+<rect x="190" y="605" width="50.0" height="16" rx="4" fill="#1a7f37"/>
+<text x="248.0" y="617" font-size="12" font-weight="600" fill="#1f2328">5.9 %</text>
+<text x="178" y="647" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">YouTube Music (Pear)</text>
 <rect x="190" y="635" width="540" height="16" rx="4" fill="#d8dee4" opacity="0.35"/>
-<rect x="190" y="635" width="514.3" height="16" rx="4" fill="#9aa1a9"/>
-<text x="712.3" y="647" font-size="12" font-weight="400" fill="#59636e">60.8 %</text>
+<rect x="190" y="635" width="88.3" height="16" rx="4" fill="#9aa1a9"/>
+<text x="286.3" y="647" font-size="12" font-weight="400" fill="#59636e">10.4 %</text>
+<text x="178" y="677" font-size="13" text-anchor="end" font-weight="600" fill="#1f2328">Tonal (live theme)</text>
+<rect x="190" y="665" width="540" height="16" rx="4" fill="#d8dee4" opacity="0.35"/>
+<rect x="190" y="665" width="170.1" height="16" rx="4" fill="#1a7f37"/>
+<text x="368.1" y="677" font-size="12" font-weight="600" fill="#1f2328">20.1 %</text>
+<text x="178" y="707" font-size="13" text-anchor="end" font-weight="400" fill="#1f2328">Riff</text>
+<rect x="190" y="695" width="540" height="16" rx="4" fill="#d8dee4" opacity="0.35"/>
+<rect x="190" y="695" width="514.3" height="16" rx="4" fill="#9aa1a9"/>
+<text x="712.3" y="707" font-size="12" font-weight="400" fill="#59636e">60.8 %</text>
 </svg>

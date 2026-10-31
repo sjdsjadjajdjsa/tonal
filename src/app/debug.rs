@@ -81,6 +81,9 @@ pub(super) fn debug_hooks(app: &Controller, window: &AppWindow) {
         window.set_source(source);
         app.search(query, source, true);
     }
+    if let Ok(preset) = std::env::var("TONAL_DEBUG_EQ") {
+        app.eq_choose(&preset);
+    }
     if let Ok(theme) = std::env::var("TONAL_DEBUG_THEME") {
         app.theme_action("apply", &format!("g:{theme}"));
     }

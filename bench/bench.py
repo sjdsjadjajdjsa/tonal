@@ -28,7 +28,7 @@ PLAY = 30
 TICK = os.sysconf("SC_CLK_TCK")
 
 
-def tonal_env(waves=True):
+def tonal_env(settings=None):
     mpv = Path("/tmp/bench/mpv")
     mpv.mkdir(parents=True, exist_ok=True)
     (mpv / "mpv.conf").write_text(f"audio-device=pipewire/{SINK}\n")
@@ -36,15 +36,15 @@ def tonal_env(waves=True):
     subprocess.run(["rm", "-rf", str(data)])
     data.mkdir(parents=True)
     env = {"MPV_HOME": str(mpv), "XDG_DATA_HOME": str(data)}
-    if not waves:
-        # Let Tonal create its library, then turn the visualizer off in its settings.
+    if settings is not None:
+        # Let Tonal create its library, then write the settings under test.
         first = subprocess.Popen(PLAYERS["Tonal"]["cmd"], env=dict(os.environ, **env),
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(5)
         first.terminate()
         first.wait()
         db = data / "tonal/library.db"
-        subprocess.run(["sqlite3", str(db), "DELETE FROM kv; INSERT INTO kv VALUES ('settings', '{\"visualizer\":false}')"])
+        subprocess.run(["sqlite3", str(db), "DELETE FROM kv; INSERT INTO kv VALUES ('settings', '" + json.dumps(settings).replace("'", "''") + "')"])
     return env
 
 
@@ -58,7 +58,15 @@ PLAYERS = {
     },
     "Tonal (waves off)": {
         "cmd": [os.environ.get("TONAL_BIN", str(ROOT / "target/release/tonal"))],
-        "env": lambda: tonal_env(waves=False),
+        "env": lambda: tonal_env({"visualizer": False}),
+        "play_env": {"TONAL_DEBUG_SOURCE": "2", "TONAL_DEBUG_QUERY": "lofi chill"},
+        "mpris": "tonal",
+        "streams": True,
+    },
+    "Tonal (live theme)": {
+        "cmd": [os.environ.get("TONAL_BIN", str(ROOT / "target/release/tonal"))],
+        "env": lambda: tonal_env({"theme": {"name": "Northern lights", "scene": "Aurora", "palette": "Boreal",
+                                            "style": "Glass", "react": "Pulse", "seed": 11, "fps": 15}}),
         "play_env": {"TONAL_DEBUG_SOURCE": "2", "TONAL_DEBUG_QUERY": "lofi chill"},
         "mpris": "tonal",
         "streams": True,
