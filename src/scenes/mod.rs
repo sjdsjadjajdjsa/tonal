@@ -3,7 +3,7 @@ mod painters;
 #[cfg(test)]
 mod tests;
 
-use draw::{hex, rand, shift_hue, Canvas, C};
+use draw::{C, Canvas, hex, rand, shift_hue};
 use serde::{Deserialize, Serialize};
 use slint::{Rgb8Pixel, Rgba8Pixel, SharedPixelBuffer};
 

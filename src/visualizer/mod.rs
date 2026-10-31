@@ -39,7 +39,12 @@ pub fn levels() -> [f32; 4] {
 
 fn publish(levels: &[f32; BANDS], energy: f32) {
     let mean = |r: std::ops::Range<usize>| levels[r.clone()].iter().sum::<f32>() / r.len() as f32;
-    let values = [mean(0..6), mean(6..18), mean(18..BANDS), (energy * 4.0).min(1.0)];
+    let values = [
+        mean(0..6),
+        mean(6..18),
+        mean(18..BANDS),
+        (energy * 4.0).min(1.0),
+    ];
     for (slot, v) in LEVELS.iter().zip(values) {
         slot.store(v.to_bits(), Ordering::Relaxed);
     }

@@ -14,10 +14,63 @@ fn open_now_playing(weak: slint::Weak<AppWindow>, tries: u32) {
     });
 }
 
+/// Fills an empty library for screenshots: "# Name" starts a playlist, every other line is a
+/// YouTube Music search whose top hit goes in it, gets played once and every third one liked.
+fn demo_library(app: Controller, file: String) {
+    tokio::spawn(async move {
+        let Ok(text) = std::fs::read_to_string(&file) else {
+            return;
+        };
+        let mut playlist = None;
+        for (n, line) in text
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .enumerate()
+        {
+            if let Some(name) = line.strip_prefix("# ") {
+                playlist = app.result(app.library.create_playlist(name, None));
+                continue;
+            }
+            let found = crate::sources::search(crate::model::SourceKind::YouTube, line, 1).await;
+            let Some(track) = app.result(found).and_then(|t| t.into_iter().next()) else {
+                continue;
+            };
+            app.result(app.library.upsert_tracks(std::slice::from_ref(&track)));
+            if let Some(id) = playlist {
+                app.result(
+                    app.library
+                        .add_to_playlist(id, std::slice::from_ref(&track)),
+                );
+            }
+            app.result(app.library.record_play(&track));
+            if n % 3 == 0 {
+                app.result(app.library.set_liked(&track, true));
+            }
+            if let Some(art) = &track.artwork_url {
+                let _ = crate::artwork::load(art, 88).await;
+            }
+        }
+        app.refresh_playlists();
+        app.load_page("Home");
+        log::info!("Demo library ready");
+    });
+}
+
 pub(super) fn debug_hooks(app: &Controller, window: &AppWindow) {
+    if let Ok(file) = std::env::var("TONAL_DEBUG_DEMO") {
+        demo_library(app.clone(), file);
+    }
     if let Ok(dir) = std::env::var("TONAL_DEBUG_MUSIC") {
         app.state.lock().settings.music_dirs = vec![dir.into()];
         app.command("rescan");
+    }
+    if let Some(id) = std::env::var("TONAL_DEBUG_PLAYLIST")
+        .ok()
+        .and_then(|v| v.parse().ok())
+    {
+        app.playlist(id);
+        app.play(0);
     }
     if let Ok(query) = std::env::var("TONAL_DEBUG_QUERY") {
         let source = std::env::var("TONAL_DEBUG_SOURCE")
@@ -36,6 +89,7 @@ pub(super) fn debug_hooks(app: &Controller, window: &AppWindow) {
     }
     if let Ok(view) = std::env::var("TONAL_DEBUG_VIEW") {
         match view.as_str() {
+            "home" => app.load_page("Home"),
             "mini" | "queue" | "lyrics" | "eq" => app.command(&view),
             "settings" => app.load_page("Settings"),
             "themes" => app.load_page("Themes"),
@@ -57,13 +111,6 @@ pub(super) fn debug_hooks(app: &Controller, window: &AppWindow) {
             }
             _ => {}
         }
-    }
-    if let Some(id) = std::env::var("TONAL_DEBUG_PLAYLIST")
-        .ok()
-        .and_then(|v| v.parse().ok())
-    {
-        app.playlist(id);
-        app.play(0);
     }
     let source = match std::env::var("TONAL_DEBUG_SOURCE").as_deref() {
         Ok("1") => crate::model::SourceKind::SoundCloud,

@@ -28,6 +28,7 @@ Most music apps are a web browser in disguise. Tonal draws its own window with [
 - **Album grid:** browse your local files as albums, sorted by artist, year or recently added.
 - **Listening stats:** your top artists and albums this month and of all time, on Home. They never leave your computer.
 - **Album colors:** the waves and the equalizer take a soft color from the cover.
+- **Living themes:** 15 animated background scenes (aurora, dunes, ocean tide, misty pines, liquid glass, synthwave, sakura petals, city rain and more), 18 color palettes, endless seed variants that can crossfade on a timer, four panel styles (Clear, Glass, Neon, Solid) and optional music reactivity. The default Classic look paints nothing and costs 0% CPU.
 - **Flowing visualizer:** a soft wave across the bottom of the window that moves with the music. It only runs while something plays, and settles into a still line when you pause.
 - **Equalizer:** drag six points on a smooth curve, or pick a preset. Hold the compare button to hear the song without it.
 - **Good playback:** gapless, crossfade, volume levelling, shuffle and repeat, all done by mpv.
@@ -39,21 +40,21 @@ Most music apps are a web browser in disguise. Tonal draws its own window with [
 
 ## Screenshots
 
-| Home | Search |
+| Home | Themes |
 | --- | --- |
-| ![Home with recently played songs and the playlists in the sidebar](docs/images/home.webp) | ![Search results from Audius for "lofi house"](docs/images/search.webp) |
+| ![Home with recently played songs over the Liquid glass theme](docs/images/home.webp) | ![The theme browser and customizer over the Outrun synthwave scene](docs/images/themes.webp) |
 
-| Artist | Album |
+| Search | Artist |
 | --- | --- |
-| ![An artist page with the photo, popular songs and album covers](docs/images/artist.webp) | ![An album page with the cover, year, length and every track](docs/images/album.webp) |
+| ![Search results from YouTube Music for Daft Punk](docs/images/search.webp) | ![The Weeknd artist page over the Golden hour dunes scene](docs/images/artist.webp) |
 
-| Queue | Settings |
+| Album | Queue |
 | --- | --- |
-| ![A playlist playing with the queue panel open on the right](docs/images/queue.webp) | ![Settings grouped into Playback and Library cards with switches](docs/images/settings.webp) |
+| ![Daft Punk Random Access Memories album page over Sakura drift](docs/images/album.webp) | ![A playlist playing with the queue panel open over City rain](docs/images/queue.webp) |
 
-**Mini player:** the controls and the visualizer in a small window.
-
-![The mini player with artwork, controls, progress and the wave visualizer](docs/images/mini.webp)
+| Settings | Mini player |
+| --- | --- |
+| ![Settings grouped into Playback and Library cards](docs/images/settings.webp) | ![The mini player with artwork, controls, progress and the wave visualizer](docs/images/mini.webp) |
 
 ## Install
 

@@ -1,5 +1,5 @@
-use crate::visualizer::Visualizer;
 use crate::AppWindow;
+use crate::visualizer::Visualizer;
 use slint::{ComponentHandle, Timer, TimerMode};
 use std::cell::RefCell;
 use std::time::{Duration, Instant};

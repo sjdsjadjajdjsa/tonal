@@ -173,7 +173,8 @@ fn run(e: Arc<Engine>, weak: slint::Weak<AppWindow>) {
             fresh = false;
         }
         if let Some(h) = &hover {
-            let pixels = scenes::thumbnail(&h.look, h.size.0, h.size.1, time, h.size.0 as f32 * 0.07);
+            let pixels =
+                scenes::thumbnail(&h.look, h.size.0, h.size.1, time, h.size.0 as f32 * 0.07);
             post_thumb(&weak, h.saved, h.index, pixels);
             fresh = false;
         }
@@ -319,7 +320,11 @@ impl Controller {
             wanted: Mutex::new(Wanted {
                 look: look.clone(),
                 generation: 0,
-                size: if size.width < 64 { (1240, 780) } else { (size.width, size.height) },
+                size: if size.width < 64 {
+                    (1240, 780)
+                } else {
+                    (size.width, size.height)
+                },
                 hover: None,
             }),
             wake: Condvar::new(),
@@ -343,7 +348,10 @@ impl Controller {
         st.set_react(look.react.index() as i32);
         let fps = scenes::FPS.iter().position(|f| *f == look.fps).unwrap_or(1);
         st.set_fps(fps as i32);
-        let every = scenes::INTERVALS.iter().position(|m| *m == look.rotate_minutes).unwrap_or(2);
+        let every = scenes::INTERVALS
+            .iter()
+            .position(|m| *m == look.rotate_minutes)
+            .unwrap_or(2);
         st.set_interval(every as i32);
         st.set_speed(look.speed);
         st.set_strength(look.strength);
@@ -353,12 +361,18 @@ impl Controller {
         st.set_rotate(look.rotate);
         let (accent, saved, paused) = {
             let s = self.state.lock();
-            (accent(&s.settings), s.settings.saved_themes.clone(), s.paused)
+            (
+                accent(&s.settings),
+                s.settings.saved_themes.clone(),
+                s.paused,
+            )
         };
         mark(st.get_gallery(), &scenes::gallery(), look);
         mark(st.get_saved(), &saved, look);
         apply_style(w, look.style, accent);
-        let listening = look.scene != Scene::Classic && look.react != React::Off && crate::visualizer::available();
+        let listening = look.scene != Scene::Classic
+            && look.react != React::Off
+            && crate::visualizer::available();
         if st.get_listening() != listening {
             st.set_listening(listening);
             super::waves::set_playing(w, !paused);
@@ -385,12 +399,21 @@ impl Controller {
         match action {
             "scene" => {
                 let scene = Scene::at(index);
-                if look.scene == Scene::Classic && look.palette == "Mono" && scene != Scene::Classic {
-                    look.palette = scenes::PALETTES[1 + index as usize % (scenes::PALETTES.len() - 1)].name.into();
+                if look.scene == Scene::Classic && look.palette == "Mono" && scene != Scene::Classic
+                {
+                    look.palette = scenes::PALETTES
+                        [1 + index as usize % (scenes::PALETTES.len() - 1)]
+                        .name
+                        .into();
                 }
                 look.scene = scene;
             }
-            "palette" => look.palette = scenes::PALETTES[(index.max(0) as usize).min(scenes::PALETTES.len() - 1)].name.into(),
+            "palette" => {
+                look.palette = scenes::PALETTES
+                    [(index.max(0) as usize).min(scenes::PALETTES.len() - 1)]
+                .name
+                .into()
+            }
             "style" => look.style = Style::at(index),
             "react" => look.react = React::at(index),
             "fps" => look.fps = scenes::FPS[(index.max(0) as usize).min(2)],
@@ -430,7 +453,9 @@ impl Controller {
     fn theme_delete(&self, index: i32) {
         let removed = {
             let mut s = self.state.lock();
-            let i = usize::try_from(index).ok().filter(|i| *i < s.settings.saved_themes.len());
+            let i = usize::try_from(index)
+                .ok()
+                .filter(|i| *i < s.settings.saved_themes.len());
             i.map(|i| s.settings.saved_themes.remove(i))
         };
         let Some(gone) = removed else { return };
@@ -448,16 +473,25 @@ impl Controller {
         let size = self.thumb_size();
         let mut wanted = e.wanted.lock();
         if let Some(left) = value.strip_prefix('-') {
-            let same = wanted.hover.as_ref().is_some_and(|h| left == format!("{}:{}", if h.saved { "s" } else { "g" }, h.index));
+            let same = wanted.hover.as_ref().is_some_and(|h| {
+                left == format!("{}:{}", if h.saved { "s" } else { "g" }, h.index)
+            });
             if same {
                 wanted.hover = None;
             }
             return;
         }
-        let Some(look) = self.theme_pick(value) else { return };
+        let Some(look) = self.theme_pick(value) else {
+            return;
+        };
         let saved = value.starts_with('s');
         let index = value[2..].parse().unwrap_or(0);
-        wanted.hover = Some(Hover { saved, index, look, size });
+        wanted.hover = Some(Hover {
+            saved,
+            index,
+            look,
+            size,
+        });
         wanted.generation += 1;
         e.wake.notify_one();
     }
@@ -465,7 +499,12 @@ impl Controller {
         let (width, scale) = self
             .window
             .upgrade()
-            .map(|w| (w.global::<ThemeStudio>().get_tile_width(), w.window().scale_factor()))
+            .map(|w| {
+                (
+                    w.global::<ThemeStudio>().get_tile_width(),
+                    w.window().scale_factor(),
+                )
+            })
             .unwrap_or((200.0, 1.0));
         let w = (width.max(80.0) * scale).round() as u32;
         (w, (w as f32 * 0.6).round() as u32)
@@ -475,15 +514,17 @@ impl Controller {
         let saved = self.state.lock().settings.saved_themes.clone();
         let weak = self.window.clone();
         let radius = 14.0 * w as f32 / 200.0;
-        let _ = std::thread::Builder::new().name("theme-thumbs".into()).spawn(move || {
-            let lists = [(false, scenes::gallery()), (true, saved)];
-            for (is_saved, looks) in lists {
-                for (i, look) in looks.iter().enumerate() {
-                    let pixels = scenes::thumbnail(look, w, h, 24.0, radius);
-                    post_thumb(&weak, is_saved, i, pixels);
+        let _ = std::thread::Builder::new()
+            .name("theme-thumbs".into())
+            .spawn(move || {
+                let lists = [(false, scenes::gallery()), (true, saved)];
+                for (is_saved, looks) in lists {
+                    for (i, look) in looks.iter().enumerate() {
+                        let pixels = scenes::thumbnail(look, w, h, 24.0, radius);
+                        post_thumb(&weak, is_saved, i, pixels);
+                    }
                 }
-            }
-        });
+            });
     }
     pub fn theme_save(&self, name: &str) {
         let (current, saved) = {

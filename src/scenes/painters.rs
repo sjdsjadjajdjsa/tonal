@@ -1,5 +1,5 @@
-use super::draw::*;
 use super::Ctx;
+use super::draw::*;
 
 /// Stars that twinkle, brighter with the highs.
 fn stars(x: usize, y: usize, v: f32, k: &Ctx, below: f32) -> f32 {
