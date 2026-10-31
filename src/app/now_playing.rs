@@ -74,6 +74,7 @@ impl Controller {
         let Some((id, url)) = track.and_then(|t| Some((t.id.clone(), t.artwork_url.clone()?)))
         else {
             self.ui(|w| w.set_album_tint(false));
+            self.theme_album(None);
             return;
         };
         let this = self.clone();
@@ -81,6 +82,9 @@ impl Controller {
             let color = crate::artwork::color(&url).await;
             log::debug!("Album color {color:?} for {url}");
             let state = this.state.clone();
+            if state.lock().current.as_ref().is_some_and(|t| t.id == id) {
+                this.theme_album(color);
+            }
             this.ui(move |w| {
                 if !state.lock().current.as_ref().is_some_and(|t| t.id == id) {
                     return;

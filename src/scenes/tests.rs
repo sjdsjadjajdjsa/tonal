@@ -1,6 +1,38 @@
 use super::*;
 
 #[test]
+fn share_codes_round_trip_and_reject_junk() {
+    for look in gallery() {
+        let back = Preset::from_code(&look.to_code()).expect("code reads back");
+        assert_eq!(back, look, "{}", look.name);
+    }
+    assert!(Preset::from_code("hello").is_none());
+    assert!(Preset::from_code("tonal1.99.0.0.0.1.100.60.30.35.15.0.15:x").is_none());
+}
+
+#[test]
+fn album_palette_follows_the_cover() {
+    let look = Preset {
+        palette: ALBUM.into(),
+        scene: Scene::Bloom,
+        ..Preset::default()
+    };
+    let red = Preset {
+        tint: Some([200, 30, 30]),
+        ..look.clone()
+    }
+    .colors();
+    let blue = Preset {
+        tint: Some([30, 60, 200]),
+        ..look
+    }
+    .colors();
+    assert!(red[3][0] > red[3][2], "red cover gives red tones");
+    assert!(blue[3][2] > blue[3][0], "blue cover gives blue tones");
+    assert!(red[0].iter().all(|c| *c < 0.2), "darkest step stays dark");
+}
+
+#[test]
 fn gallery_paints_every_scene_with_variety() {
     let (w, h) = (480u32, 300u32);
     let looks = gallery();

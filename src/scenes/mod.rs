@@ -86,7 +86,45 @@ pub const PALETTES: &[Palette] = &[
         name: "Lavender",
         colors: [0x0f0b1a, 0x2a1f45, 0x6c5ba7, 0xb9a7ff, 0xf0e8ff],
     },
+    Palette {
+        name: ALBUM,
+        colors: [0x0d0d12, 0x262433, 0x5f5a7a, 0xa9a3c9, 0xeeeaf8],
+    },
 ];
+
+/// The palette that takes its colours from the playing song's cover.
+pub const ALBUM: &str = "From the album";
+
+static ALBUM_TINT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(u32::MAX);
+
+/// Records the playing song's cover colour, or none.
+pub fn set_album_tint(rgb: Option<[u8; 3]>) {
+    let packed = rgb.map_or(u32::MAX, |[r, g, b]| u32::from_be_bytes([0, r, g, b]));
+    ALBUM_TINT.store(packed, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn album_tint() -> Option<[u8; 3]> {
+    let packed = ALBUM_TINT.load(std::sync::atomic::Ordering::Relaxed);
+    let [_, r, g, b] = packed.to_be_bytes();
+    (packed != u32::MAX).then_some([r, g, b])
+}
+
+/// Five steps from near black to a pale tint, all in the cover's hue.
+fn album_colors(rgb: [u8; 3]) -> [C; 5] {
+    let mut c = rgb.map(|v| f32::from(v) / 255.0);
+    let top = c.iter().fold(0.0f32, |a, &b| a.max(b));
+    if top < 0.6 {
+        c = draw::scale(c, 0.6 / top.max(0.05));
+    }
+    let white = [1.0; 3];
+    [
+        draw::scale(c, 0.07),
+        draw::scale(c, 0.24),
+        draw::scale(c, 0.58),
+        draw::mix(c, white, 0.12),
+        draw::mix(c, white, 0.68),
+    ]
+}
 
 pub fn palette_index(name: &str) -> usize {
     PALETTES.iter().position(|p| p.name == name).unwrap_or(0)
@@ -177,6 +215,9 @@ pub struct Preset {
     pub rotate: bool,
     pub rotate_minutes: u32,
     pub fps: u32,
+    /// The cover colour this look was painted with, for the album palette.
+    #[serde(skip)]
+    pub tint: Option<[u8; 3]>,
 }
 
 impl Default for Preset {
@@ -195,19 +236,90 @@ impl Default for Preset {
             rotate: false,
             rotate_minutes: 15,
             fps: 15,
+            tint: None,
         }
     }
 }
 
 impl Preset {
     pub fn colors(&self) -> [C; 5] {
+        if let Some(rgb) = self.album_rgb() {
+            return album_colors(rgb);
+        }
         let p = &PALETTES[palette_index(&self.palette)];
         let shift = (rand(self.seed.wrapping_mul(7919)) - 0.5) * 18.0;
         let light = 0.94 + rand(self.seed.wrapping_mul(104_729)) * 0.12;
         p.colors.map(|c| shift_hue(hex(c), shift, light))
     }
 
+    /// The cover colour to paint with, when this look uses the album palette.
+    fn album_rgb(&self) -> Option<[u8; 3]> {
+        (self.palette == ALBUM)
+            .then(|| self.tint.or_else(album_tint))
+            .flatten()
+    }
+
+    /// Reads a code from `to_code`; anything malformed gives `None`.
+    pub fn from_code(code: &str) -> Option<Preset> {
+        let (head, name) = code.trim().split_once(':')?;
+        let mut parts = head.strip_prefix("tonal1.")?.split('.');
+        let mut int = || parts.next()?.parse::<i64>().ok();
+        let scene = Scene::ALL.get(usize::try_from(int()?).ok()?).copied()?;
+        let palette = PALETTES.get(usize::try_from(int()?).ok()?)?.name;
+        let style = Style::ALL.get(usize::try_from(int()?).ok()?).copied()?;
+        let react = React::ALL.get(usize::try_from(int()?).ok()?).copied()?;
+        let seed = u32::try_from(int()?).ok()?;
+        let mut pct = || Some(int()? as f32 / 100.0);
+        let (speed, strength, dim, grain) = (pct()?, pct()?, pct()?, pct()?);
+        let mut int = || parts.next()?.parse::<u32>().ok();
+        let (fps, rotate, minutes) = (int()?, int()? == 1, int()?);
+        Some(Preset {
+            name: name.trim().chars().take(40).collect(),
+            scene,
+            palette: palette.into(),
+            style,
+            react,
+            seed,
+            speed: speed.clamp(0.0, 3.0),
+            strength: strength.clamp(0.0, 1.0),
+            dim: dim.clamp(0.0, 0.85),
+            grain: grain.clamp(0.0, 1.0),
+            rotate,
+            rotate_minutes: if INTERVALS.contains(&minutes) {
+                minutes
+            } else {
+                15
+            },
+            fps: if FPS.contains(&fps) { fps } else { 15 },
+            tint: None,
+        })
+    }
+
+    /// A short text code that holds everything but the cover colour.
+    pub fn to_code(&self) -> String {
+        let pct = |v: f32| (v * 100.0).round() as i32;
+        format!(
+            "tonal1.{}.{}.{}.{}.{}.{}.{}.{}.{}.{}.{}.{}:{}",
+            self.scene.index(),
+            palette_index(&self.palette),
+            self.style.index(),
+            self.react.index(),
+            self.seed,
+            pct(self.speed),
+            pct(self.strength),
+            pct(self.dim),
+            pct(self.grain),
+            self.fps,
+            u8::from(self.rotate),
+            self.rotate_minutes,
+            self.name
+        )
+    }
+
     pub fn accent(&self) -> [u8; 3] {
+        if let Some(rgb) = self.album_rgb() {
+            return album_colors(rgb)[4].map(|c| (c.clamp(0.0, 1.0) * 255.0) as u8);
+        }
         PALETTES[palette_index(&self.palette)].colors[4].to_be_bytes()[1..4]
             .try_into()
             .unwrap_or([236, 236, 238])
@@ -270,6 +382,8 @@ pub fn gallery() -> Vec<Preset> {
         look("Ribbons", Ribbons, "Cyber", Neon, Pulse, 23),
         look("Embers", Bloom, "Ember", Solid, Pulse, 31),
         look("Lavender haze", Aurora, "Lavender", Glass, Flow, 27),
+        look("Cover glow", Bloom, ALBUM, Glass, Pulse, 41),
+        look("Album waves", Ribbons, ALBUM, Clear, Flow, 43),
     ]
 }
 /// How loud the music is right now, already shaped by the theme's reaction.
