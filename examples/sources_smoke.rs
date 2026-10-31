@@ -9,6 +9,8 @@
 mod job;
 #[path = "../src/model.rs"]
 mod model;
+#[path = "../src/scenes/mod.rs"]
+mod scenes;
 #[path = "../src/sources/mod.rs"]
 mod sources;
 #[path = "../src/ytdl_wait.rs"]

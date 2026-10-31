@@ -1,6 +1,7 @@
 use rustfft::num_complex::Complex32;
 use rustfft::{Fft, FftPlanner};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 #[cfg(target_os = "macos")]
 mod macos;
@@ -28,6 +29,21 @@ const BANDS: usize = 36;
 const POINTS: usize = 40;
 const LOW_HZ: f32 = 35.0;
 const HIGH_HZ: f32 = 12_000.0;
+
+static LEVELS: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
+
+/// Bass, mids, highs and overall energy of what plays, each 0 to 1, for the themes.
+pub fn levels() -> [f32; 4] {
+    std::array::from_fn(|i| f32::from_bits(LEVELS[i].load(Ordering::Relaxed)))
+}
+
+fn publish(levels: &[f32; BANDS], energy: f32) {
+    let mean = |r: std::ops::Range<usize>| levels[r.clone()].iter().sum::<f32>() / r.len() as f32;
+    let values = [mean(0..6), mean(6..18), mean(18..BANDS), (energy * 4.0).min(1.0)];
+    for (slot, v) in LEVELS.iter().zip(values) {
+        slot.store(v.to_bits(), Ordering::Relaxed);
+    }
+}
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WaveFrame {
@@ -150,6 +166,7 @@ impl Visualizer {
             energy += *level;
         }
         self.energy = energy / BANDS as f32;
+        publish(&self.levels, self.energy);
         let mut blurred = self.levels;
         for _ in 0..3 {
             let src = blurred;

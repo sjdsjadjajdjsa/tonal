@@ -7,8 +7,9 @@ import { Dialog } from "dialogs.slint";
 import { ArtistView, AlbumView, AlbumGrid, StatsView, CardRow } from "browse.slint";
 import { EqPanel } from "equalizer.slint";
 import { NowPlayingView } from "now-playing.slint";
+import { ThemesView, ThemeStudio, ThemeCard, PaletteRow } from "themes.slint";
 
-export { TrackRow, PlaylistRow, SettingRow, LyricRow, CardRow, Theme }
+export { TrackRow, PlaylistRow, SettingRow, LyricRow, CardRow, Theme, ThemeStudio, ThemeCard, PaletteRow }
 
 export component AppWindow inherits Window {
     in property <string> window-title: "Tonal";
@@ -206,6 +207,38 @@ export component AppWindow inherits Window {
         }
     }
 
+    if ThemeStudio.on: Image {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        source: ThemeStudio.image;
+        image-fit: fill;
+    }
+    if ThemeStudio.on && ThemeStudio.style == 1 && !root.mini: Rectangle {
+        x: 0;
+        y: 0;
+        width: root.slim ? 68px : 232px;
+        height: bar.y;
+        clip: true;
+        Image { x: 0; y: 0; width: root.width; height: root.height; source: ThemeStudio.frost; image-fit: fill; }
+    }
+    if ThemeStudio.on && ThemeStudio.style == 1 && !root.mini: Rectangle {
+        x: 0;
+        y: bar.y;
+        width: root.width;
+        height: root.height - bar.y;
+        clip: true;
+        Image { x: 0; y: -bar.y; width: root.width; height: root.height; source: ThemeStudio.frost; image-fit: fill; }
+    }
+    if ThemeStudio.on && ThemeStudio.style == 1 && !root.mini && root.panel != "" && !root.now-open: Rectangle {
+        x: root.width - 320px;
+        y: 0;
+        width: 320px;
+        height: bar.y;
+        clip: true;
+        Image { x: -parent.x; y: 0; width: root.width; height: root.height; source: ThemeStudio.frost; image-fit: fill; }
+    }
     forward-focus: keys;
     keys := FocusScope {
         key-pressed(event) => {
@@ -225,6 +258,10 @@ export component AppWindow inherits Window {
             }
             if (event.modifiers.alt && event.text == Key.RightArrow) {
                 root.nav(1);
+                return accept;
+            }
+            if (event.text == Key.Escape && ThemeStudio.peek) {
+                ThemeStudio.peek = false;
                 return accept;
             }
             if (event.text == Key.Escape && root.dialog != "") {
@@ -468,7 +505,7 @@ export component AppWindow inherits Window {
                             empty-text: root.empty-text;
                             open(i) => { root.open-card("local-album", i); }
                         }
-                        if root.page != "Settings" && root.page != "Artist" && root.page != "Album" && !(root.page == "Home" && root.home-tab == 2) && !(root.page == "Local files" && root.local-view == 1): TrackList {
+                        if root.page != "Settings" && root.page != "Themes" && root.page != "Artist" && root.page != "Album" && !(root.page == "Home" && root.home-tab == 2) && !(root.page == "Local files" && root.local-view == 1): TrackList {
                             vertical-stretch: 1;
                             min-height: 120px;
                             tracks: root.tracks;
@@ -485,6 +522,15 @@ export component AppWindow inherits Window {
                             add-playlist(id) => { root.add-playlist(id); }
                             artist(i, w) => { root.open-artist("tracks", i, w); }
                             album(i) => { root.open-album("tracks", i); }
+                        }
+                        if root.page == "Themes": ThemesView {
+                            vertical-stretch: 1;
+                            min-height: 120px;
+                            save => {
+                                root.dialog-heading = "Save theme";
+                                root.dialog-value = ThemeStudio.name;
+                                root.dialog = "theme-save";
+                            }
                         }
                         if root.page == "Settings": SettingsView {
                             vertical-stretch: 1;
@@ -727,5 +773,18 @@ export component AppWindow inherits Window {
         value <=> root.dialog-value;
         dismiss => { root.dialog = ""; }
         submit(v) => { root.dialog-submit(v); }
+    }
+
+    if ThemeStudio.peek && ThemeStudio.on: Rectangle {
+        Image { width: root.width; height: root.height; source: ThemeStudio.image; image-fit: fill; }
+        TouchArea { clicked => { ThemeStudio.peek = false; } }
+        Rectangle {
+            y: root.height - 64px;
+            width: hint.preferred-width + 32px;
+            height: 32px;
+            border-radius: 16px;
+            background: #00000080;
+            hint := Label { text: "Click anywhere or press Esc to come back"; font-size: 12px; color: #ffffffd0; }
+        }
     }
 }

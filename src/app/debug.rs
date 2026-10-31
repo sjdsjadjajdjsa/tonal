@@ -28,6 +28,9 @@ pub(super) fn debug_hooks(app: &Controller, window: &AppWindow) {
         window.set_source(source);
         app.search(query, source, true);
     }
+    if let Ok(theme) = std::env::var("TONAL_DEBUG_THEME") {
+        app.theme_action("apply", &format!("g:{theme}"));
+    }
     if std::env::var_os("TONAL_DEBUG_RESCAN").is_some() {
         app.command("rescan");
     }
@@ -35,6 +38,7 @@ pub(super) fn debug_hooks(app: &Controller, window: &AppWindow) {
         match view.as_str() {
             "mini" | "queue" | "lyrics" | "eq" => app.command(&view),
             "settings" => app.load_page("Settings"),
+            "themes" => app.load_page("Themes"),
             "nowplaying" => open_now_playing(window.as_weak(), 40),
             "stats" | "stats-all" => {
                 let period = (view == "stats-all") as i32;

@@ -143,6 +143,7 @@ export component Sidebar inherits Rectangle {
                 }
             }
         }
+        NavItem { compact: root.compact; icon: Icons.palette; text: "Themes"; active: root.page == "Themes"; clicked => { root.navigate("Themes"); } }
         NavItem { compact: root.compact; icon: Icons.settings; text: "Settings"; active: root.page == "Settings"; clicked => { root.navigate("Settings"); } }
     }
 }

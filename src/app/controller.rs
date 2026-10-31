@@ -124,6 +124,7 @@ impl Controller {
             "Liked songs" => self.library.liked(),
             "Local files" => self.library.local_tracks(),
             "Downloads" => self.library.downloads(),
+            "Themes" => return self.theme_action("thumbs", ""),
             "Search" | "Settings" => return,
             _ => return,
         };

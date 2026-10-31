@@ -208,6 +208,8 @@ pub struct Settings {
     pub audio_device: String,
     pub replaygain: bool,
     pub bit_perfect: bool,
+    pub theme: crate::scenes::Preset,
+    pub saved_themes: Vec<crate::scenes::Preset>,
 }
 
 impl Default for Settings {
@@ -246,6 +248,8 @@ impl Default for Settings {
             audio_device: String::new(),
             replaygain: true,
             bit_perfect: false,
+            theme: crate::scenes::Preset::default(),
+            saved_themes: Vec::new(),
         }
     }
 }

@@ -203,6 +203,7 @@ impl Controller {
                 }
             }
             "import" => self.import_public(value.to_owned()),
+            "theme-save" if !value.trim().is_empty() => self.theme_save(value.trim()),
             _ => {
                 self.status("Enter a name first");
                 return;

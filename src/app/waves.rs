@@ -1,5 +1,5 @@
-use crate::AppWindow;
 use crate::visualizer::Visualizer;
+use crate::AppWindow;
 use slint::{ComponentHandle, Timer, TimerMode};
 use std::cell::RefCell;
 use std::time::{Duration, Instant};
@@ -17,7 +17,8 @@ thread_local! {
 }
 
 pub fn set_playing(window: &AppWindow, playing: bool) {
-    let playing = playing && window.get_waves();
+    let listening = window.global::<crate::ThemeStudio>().get_listening();
+    let playing = playing && (window.get_waves() || listening);
     WAVES.with(|cell| {
         let mut slot = cell.borrow_mut();
         if slot.is_none() {
@@ -75,6 +76,9 @@ fn tick(window: &AppWindow) {
             window.set_wave_glow(Default::default());
             window.set_wave_line(Default::default());
             window.set_eq_backdrop(Default::default());
+            return;
+        }
+        if !window.get_waves() {
             return;
         }
         window.set_wave_back(frame.back.into());

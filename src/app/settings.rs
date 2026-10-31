@@ -107,11 +107,9 @@ impl Controller {
             self.player.set_bit_perfect(settings.bit_perfect);
             crate::sources::set_cookies_browser(&settings.youtube_cookies);
             self.player.refresh_ytdl_options();
-            let color = parse_color(&settings.accent);
+            let color = super::themes::accent(&settings);
             self.ui(move |w| {
-                if let Some(color) = color {
-                    w.global::<crate::Theme>().set_accent(color);
-                }
+                w.global::<crate::Theme>().set_accent(color);
                 models::update(w.get_settings(), models::settings(&settings));
             });
         }

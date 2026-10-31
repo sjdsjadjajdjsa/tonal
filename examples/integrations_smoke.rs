@@ -7,6 +7,8 @@
 mod integrations;
 #[path = "../src/model.rs"]
 mod model;
+#[path = "../src/scenes/mod.rs"]
+mod scenes;
 
 use model::{SourceKind, Track};
 

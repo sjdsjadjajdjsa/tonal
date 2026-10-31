@@ -40,7 +40,7 @@ export component Dialog inherits Rectangle {
             }
             if root.kind != "delete": field := TextField {
                 text <=> root.value;
-                placeholder: root.kind == "import" ? "https://open.spotify.com/playlist/..." : "Playlist name";
+                placeholder: root.kind == "import" ? "https://open.spotify.com/playlist/..." : root.kind == "theme-save" ? "Theme name" : "Playlist name";
                 accepted(text) => { root.submit(text); }
                 init => { self.focus(); }
             }

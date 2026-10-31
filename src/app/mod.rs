@@ -12,6 +12,7 @@ mod playback;
 mod search;
 mod settings;
 mod state;
+mod themes;
 mod waves;
 
 use crate::{
@@ -103,9 +104,6 @@ pub fn run() -> anyhow::Result<()> {
         crate::model::SourceKind::Audius => 2,
         crate::model::SourceKind::Local => 3,
     });
-    if let Some(color) = controller::parse_color(&settings.accent) {
-        window.global::<crate::Theme>().set_accent(color);
-    }
     let weak = window.as_weak();
     #[cfg(windows)]
     let hwnd = {
@@ -213,6 +211,11 @@ pub fn run() -> anyhow::Result<()> {
     window.on_add_playlist(move |id| c.add_playlist(id as i64));
     let c = app.clone();
     window.on_command(move |command| c.command(&command));
+    app.themes_init(&window);
+    let c = app.clone();
+    window
+        .global::<crate::ThemeStudio>()
+        .on_action(move |action, value| c.theme_action(&action, &value));
     app.eq_init(&window);
     app.player.refresh_devices();
     let c = app.clone();

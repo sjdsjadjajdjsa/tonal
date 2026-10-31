@@ -1,0 +1,429 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme, Icons, Label, Icon, IconButton, Button, Segmented, Switch, Scrubber } from "theme.slint";
+
+export struct ThemeCard {
+    name: string,
+    detail: string,
+    thumb: image,
+    active: bool,
+}
+
+export struct PaletteRow {
+    name: string,
+    a: color,
+    b: color,
+    c: color,
+    d: color,
+    e: color,
+}
+
+/// The live background and the theme studio's editing state, shared with Rust.
+export global ThemeStudio {
+    in property <bool> on;
+    in property <image> image;
+    in property <image> frost;
+    in property <bool> listening;
+    in-out property <bool> peek;
+    in property <[string]> scenes;
+    in property <[PaletteRow]> palettes;
+    in property <[ThemeCard]> gallery;
+    in property <[ThemeCard]> saved;
+    in property <string> name;
+    in property <string> detail;
+    in-out property <int> scene;
+    in-out property <int> palette;
+    in-out property <int> style;
+    in-out property <int> react;
+    in-out property <int> fps;
+    in-out property <int> interval;
+    in-out property <float> speed;
+    in-out property <float> strength;
+    in-out property <float> dim;
+    in-out property <float> grain;
+    in-out property <int> seed;
+    in-out property <bool> rotate;
+    in-out property <length> tile-width: 200px;
+    callback action(string, string);
+}
+
+component Chip inherits Rectangle {
+    in property <string> text;
+    in property <bool> active;
+    callback clicked;
+    height: 32px;
+    border-radius: 16px;
+    background: root.active ? Theme.text : tap.has-hover ? Theme.hover : Theme.surface;
+    border-width: 1px;
+    border-color: root.active ? transparent : Theme.border;
+    animate background { duration: 120ms; }
+    Label {
+        text: root.text;
+        font-size: 12.5px;
+        font-weight: 600;
+        horizontal-alignment: center;
+        color: root.active ? Theme.on-accent : Theme.text;
+    }
+    tap := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+component Swatch inherits Rectangle {
+    in property <PaletteRow> colors;
+    in property <bool> active;
+    callback clicked;
+    height: 36px;
+    border-radius: 18px;
+    background: tap.has-hover ? Theme.hover : Theme.surface;
+    border-width: root.active ? 2px : 1px;
+    border-color: root.active ? Theme.text : Theme.border;
+    animate background { duration: 120ms; }
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 12px;
+        spacing: 8px;
+        Rectangle {
+            width: 58px;
+            for c[i] in [root.colors.a, root.colors.b, root.colors.c, root.colors.d, root.colors.e]: Rectangle {
+                x: i * 10px;
+                y: (parent.height - 18px) / 2;
+                width: 18px;
+                height: 18px;
+                border-radius: 9px;
+                background: c;
+                border-width: 1.5px;
+                border-color: Theme.popup;
+            }
+        }
+        Label {
+            text: root.colors.name;
+            font-size: 12px;
+            font-weight: 600;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+    tap := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+component Tile inherits Rectangle {
+    in property <ThemeCard> card;
+    in property <bool> removable;
+    callback apply;
+    callback hover(bool);
+    callback remove;
+    private property <length> art: root.width * 0.6;
+    height: root.art + 46px;
+    Image {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.art;
+        source: root.card.thumb;
+        image-fit: fill;
+    }
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.art;
+        border-radius: Theme.radius-l;
+        border-width: root.card.active ? 2px : 1px;
+        border-color: root.card.active ? Theme.text : tap.has-hover ? Theme.hover.with-alpha(0.6) : Theme.border;
+        animate border-color { duration: 140ms; }
+    }
+    Label {
+        x: 2px;
+        y: root.art + 9px;
+        width: root.width - 4px;
+        text: root.card.name;
+        font-size: 13px;
+        font-weight: 600;
+        overflow: elide;
+    }
+    Label {
+        x: 2px;
+        y: root.art + 27px;
+        width: root.width - 4px;
+        text: root.card.detail;
+        font-size: 11.5px;
+        color: Theme.muted;
+        overflow: elide;
+    }
+    tap := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.apply(); }
+        changed has-hover => { root.hover(self.has-hover); }
+    }
+    if root.removable: IconButton {
+        x: root.width - self.width - 6px;
+        y: 6px;
+        size: 26px;
+        icon-size: 13px;
+        icon: Icons.close;
+        tint: Theme.text;
+        clicked => { root.remove(); }
+    }
+    if root.card.active: Rectangle {
+        x: 8px;
+        y: 8px;
+        width: 22px;
+        height: 22px;
+        border-radius: 11px;
+        background: Theme.text;
+        Icon { data: Icons.check; width: 12px; height: 12px; tint: Theme.on-accent; }
+    }
+}
+component Row inherits HorizontalLayout {
+    in property <string> label;
+    spacing: 16px;
+    VerticalLayout {
+        alignment: start;
+        padding-top: 8px;
+        Label {
+            width: 104px;
+            text: root.label;
+            font-size: 12.5px;
+            font-weight: 600;
+            color: Theme.muted;
+        }
+    }
+    @children
+}
+component TileGrid inherits Rectangle {
+    in property <[ThemeCard]> cards;
+    in property <bool> removable;
+    in property <length> avail;
+    callback apply(int);
+    callback hover(int, bool);
+    callback remove(int);
+    private property <length> gap: 16px;
+    private property <int> cols: max(1, floor((root.avail + root.gap) / (184px + root.gap)));
+    private property <length> tile: (root.avail - (root.cols - 1) * root.gap) / root.cols;
+    private property <length> step: root.tile * 0.6 + 46px + root.gap;
+    height: ceil(root.cards.length / root.cols) * root.step - root.gap;
+    changed tile => { ThemeStudio.tile-width = root.tile; }
+    init => { ThemeStudio.tile-width = root.tile; }
+    for card[i] in root.cards: Tile {
+        x: mod(i, root.cols) * (root.tile + root.gap);
+        y: floor(i / root.cols) * root.step;
+        width: root.tile;
+        card: card;
+        removable: root.removable;
+        apply => { root.apply(i); }
+        hover(on) => { root.hover(i, on); }
+        remove => { root.remove(i); }
+    }
+}
+component Slider inherits Row {
+    in property <float> value;
+    in property <string> key;
+    in property <string> shown;
+    HorizontalLayout {
+        spacing: 12px;
+        padding-top: 8px;
+        Scrubber {
+            live: true;
+            value: root.value;
+            changed(v) => { ThemeStudio.action(root.key, "\{v}"); }
+        }
+        Label {
+            width: 44px;
+            text: root.shown;
+            font-size: 12px;
+            color: Theme.muted;
+            horizontal-alignment: right;
+        }
+    }
+}
+
+export component ThemesView inherits Rectangle {
+    callback save;
+    private property <length> inner: root.width - 14px;
+    private property <length> field: root.inner - 36px - 120px;
+    ScrollView {
+        VerticalLayout {
+            alignment: start;
+            padding-right: 14px;
+            padding-bottom: 32px;
+            spacing: 22px;
+            HorizontalLayout {
+                spacing: 8px;
+                VerticalLayout {
+                    alignment: center;
+                    horizontal-stretch: 1;
+                    spacing: 2px;
+                    Label { text: ThemeStudio.name; font-size: 17px; font-weight: 700; overflow: elide; }
+                    Label { text: ThemeStudio.detail; font-size: 12px; color: Theme.muted; overflow: elide; }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    Button { text: "Surprise me"; icon: Icons.sparkle; clicked => { ThemeStudio.action("random", ""); } }
+                }
+                if ThemeStudio.on: VerticalLayout {
+                    alignment: center;
+                    Button { text: "Peek"; icon: Icons.eye; clicked => { ThemeStudio.peek = true; } }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    Button { text: "Save"; icon: Icons.plus; primary: true; clicked => { root.save(); } }
+                }
+            }
+            if ThemeStudio.saved.length > 0: Label { text: "Your themes"; font-size: 14px; font-weight: 600; }
+            if ThemeStudio.saved.length > 0: TileGrid {
+                avail: root.inner;
+                cards: ThemeStudio.saved;
+                removable: true;
+                apply(i) => { ThemeStudio.action("apply", "s:\{i}"); }
+                hover(i, on) => { ThemeStudio.action("hover", on ? "s:\{i}" : "-s:\{i}"); }
+                remove(i) => { ThemeStudio.action("delete", "\{i}"); }
+            }
+            Label { text: "Gallery"; font-size: 14px; font-weight: 600; }
+            TileGrid {
+                avail: root.inner;
+                cards: ThemeStudio.gallery;
+                apply(i) => { ThemeStudio.action("apply", "g:\{i}"); }
+                hover(i, on) => { ThemeStudio.action("hover", on ? "g:\{i}" : "-g:\{i}"); }
+            }
+            Label { text: "Customize"; font-size: 14px; font-weight: 600; }
+            Rectangle {
+                background: Theme.surface;
+                border-radius: Theme.radius-l;
+                border-width: 1px;
+                border-color: Theme.border;
+                VerticalLayout {
+                    padding: 18px;
+                    spacing: 16px;
+                    Row {
+                        label: "Scene";
+                        Rectangle {
+                            property <int> cols: max(1, floor((root.field + 8px) / 112px));
+                            property <length> chip: (root.field - (self.cols - 1) * 8px) / self.cols;
+                            height: ceil(ThemeStudio.scenes.length / self.cols) * 40px - 8px;
+                            for s[i] in ThemeStudio.scenes: Chip {
+                                x: mod(i, parent.cols) * (parent.chip + 8px);
+                                y: floor(i / parent.cols) * 40px;
+                                width: parent.chip;
+                                text: s;
+                                active: i == ThemeStudio.scene;
+                                clicked => { ThemeStudio.action("scene", "\{i}"); }
+                            }
+                        }
+                    }
+                    if ThemeStudio.scene != 0: Row {
+                        label: "Colors";
+                        Rectangle {
+                            property <int> cols: max(1, floor((root.field + 8px) / 148px));
+                            property <length> cell: (root.field - (self.cols - 1) * 8px) / self.cols;
+                            height: ceil(ThemeStudio.palettes.length / self.cols) * 44px - 8px;
+                            for pal[i] in ThemeStudio.palettes: Swatch {
+                                x: mod(i, parent.cols) * (parent.cell + 8px);
+                                y: floor(i / parent.cols) * 44px;
+                                width: parent.cell;
+                                colors: pal;
+                                active: i == ThemeStudio.palette;
+                                clicked => { ThemeStudio.action("palette", "\{i}"); }
+                            }
+                        }
+                    }
+                    Row {
+                        label: "Style";
+                        HorizontalLayout {
+                            alignment: start;
+                            Segmented {
+                                options: ["Clear", "Glass", "Neon", "Solid"];
+                                selected <=> ThemeStudio.style;
+                                picked(i) => { ThemeStudio.action("style", "\{i}"); }
+                            }
+                        }
+                    }
+                    if ThemeStudio.scene == 0: Label {
+                        text: "Classic keeps Tonal see-through and still. Pick a scene to bring the background to life.";
+                        wrap: word-wrap;
+                        font-size: 12.5px;
+                        color: Theme.muted;
+                    }
+                    if ThemeStudio.scene != 0: Row {
+                        label: "Music";
+                        HorizontalLayout {
+                            alignment: start;
+                            Segmented {
+                                options: ["Still", "Pulse", "Flow", "Sparkle"];
+                                selected <=> ThemeStudio.react;
+                                picked(i) => { ThemeStudio.action("react", "\{i}"); }
+                            }
+                        }
+                    }
+                    if ThemeStudio.scene != 0 && ThemeStudio.react != 0: Slider {
+                        label: "Strength";
+                        key: "strength";
+                        value: ThemeStudio.strength;
+                        shown: round(ThemeStudio.strength * 100) + "%";
+                    }
+                    if ThemeStudio.scene != 0: Slider {
+                        label: "Motion";
+                        key: "speed";
+                        value: ThemeStudio.speed / 3;
+                        shown: round(ThemeStudio.speed * 100) + "%";
+                    }
+                    if ThemeStudio.scene != 0: Slider {
+                        label: "Dim";
+                        key: "dim";
+                        value: ThemeStudio.dim / 0.85;
+                        shown: round(ThemeStudio.dim / 0.85 * 100) + "%";
+                    }
+                    if ThemeStudio.scene != 0: Slider {
+                        label: "Grain";
+                        key: "grain";
+                        value: ThemeStudio.grain;
+                        shown: round(ThemeStudio.grain * 100) + "%";
+                    }
+                    if ThemeStudio.scene != 0: Row {
+                        label: "Variant";
+                        HorizontalLayout {
+                            alignment: start;
+                            spacing: 4px;
+                            IconButton { icon: Icons.back; clicked => { ThemeStudio.action("seed", "prev"); } }
+                            Label { text: "#\{ThemeStudio.seed}"; width: 56px; horizontal-alignment: center; vertical-alignment: center; font-weight: 600; }
+                            IconButton { icon: Icons.forward; clicked => { ThemeStudio.action("seed", "next"); } }
+                            IconButton { icon: Icons.shuffle; clicked => { ThemeStudio.action("seed", "shuffle"); } }
+                        }
+                    }
+                    if ThemeStudio.scene != 0: Row {
+                        label: "Rotate";
+                        HorizontalLayout {
+                            alignment: start;
+                            spacing: 12px;
+                            VerticalLayout {
+                                alignment: center;
+                                Switch {
+                                    checked <=> ThemeStudio.rotate;
+                                    toggled(on) => { ThemeStudio.action("rotate", on ? "true" : "false"); }
+                                }
+                            }
+                            if ThemeStudio.rotate: Segmented {
+                                options: ["Every minute", "5 min", "15 min", "Hourly"];
+                                selected <=> ThemeStudio.interval;
+                                picked(i) => { ThemeStudio.action("interval", "\{i}"); }
+                            }
+                        }
+                    }
+                    if ThemeStudio.scene != 0: Row {
+                        label: "Smoothness";
+                        HorizontalLayout {
+                            alignment: start;
+                            Segmented {
+                                options: ["Still", "Calm", "Fluid"];
+                                selected <=> ThemeStudio.fps;
+                                picked(i) => { ThemeStudio.action("fps", "\{i}"); }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
