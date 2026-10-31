@@ -1,6 +1,6 @@
 # Maintainer: sjdsjadjajdjsa <https://github.com/sjdsjadjajdjsa>
 pkgname=tonal
-pkgver=0.3.0
+pkgver=0.4.0
 pkgrel=1
 pkgdesc='A lightweight native music player. Rust, Slint, mpv.'
 arch=('x86_64' 'aarch64')
@@ -15,7 +15,7 @@ optdepends=('deno: YouTube challenge solving'
 options=('!lto' '!debug')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 # Filled on release with `updpkgsums` once the v$pkgver tag exists.
-sha256sums=('1d6022eb6595fde77df646c159c0d53ec51cdf8a6d8dcbc4365604b1c6bb8737')
+sha256sums=('c71ad2d1b83e21af2391cd3fbf342272bf786b43246fb95f0b9f2c350f84cd80')
 
 prepare() {
   cd "$pkgname-$pkgver"
