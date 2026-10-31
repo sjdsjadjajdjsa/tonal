@@ -28,6 +28,9 @@ struct Wanted {
     paused: bool,
     /// The playing song's cover colour, for the album palette.
     album: Option<[u8; 3]>,
+    /// Another window has focus, so the scene can move a little slower. Starts true because
+    /// the compositor only reports focus once the window gets it.
+    unfocused: bool,
 }
 /// The background painter: one thread that wakes per frame and posts images to the window.
 struct Engine {
@@ -87,6 +90,54 @@ pub fn set_minimized(minimized: bool) {
     }
 }
 
+/// The window gained or lost keyboard focus.
+pub fn set_focused(focused: bool) {
+    if engine().is_some_and(|e| e.wanted.lock().unfocused == focused) {
+        update(|w| w.unfocused = !focused);
+    }
+}
+
+/// Frame rate caps for a scene nobody is looking at directly, and for running on battery.
+const QUIET_FPS: u32 = 10;
+const BATTERY_FPS: u32 = 8;
+
+/// Whether the computer is running from its battery rather than mains power.
+fn on_battery() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        let Ok(dir) = std::fs::read_dir("/sys/class/power_supply") else {
+            return false;
+        };
+        let (mut mains, mut online) = (false, false);
+        for entry in dir.flatten() {
+            let path = entry.path();
+            let read = |name: &str| std::fs::read_to_string(path.join(name)).unwrap_or_default();
+            if read("type").trim() == "Mains" {
+                mains = true;
+                online |= read("online").trim() == "1";
+            }
+        }
+        mains && !online
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("pmset")
+            .args(["-g", "ps"])
+            .output()
+            .is_ok_and(|out| String::from_utf8_lossy(&out.stdout).contains("'Battery Power'"))
+    }
+    #[cfg(windows)]
+    {
+        use windows::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
+        let mut status = SYSTEM_POWER_STATUS::default();
+        unsafe { GetSystemPowerStatus(&mut status) }.is_ok() && status.ACLineStatus == 0
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
+    {
+        false
+    }
+}
+
 /// Music paused or resumed.
 pub fn set_paused(paused: bool) {
     let changed = engine().is_some_and(|e| e.wanted.lock().paused != paused);
@@ -114,17 +165,38 @@ fn post(e: &Arc<Engine>, weak: &slint::Weak<AppWindow>, frame: scenes::Frame) ->
     e.busy.store(true, Ordering::Release);
     let e = e.clone();
     let sent = weak.upgrade_in_event_loop(move |w| {
-        let studio = w.global::<ThemeStudio>();
-        studio.set_image(Image::from_rgb8(frame.image));
-        if let Some(frost) = frame.frost {
-            studio.set_frost(Image::from_rgb8(frost));
+        if super::waves::ticking() {
+            PENDING.with(|p| *p.borrow_mut() = Some((frame, e)));
+        } else {
+            show_frame(&w, frame, &e);
         }
-        studio.set_on(true);
-        let size = w.window().size();
-        e.wanted.lock().size = (size.width, size.height);
-        e.busy.store(false, Ordering::Release);
     });
     sent.is_ok()
+}
+
+thread_local! {
+    /// A painted frame held for the next wave tick, so both change in one redraw.
+    static PENDING: std::cell::RefCell<Option<(scenes::Frame, Arc<Engine>)>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Shows the frame held for this wave tick, if there is one.
+pub fn flush(w: &AppWindow) {
+    if let Some((frame, e)) = PENDING.with(|p| p.borrow_mut().take()) {
+        show_frame(w, frame, &e);
+    }
+}
+
+fn show_frame(w: &AppWindow, frame: scenes::Frame, e: &Engine) {
+    let studio = w.global::<ThemeStudio>();
+    studio.set_image(Image::from_rgb8(frame.image));
+    if let Some(frost) = frame.frost {
+        studio.set_frost(Image::from_rgb8(frost));
+    }
+    studio.set_on(true);
+    let size = w.window().size();
+    e.wanted.lock().size = (size.width, size.height);
+    e.busy.store(false, Ordering::Release);
 }
 fn post_thumb(
     weak: &slint::Weak<AppWindow>,
@@ -148,6 +220,9 @@ fn post_thumb(
 
 fn clear(weak: &slint::Weak<AppWindow>) {
     let _ = weak.upgrade_in_event_loop(|w| {
+        if let Some((_, e)) = PENDING.with(|p| p.borrow_mut().take()) {
+            e.busy.store(false, Ordering::Release);
+        }
         let studio = w.global::<ThemeStudio>();
         studio.set_on(false);
         studio.set_peek(false);
@@ -164,8 +239,13 @@ fn run(e: Arc<Engine>, weak: slint::Weak<AppWindow>) {
     let (mut rotated, mut offset) = (Instant::now(), 0u32);
     let (mut cleared, mut fresh) = (true, true);
     let (mut drew, mut unseen) = (DRAWS.load(Ordering::SeqCst), None::<Instant>);
+    let (mut battery, mut checked) = (on_battery(), Instant::now());
     loop {
-        let (mut look, generation, size, hover, hidden, paused, album) = {
+        if checked.elapsed() > Duration::from_secs(30) {
+            battery = on_battery();
+            checked = Instant::now();
+        }
+        let (mut look, generation, size, hover, hidden, paused, album, unfocused) = {
             let w = e.wanted.lock();
             let look = w.look.clone();
             let hidden = w.occluded || w.minimized;
@@ -177,6 +257,7 @@ fn run(e: Arc<Engine>, weak: slint::Weak<AppWindow>) {
                 hidden,
                 w.paused,
                 w.album,
+                w.unfocused,
             )
         };
         look.tint = album;
@@ -286,7 +367,14 @@ fn run(e: Arc<Engine>, weak: slint::Weak<AppWindow>) {
         } else if paused {
             look.fps.clamp(1, 6)
         } else {
-            look.fps.max(1)
+            let mut fps = look.fps.max(1);
+            if battery {
+                fps = fps.min(BATTERY_FPS);
+            }
+            if unfocused {
+                fps = fps.min(QUIET_FPS);
+            }
+            fps
         };
         let next = Duration::from_secs_f32(1.0 / fps as f32).saturating_sub(start.elapsed());
         let mut w = e.wanted.lock();
@@ -458,6 +546,7 @@ impl Controller {
                 minimized: false,
                 paused,
                 album: None,
+                unfocused: true,
             }),
             wake: Condvar::new(),
             busy: AtomicBool::new(false),

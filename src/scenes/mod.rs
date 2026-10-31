@@ -4,7 +4,7 @@ mod painters;
 #[cfg(test)]
 mod tests;
 
-use draw::{C, Canvas, hex, rand, shift_hue};
+use draw::{hex, rand, shift_hue, Canvas, C};
 use serde::{Deserialize, Serialize};
 use slint::{Rgb8Pixel, Rgba8Pixel, SharedPixelBuffer};
 
@@ -463,49 +463,109 @@ fn paint_look(canvas: &mut Canvas, look: &Preset, time: f32, audio: Audio) {
     paint(look.scene, canvas, &ctx);
     depth::apply(look.scene, canvas, &ctx);
     let keep = 1.0 - look.dim.clamp(0.0, 0.85);
-    canvas.fill_with(|u, v, c| {
-        let (du, dv) = (u - 0.5, v - 0.5);
-        let shade = keep * (1.0 - 0.55 * (du * du + dv * dv * 1.4));
-        draw::scale(c, shade)
-    });
+    let (w, h) = (canvas.w.max(1), canvas.h.max(1));
+    let across: Vec<f32> = (0..w)
+        .map(|x| {
+            let du = (x as f32 + 0.5) / w as f32 - 0.5;
+            keep * (1.0 - 0.55 * du * du)
+        })
+        .collect();
+    for (y, row) in canvas.px.chunks_exact_mut(w).enumerate() {
+        let dv = (y as f32 + 0.5) / h as f32 - 0.5;
+        let down = keep * 0.77 * dv * dv;
+        for (p, a) in row.iter_mut().zip(&across) {
+            *p = draw::scale(*p, a - down);
+        }
+    }
 }
 
 /// Bilinear scale of the canvas into `out` (3 or 4 bytes a pixel), with film grain and dither.
+/// Each source row is widened once in 8.8 fixed point, then output rows blend two widened rows,
+/// so the inner loops are straight runs. Grain comes from a shared table at a random offset per row.
 fn upscale(src: &Canvas, out: &mut [u8], w: usize, h: usize, bytes: usize, grain: f32, frame: u32) {
     let (sw, sh) = (src.w, src.h);
-    let taps = |n: usize, len: usize| -> Vec<(usize, usize, f32)> {
+    let taps = |n: usize, len: usize| -> Vec<(usize, usize, i32)> {
         let k = len as f32 / n as f32;
         (0..n)
             .map(|i| {
                 let f = ((i as f32 + 0.5) * k - 0.5).max(0.0);
                 let a = (f as usize).min(len - 1);
-                (a, (a + 1).min(len - 1), f - a as f32)
+                (a, (a + 1).min(len - 1), ((f - a as f32) * 256.0) as i32)
             })
             .collect()
     };
     let (xs, ys) = (taps(w, sw), taps(h, sh));
-    let amount = grain.clamp(0.0, 1.0) * 0.07 + 1.5 / 255.0;
+    let mut fixed = vec![[0i32; 3]; sw];
+    let mut widen = |y: usize, into: &mut Vec<i32>| {
+        for (f, c) in fixed.iter_mut().zip(&src.px[y * sw..y * sw + sw]) {
+            *f = c.map(|v| (v.clamp(0.0, 1.0) * 65280.0) as i32);
+        }
+        into.clear();
+        for &(x0, x1, tx) in &xs {
+            let (a, b) = (fixed[x0], fixed[x1]);
+            into.extend([0, 1, 2].map(|ch| a[ch] + (((b[ch] - a[ch]) * tx) >> 8)));
+        }
+    };
+    let amount = ((grain.clamp(0.0, 1.0) * 0.07 + 1.5 / 255.0) * 65280.0) as i32;
+    let noise = noise_table();
     let salt = draw::hash(frame);
-    let mut line = vec![[0.0f32; 3]; sw];
+    let (mut top, mut bottom) = (Vec::with_capacity(w * 3), Vec::with_capacity(w * 3));
+    let mut held = (usize::MAX, usize::MAX);
+    let mut grains = vec![0i32; w];
     for (y, &(y0, y1, ty)) in ys.iter().enumerate() {
-        let (r0, r1) = (
-            &src.px[y0 * sw..y0 * sw + sw],
-            &src.px[y1 * sw..y1 * sw + sw],
-        );
-        for i in 0..sw {
-            line[i] = draw::mix(r0[i], r1[i], ty);
+        if held.0 != y0 {
+            if held.1 == y0 {
+                std::mem::swap(&mut top, &mut bottom);
+                held.1 = usize::MAX;
+            } else {
+                widen(y0, &mut top);
+            }
+            held.0 = y0;
+        }
+        if held.1 != y1 {
+            widen(y1, &mut bottom);
+            held.1 = y1;
+        }
+        let start = draw::hash(y as u32 ^ salt) as usize;
+        for (i, g) in grains.iter_mut().enumerate() {
+            *g = ((noise[(start + i) & (NOISE - 1)] * amount) >> 16) + 128;
         }
         let row = &mut out[y * w * bytes..(y + 1) * w * bytes];
-        for (x, &(x0, x1, tx)) in xs.iter().enumerate() {
-            let c = draw::mix(line[x0], line[x1], tx);
-            let n = (draw::rand((x as u32) ^ ((y as u32) << 16) ^ salt) - 0.5) * amount;
-            let p = &mut row[x * bytes..x * bytes + 3];
-            for ch in 0..3 {
-                p[ch] = ((c[ch] + n).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
-            }
+        if bytes == 4 {
+            blend_row::<4>(row, &top, &bottom, &grains, ty);
+        } else {
+            blend_row::<3>(row, &top, &bottom, &grains, ty);
         }
     }
 }
+
+/// One output row: blends two widened rows by `ty`, adds the grain and packs to bytes.
+#[inline]
+fn blend_row<const B: usize>(row: &mut [u8], top: &[i32], bottom: &[i32], grains: &[i32], ty: i32) {
+    for (((p, a), b), g) in row
+        .as_chunks_mut::<B>()
+        .0
+        .iter_mut()
+        .zip(top.as_chunks::<3>().0)
+        .zip(bottom.as_chunks::<3>().0)
+        .zip(grains)
+    {
+        for ch in 0..3 {
+            let v = a[ch] + (((b[ch] - a[ch]) * ty) >> 8) + g;
+            p[ch] = (v >> 8).clamp(0, 255) as u8;
+        }
+    }
+}
+
+const NOISE: usize = 4096;
+/// Grain values from -32768 to 32767, made once and shared by every frame.
+fn noise_table() -> &'static [i32; NOISE] {
+    static TABLE: std::sync::OnceLock<[i32; NOISE]> = std::sync::OnceLock::new();
+    TABLE.get_or_init(|| {
+        std::array::from_fn(|i| ((draw::rand(i as u32 ^ 0x9e37_79b9) - 0.5) * 65536.0) as i32)
+    })
+}
+
 /// Keeps the scratch canvases between frames so a frame allocates only its output.
 #[derive(Default)]
 pub struct Renderer {

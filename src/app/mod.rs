@@ -188,6 +188,10 @@ pub fn run() -> anyhow::Result<()> {
                 themes::drawn();
                 EventResult::Propagate
             }
+            winit::event::WindowEvent::Focused(focused) => {
+                themes::set_focused(*focused);
+                EventResult::Propagate
+            }
             winit::event::WindowEvent::Occluded(covered) => {
                 themes::set_occluded(*covered);
                 EventResult::Propagate

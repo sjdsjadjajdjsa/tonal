@@ -49,7 +49,13 @@ pub fn set_playing(window: &AppWindow, playing: bool) {
     });
 }
 
+/// The waves are animating, so other changes to the window can wait for their next frame.
+pub fn ticking() -> bool {
+    WAVES.with(|cell| cell.borrow().as_ref().is_some_and(|w| w.timer.running()))
+}
+
 fn tick(window: &AppWindow) {
+    super::themes::flush(window);
     WAVES.with(|cell| {
         let mut slot = cell.borrow_mut();
         let Some(waves) = slot.as_mut() else { return };

@@ -32,6 +32,61 @@ fn album_palette_follows_the_cover() {
     assert!(red[0].iter().all(|c| *c < 0.2), "darkest step stays dark");
 }
 
+/// Frame cost per scene at a desktop window size: `cargo test --release frame_cost -- --ignored --nocapture`.
+#[test]
+#[ignore]
+fn frame_cost() {
+    let size = (1240, 780);
+    let mut renderer = Renderer::default();
+    let audio = Audio {
+        pulse: 0.4,
+        sparkle: 0.4,
+        flow: 0.0,
+    };
+    let (mut total, mut count) = (0.0f64, 0);
+    for look in gallery().iter().filter(|l| l.scene != Scene::Classic) {
+        renderer.frame(look, None, 1.0, audio, size);
+        let start = std::time::Instant::now();
+        for i in 0..30 {
+            std::hint::black_box(renderer.frame(look, None, i as f32 / 15.0, audio, size));
+        }
+        let ms = start.elapsed().as_secs_f64() * 1000.0 / 30.0;
+        eprintln!("{:<14} {:>6.2} ms", look.scene.label(), ms);
+        total += ms;
+        count += 1;
+    }
+    eprintln!("mean           {:>6.2} ms", total / count as f64);
+    let look = &gallery()[0];
+    let (cw, ch) = canvas_size(size.0, size.1, 1.0);
+    let mut canvas = Canvas::default();
+    canvas.resize(cw, ch);
+    let start = std::time::Instant::now();
+    for i in 0..30 {
+        paint_look(&mut canvas, look, i as f32, audio);
+    }
+    eprintln!(
+        "paint          {:>6.2} ms",
+        start.elapsed().as_secs_f64() * 1000.0 / 30.0
+    );
+    let mut out = vec![0u8; size.0 as usize * size.1 as usize * 3];
+    let start = std::time::Instant::now();
+    for i in 0..30 {
+        upscale(
+            &canvas,
+            &mut out,
+            size.0 as usize,
+            size.1 as usize,
+            3,
+            0.35,
+            i,
+        );
+    }
+    eprintln!(
+        "upscale        {:>6.2} ms",
+        start.elapsed().as_secs_f64() * 1000.0 / 30.0
+    );
+}
+
 #[test]
 fn gallery_paints_every_scene_with_variety() {
     let (w, h) = (480u32, 300u32);

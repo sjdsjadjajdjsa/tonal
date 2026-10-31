@@ -190,9 +190,11 @@ impl Canvas {
     pub fn fill_with(&mut self, mut f: impl FnMut(f32, f32, C) -> C) {
         let (w, h) = (self.w, self.h);
         let (iw, ih) = (1.0 / w as f32, 1.0 / h as f32);
-        for (i, p) in self.px.iter_mut().enumerate() {
-            let (x, y) = (i % w, i / w);
-            *p = f((x as f32 + 0.5) * iw, (y as f32 + 0.5) * ih, *p);
+        for (y, row) in self.px.chunks_exact_mut(w.max(1)).enumerate() {
+            let v = (y as f32 + 0.5) * ih;
+            for (x, p) in row.iter_mut().enumerate() {
+                *p = f((x as f32 + 0.5) * iw, v, *p);
+            }
         }
     }
 
