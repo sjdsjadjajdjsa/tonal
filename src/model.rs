@@ -210,6 +210,10 @@ pub struct Settings {
     pub bit_perfect: bool,
     pub theme: crate::scenes::Preset,
     pub saved_themes: Vec<crate::scenes::Preset>,
+    /// A theme pinned to a playlist, by playlist id, shown while it plays.
+    pub playlist_themes: std::collections::BTreeMap<i64, crate::scenes::Preset>,
+    /// How strongly the waves flash on a drum hit: Off, Soft or Strong.
+    pub beat_flash: String,
 }
 
 impl Default for Settings {
@@ -250,6 +254,8 @@ impl Default for Settings {
             bit_perfect: false,
             theme: crate::scenes::Preset::default(),
             saved_themes: Vec::new(),
+            playlist_themes: Default::default(),
+            beat_flash: "Soft".into(),
         }
     }
 }

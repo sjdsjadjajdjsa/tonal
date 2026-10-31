@@ -161,6 +161,7 @@ impl Controller {
                     RepeatMode::One => RepeatMode::Off,
                 });
             }
+            "playlist-theme" => self.theme_pin_playlist(),
             "shuffle-play" => {
                 self.player.set_shuffle(true);
                 self.play(0);

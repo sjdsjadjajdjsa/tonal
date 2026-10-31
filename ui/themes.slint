@@ -30,6 +30,7 @@ export global ThemeStudio {
     in property <[ThemeCard]> saved;
     in property <string> name;
     in property <string> detail;
+    in property <string> code;
     in-out property <int> scene;
     in-out property <int> palette;
     in-out property <int> style;
@@ -242,6 +243,7 @@ component Slider inherits Row {
 
 export component ThemesView inherits Rectangle {
     callback save;
+    callback share;
     private property <length> inner: root.width - 14px;
     private property <length> field: root.inner - 36px - 120px;
     ScrollView {
@@ -266,6 +268,10 @@ export component ThemesView inherits Rectangle {
                 if ThemeStudio.on: VerticalLayout {
                     alignment: center;
                     Button { text: "Peek"; icon: Icons.eye; clicked => { ThemeStudio.peek = true; } }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    Button { text: "Share"; icon: Icons.link; clicked => { root.share(); } }
                 }
                 VerticalLayout {
                     alignment: center;

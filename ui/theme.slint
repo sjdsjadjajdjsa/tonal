@@ -66,6 +66,7 @@ export global Icons {
     out property <string> headphones: "M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3";
     out property <string> palette: "M12 22a10 10 0 1 1 10-10c0 2.8-2.2 4-4 4h-2.2a1.8 1.8 0 0 0-1.3 3l.3.3A1.8 1.8 0 0 1 12 22z M13.5 6.5a1 1 0 1 1-2 0a1 1 0 1 1 2 0z M18 10.5a1 1 0 1 1-2 0a1 1 0 1 1 2 0z M8.5 7.5a1 1 0 1 1-2 0a1 1 0 1 1 2 0z M7 12.5a1 1 0 1 1-2 0a1 1 0 1 1 2 0z";
     out property <string> sparkle: "M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z";
+    out property <string> link: "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71";
     out property <string> eye: "M2.1 12.3a1 1 0 0 1 0-.6 10.8 10.8 0 0 1 19.8 0 1 1 0 0 1 0 .6 10.8 10.8 0 0 1-19.8 0z M15 12a3 3 0 1 1-6 0a3 3 0 1 1 6 0z";
 }
 
@@ -365,6 +366,13 @@ export component TextField inherits Rectangle {
     callback accepted(string);
     callback edited(string);
     callback committed(string);
+    public function copy-all() {
+        input.select-all();
+        input.copy();
+    }
+    public function select-all() {
+        input.select-all();
+    }
     forward-focus: input;
     height: 40px;
     border-radius: root.radius;

@@ -609,6 +609,7 @@ impl Controller {
                     let mut tracks = vec![seed.clone()];
                     self.playable(&mut tracks);
                     self.player.play_tracks(tracks, 0);
+                    self.theme_playing_from(None);
                     self.radio(seed);
                 }
             }

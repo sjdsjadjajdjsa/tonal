@@ -23,11 +23,13 @@ impl Controller {
                 .find(|p| p.id == id)
                 .map(|p| p.name)
                 .unwrap_or_default();
+            let pinned = self.state.lock().settings.playlist_themes.contains_key(&id);
             self.ui(move |w| {
                 w.set_page("Playlist".into());
                 w.set_loading(false);
                 w.set_playlist_view(true);
                 w.set_active_playlist(id as i32);
+                w.set_playlist_themed(pinned);
             });
             self.display(tracks, name);
         }
@@ -204,6 +206,7 @@ impl Controller {
             }
             "import" => self.import_public(value.to_owned()),
             "theme-save" if !value.trim().is_empty() => self.theme_save(value.trim()),
+            "theme-code" if !value.trim().is_empty() => self.theme_code(value),
             _ => {
                 self.status("Enter a name first");
                 return;

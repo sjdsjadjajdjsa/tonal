@@ -38,6 +38,7 @@ export component AppWindow inherits Window {
     in-out property <string> status;
     in property <bool> loading;
     in property <bool> playlist-view;
+    in property <bool> playlist-themed;
     in property <int> active-playlist: -1;
     in property <string> now-id;
     in property <string> now-title;
@@ -342,6 +343,14 @@ export component AppWindow inherits Window {
                             if root.playlist-view: VerticalLayout {
                                 alignment: center;
                                 IconButton {
+                                    icon: Icons.palette;
+                                    active: root.playlist-themed;
+                                    clicked => { root.command("playlist-theme"); }
+                                }
+                            }
+                            if root.playlist-view: VerticalLayout {
+                                alignment: center;
+                                IconButton {
                                     icon: Icons.pencil;
                                     clicked => {
                                         root.dialog-heading = "Rename playlist";
@@ -531,6 +540,11 @@ export component AppWindow inherits Window {
                                 root.dialog-heading = "Save theme";
                                 root.dialog-value = ThemeStudio.name;
                                 root.dialog = "theme-save";
+                            }
+                            share => {
+                                root.dialog-heading = "Share this theme";
+                                root.dialog-value = ThemeStudio.code;
+                                root.dialog = "theme-code";
                             }
                         }
                         if root.page == "Settings": SettingsView {

@@ -17,6 +17,7 @@ thread_local! {
 }
 
 pub fn set_playing(window: &AppWindow, playing: bool) {
+    super::themes::set_paused(!playing);
     let listening = window.global::<crate::ThemeStudio>().get_listening();
     let playing = playing && (window.get_waves() || listening);
     WAVES.with(|cell| {

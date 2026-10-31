@@ -17,14 +17,15 @@ impl Controller {
         }
     }
     pub fn play(&self, index: usize) {
-        let mut tracks = {
+        let (mut tracks, playlist) = {
             let mut s = self.state.lock();
             s.restore_position = None;
-            s.display.clone()
+            (s.display.clone(), s.playlist)
         };
         self.playable(&mut tracks);
         if index < tracks.len() {
             self.player.play_tracks(tracks, index);
+            self.theme_playing_from(playlist);
         }
     }
     pub(super) fn radio(&self, track: Track) {

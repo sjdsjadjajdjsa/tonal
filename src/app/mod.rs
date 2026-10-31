@@ -87,6 +87,9 @@ pub fn run() -> anyhow::Result<()> {
     window.set_top_artists(ModelRc::new(VecModel::<crate::CardRow>::default()));
     window.set_top_albums(ModelRc::new(VecModel::<crate::CardRow>::default()));
     window.set_album_colors(settings.album_colors);
+    window
+        .global::<crate::WaveLook>()
+        .set_flash(models::flash(&settings.beat_flash));
     window.set_playlists(ModelRc::new(VecModel::<PlaylistRow>::default()));
     window.set_settings(ModelRc::new(VecModel::<SettingRow>::from(
         models::settings(&settings),
@@ -180,6 +183,14 @@ pub fn run() -> anyhow::Result<()> {
             } => {
                 c.nav(if *button == winit::event::MouseButton::Back { -1 } else { 1 });
                 EventResult::PreventDefault
+            }
+            winit::event::WindowEvent::Occluded(covered) => {
+                themes::set_occluded(*covered);
+                EventResult::Propagate
+            }
+            winit::event::WindowEvent::Resized(size) => {
+                themes::set_minimized(size.width == 0 || size.height == 0);
+                EventResult::Propagate
             }
             _ => EventResult::Propagate,
         });

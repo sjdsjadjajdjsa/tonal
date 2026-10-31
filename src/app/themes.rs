@@ -20,6 +20,14 @@ struct Wanted {
     generation: u64,
     size: (u32, u32),
     hover: Option<Hover>,
+    /// The window is fully covered, so nothing needs painting.
+    occluded: bool,
+    /// The window is minimized (zero size on Windows).
+    minimized: bool,
+    /// Music is paused: the scene slows down and paints less often.
+    paused: bool,
+    /// The playing song's cover colour, for the album palette.
+    album: Option<[u8; 3]>,
 }
 /// The background painter: one thread that wakes per frame and posts images to the window.
 struct Engine {
@@ -30,9 +38,42 @@ struct Engine {
 
 static ENGINE: OnceLock<Arc<Engine>> = OnceLock::new();
 static SAVES: AtomicU64 = AtomicU64::new(0);
+/// The playlist whose pinned theme is showing instead of the user's own, and that theme.
+static PINNED: Mutex<Option<(i64, Preset)>> = Mutex::new(None);
 
 fn engine() -> Option<&'static Arc<Engine>> {
     ENGINE.get()
+}
+
+fn update(change: impl FnOnce(&mut Wanted)) {
+    if let Some(e) = engine() {
+        let mut w = e.wanted.lock();
+        change(&mut w);
+        w.generation += 1;
+        e.wake.notify_one();
+    }
+}
+
+/// The window was covered by other windows or shown again.
+pub fn set_occluded(occluded: bool) {
+    if engine().is_some_and(|e| e.wanted.lock().occluded != occluded) {
+        update(|w| w.occluded = occluded);
+    }
+}
+
+/// The window was minimized or restored.
+pub fn set_minimized(minimized: bool) {
+    if engine().is_some_and(|e| e.wanted.lock().minimized != minimized) {
+        update(|w| w.minimized = minimized);
+    }
+}
+
+/// Music paused or resumed.
+pub fn set_paused(paused: bool) {
+    let changed = engine().is_some_and(|e| e.wanted.lock().paused != paused);
+    if changed {
+        update(|w| w.paused = paused);
+    }
 }
 
 fn show(look: &Preset) {
@@ -104,18 +145,32 @@ fn run(e: Arc<Engine>, weak: slint::Weak<AppWindow>) {
     let (mut rotated, mut offset) = (Instant::now(), 0u32);
     let (mut cleared, mut fresh) = (true, true);
     loop {
-        let (look, generation, size, hover) = {
+        let (mut look, generation, size, hover, hidden, paused, album) = {
             let w = e.wanted.lock();
-            (w.look.clone(), w.generation, w.size, w.hover.clone())
+            let look = w.look.clone();
+            let hidden = w.occluded || w.minimized;
+            (
+                look,
+                w.generation,
+                w.size,
+                w.hover.clone(),
+                hidden,
+                w.paused,
+                w.album,
+            )
         };
+        look.tint = album;
         if generation != seen {
             seen = generation;
+            let both_alive = shown.scene != Scene::Classic && look.scene != Scene::Classic;
             if !shown.same_look(&look) {
-                if shown.scene != Scene::Classic && look.scene != Scene::Classic {
+                if both_alive {
                     fade = Some((varied(&shown, offset), Instant::now(), 0.9));
                 }
                 offset = 0;
                 rotated = Instant::now();
+            } else if both_alive && look.palette == scenes::ALBUM && shown.tint != look.tint {
+                fade = Some((varied(&shown, offset), Instant::now(), 1.5));
             }
             shown = look.clone();
             fresh = true;
@@ -139,6 +194,14 @@ fn run(e: Arc<Engine>, weak: slint::Weak<AppWindow>) {
             }
             continue;
         }
+        if hidden && hover.is_none() {
+            let mut w = e.wanted.lock();
+            if w.generation == seen {
+                e.wake.wait(&mut w);
+            }
+            last = Instant::now();
+            continue;
+        }
         let moving = look.fps > 0 || fade.is_some() || hover.is_some();
         if !moving && !fresh {
             let mut w = e.wanted.lock();
@@ -156,7 +219,8 @@ fn run(e: Arc<Engine>, weak: slint::Weak<AppWindow>) {
         let dt = start.duration_since(last).as_secs_f32().min(0.1);
         last = start;
         let audio = Audio::shaped(crate::visualizer::levels(), look.react, look.strength);
-        time += dt * look.speed * (1.0 + audio.flow);
+        let pace = if paused { 0.25 } else { 1.0 };
+        time += dt * look.speed * pace * (1.0 + audio.flow);
         if alive && !e.busy.load(Ordering::Acquire) {
             let from = fade
                 .as_ref()
@@ -180,6 +244,8 @@ fn run(e: Arc<Engine>, weak: slint::Weak<AppWindow>) {
         }
         let fps = if hover.is_some() || fade.is_some() {
             look.fps.max(24)
+        } else if paused {
+            look.fps.clamp(1, 6)
         } else {
             look.fps.max(1)
         };
@@ -197,13 +263,27 @@ fn rgb(c: u32) -> Color {
 fn palettes() -> Vec<PaletteRow> {
     scenes::PALETTES
         .iter()
-        .map(|p| PaletteRow {
-            name: p.name.into(),
-            a: rgb(p.colors[0]),
-            b: rgb(p.colors[1]),
-            c: rgb(p.colors[2]),
-            d: rgb(p.colors[3]),
-            e: rgb(p.colors[4]),
+        .map(|p| {
+            let live = Preset {
+                palette: p.name.into(),
+                ..Preset::default()
+            };
+            let c = if p.name == scenes::ALBUM {
+                live.colors().map(|c| {
+                    let [r, g, b] = c.map(|v| (v.clamp(0.0, 1.0) * 255.0) as u8);
+                    Color::from_rgb_u8(r, g, b)
+                })
+            } else {
+                p.colors.map(rgb)
+            };
+            PaletteRow {
+                name: p.name.into(),
+                a: c[0],
+                b: c[1],
+                c: c[2],
+                d: c[3],
+                e: c[4],
+            }
         })
         .collect()
 }
@@ -297,17 +377,26 @@ fn apply_style(w: &AppWindow, style: Style, accent: Color) {
 }
 /// The accent in use: the theme's own colour while a scene plays, otherwise the one from Settings.
 pub fn accent(settings: &crate::model::Settings) -> Color {
-    if settings.theme.scene != Scene::Classic {
-        let [r, g, b] = settings.theme.accent();
+    let pinned = PINNED.lock().as_ref().map(|(_, look)| look.clone());
+    accent_for(pinned.as_ref().unwrap_or(&settings.theme), settings)
+}
+
+fn accent_for(look: &Preset, settings: &crate::model::Settings) -> Color {
+    if look.scene != Scene::Classic {
+        let [r, g, b] = look.accent();
         return Color::from_rgb_u8(r, g, b);
     }
     super::controller::parse_color(&settings.accent).unwrap_or(Color::from_rgb_u8(236, 236, 238))
 }
 impl Controller {
     pub fn themes_init(&self, window: &AppWindow) {
-        let (look, saved) = {
+        let (look, saved, paused) = {
             let s = self.state.lock();
-            (s.settings.theme.clone(), s.settings.saved_themes.clone())
+            (
+                s.settings.theme.clone(),
+                s.settings.saved_themes.clone(),
+                s.paused,
+            )
         };
         let studio = window.global::<ThemeStudio>();
         let names: Vec<slint::SharedString> = Scene::ALL.iter().map(|s| s.label().into()).collect();
@@ -326,6 +415,10 @@ impl Controller {
                     (size.width, size.height)
                 },
                 hover: None,
+                occluded: false,
+                minimized: false,
+                paused,
+                album: None,
             }),
             wake: Condvar::new(),
             busy: AtomicBool::new(false),
@@ -342,6 +435,7 @@ impl Controller {
         let st = w.global::<ThemeStudio>();
         st.set_name(look.name.as_str().into());
         st.set_detail(look.detail().into());
+        st.set_code(look.to_code().into());
         st.set_scene(look.scene.index() as i32);
         st.set_palette(scenes::palette_index(&look.palette) as i32);
         st.set_style(look.style.index() as i32);
@@ -362,7 +456,7 @@ impl Controller {
         let (accent, saved, paused) = {
             let s = self.state.lock();
             (
-                accent(&s.settings),
+                accent_for(look, &s.settings),
                 s.settings.saved_themes.clone(),
                 s.paused,
             )
@@ -383,6 +477,7 @@ impl Controller {
         }
     }
     fn theme_set(&self, look: Preset) {
+        *PINNED.lock() = None;
         self.state.lock().settings.theme = look.clone();
         show(&look);
         let this = self.clone();
@@ -397,7 +492,7 @@ impl Controller {
         });
     }
     pub fn theme_action(&self, action: &str, value: &str) {
-        let mut look = self.state.lock().settings.theme.clone();
+        let mut look = self.shown_look();
         let index = value.parse::<i32>().unwrap_or(0);
         let amount = value.parse::<f32>().unwrap_or(0.0).clamp(0.0, 1.0);
         match action {
@@ -533,8 +628,12 @@ impl Controller {
     pub fn theme_save(&self, name: &str) {
         let (current, saved) = {
             let mut s = self.state.lock();
-            s.settings.theme.name = name.to_owned();
-            let look = s.settings.theme.clone();
+            let mut look = PINNED
+                .lock()
+                .take()
+                .map_or_else(|| s.settings.theme.clone(), |(_, l)| l);
+            look.name = name.to_owned();
+            s.settings.theme = look.clone();
             let list = &mut s.settings.saved_themes;
             match list.iter_mut().find(|t| t.name == name) {
                 Some(slot) => *slot = look.clone(),
@@ -550,5 +649,90 @@ impl Controller {
         });
         self.save_settings();
         self.status(format!("Saved \"{name}\""));
+    }
+    /// The look on screen: a playing playlist's pinned theme, or the user's own.
+    fn shown_look(&self) -> Preset {
+        let pinned = PINNED.lock().as_ref().map(|(_, look)| look.clone());
+        pinned.unwrap_or_else(|| self.state.lock().settings.theme.clone())
+    }
+    fn theme_show(&self, look: Preset) {
+        show(&look);
+        let this = self.clone();
+        self.ui(move |w| this.theme_sync(&w, &look));
+    }
+    /// The playing song's cover colour changed, or the song has none.
+    pub fn theme_album(&self, rgb: Option<[u8; 3]>) {
+        scenes::set_album_tint(rgb);
+        update(|w| w.album = rgb);
+        let look = self.shown_look();
+        let this = self.clone();
+        self.ui(move |w| {
+            let studio = w.global::<ThemeStudio>();
+            studio.set_palettes(ModelRc::new(VecModel::from(palettes())));
+            if look.palette == scenes::ALBUM {
+                this.theme_sync(&w, &look);
+            }
+            if w.get_page() == "Themes" {
+                this.theme_thumbs();
+            }
+        });
+    }
+    /// Music started from `playlist`: show its pinned theme, or go back to the user's own.
+    pub fn theme_playing_from(&self, playlist: Option<i64>) {
+        let pinned = {
+            let s = self.state.lock();
+            playlist.and_then(|id| Some((id, s.settings.playlist_themes.get(&id)?.clone())))
+        };
+        let before = std::mem::replace(&mut *PINNED.lock(), pinned.clone());
+        match (pinned, before) {
+            (Some((_, look)), before) if before.as_ref().map(|b| &b.1) != Some(&look) => {
+                self.theme_show(look)
+            }
+            (None, Some(_)) => {
+                let own = self.state.lock().settings.theme.clone();
+                self.theme_show(own);
+            }
+            _ => {}
+        }
+    }
+    /// Pins the look on screen to the open playlist, or unpins it.
+    pub fn theme_pin_playlist(&self) {
+        let look = self.shown_look();
+        let pinned = {
+            let mut s = self.state.lock();
+            let Some(id) = s.playlist else { return };
+            let map = &mut s.settings.playlist_themes;
+            if map.remove(&id).is_none() {
+                map.insert(id, look);
+            }
+            map.contains_key(&id)
+        };
+        self.ui(move |w| w.set_playlist_themed(pinned));
+        let showing = PINNED.lock().as_ref().map(|(id, _)| *id);
+        if !pinned && showing.is_some() && showing == self.state.lock().playlist {
+            *PINNED.lock() = None;
+            let own = self.state.lock().settings.theme.clone();
+            self.theme_show(own);
+        }
+        self.save_settings();
+        self.status(if pinned {
+            "This playlist now plays with this theme".to_owned()
+        } else {
+            "This playlist uses your own theme again".to_owned()
+        });
+    }
+    /// Loads a theme from a share code, as typed in the code dialog.
+    pub fn theme_code(&self, code: &str) {
+        if code.trim() == self.shown_look().to_code() {
+            return;
+        }
+        match Preset::from_code(code) {
+            Some(look) => {
+                let name = look.name.clone();
+                self.theme_set(look);
+                self.status(format!("Loaded \"{name}\""));
+            }
+            None => self.status("That isn't a Tonal theme code".to_owned()),
+        }
     }
 }
