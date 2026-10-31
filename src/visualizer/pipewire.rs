@@ -4,7 +4,7 @@ use std::collections::{HashMap, VecDeque};
 use std::io::Read;
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 struct Stream {
@@ -21,14 +21,16 @@ impl Drop for Stream {
 }
 
 pub(super) struct Capture {
-    active: Arc<AtomicBool>,
+    active: AtomicBool,
+    generation: Arc<AtomicU64>,
     streams: Arc<Mutex<HashMap<String, Stream>>>,
 }
 
 impl Capture {
     pub(super) fn new() -> Self {
         Self {
-            active: Arc::new(AtomicBool::new(false)),
+            active: AtomicBool::new(false),
+            generation: Arc::new(AtomicU64::new(0)),
             streams: Arc::new(Mutex::new(HashMap::new())),
         }
     }
@@ -37,18 +39,20 @@ impl Capture {
         if self.active.swap(on, Ordering::SeqCst) == on {
             return;
         }
+        let mine = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
         if !on {
             self.streams.lock().clear();
             return;
         }
-        let active = self.active.clone();
+        let generation = self.generation.clone();
+        let current = move || generation.load(Ordering::SeqCst) == mine;
         let streams = self.streams.clone();
         let spawned = std::thread::Builder::new()
             .name("visualizer-capture".into())
             .spawn(move || {
                 let prefix = format!("tonal-{}-", std::process::id());
                 let mut wait = Duration::from_millis(300);
-                while active.load(Ordering::SeqCst) {
+                while current() {
                     let names = discover(&prefix);
                     {
                         let mut map = streams.lock();
@@ -57,8 +61,7 @@ impl Capture {
                                 && stream.child.try_wait().ok().flatten().is_none()
                                 && stream.last_data.lock().elapsed() < Duration::from_secs(3)
                         });
-                        if !active.load(Ordering::SeqCst) {
-                            map.clear();
+                        if !current() {
                             break;
                         }
                         for name in &names {
@@ -72,7 +75,6 @@ impl Capture {
                     std::thread::sleep(wait);
                     wait = (wait * 2).min(Duration::from_secs(2));
                 }
-                streams.lock().clear();
             });
         if spawned.is_err() {
             self.active.store(false, Ordering::SeqCst);
@@ -100,7 +102,7 @@ impl Capture {
 
 impl Drop for Capture {
     fn drop(&mut self) {
-        self.active.store(false, Ordering::SeqCst);
+        self.generation.fetch_add(1, Ordering::SeqCst);
         self.streams.lock().clear();
     }
 }

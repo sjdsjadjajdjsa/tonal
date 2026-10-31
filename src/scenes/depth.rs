@@ -1,4 +1,4 @@
-use super::draw::{Canvas, mix, noise2, rand, smooth};
+use super::draw::{mix, noise2, rand, smooth, Canvas};
 use super::{Ctx, Scene};
 
 /// What sits in front of a scene: out-of-focus shapes drifting faster than it.

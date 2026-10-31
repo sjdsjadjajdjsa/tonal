@@ -1139,6 +1139,96 @@ fn queue_restores_order_and_preserves_duplicate_identity() {
     assert_eq!(queue.next(RepeatMode::One, false), None);
 }
 
+#[test]
+fn queue_shuffled_replace_starts_on_chosen_track_with_all_others_ahead() {
+    let tracks = (0..12)
+        .map(|i| track(&i.to_string(), "unused"))
+        .collect::<Vec<_>>();
+    for start in [0, 5, 11] {
+        let mut queue = Queue::default();
+        queue.set_shuffle(true);
+        queue.replace(tracks.clone(), start);
+        assert_eq!(queue.current, Some(0));
+        assert_eq!(queue.track().unwrap().title, start.to_string());
+        let mut titles: Vec<_> = queue.tracks().into_iter().map(|t| t.title).collect();
+        titles.sort();
+        let mut expected: Vec<_> = tracks.iter().map(|t| t.title.clone()).collect();
+        expected.sort();
+        assert_eq!(titles, expected);
+        queue.set_shuffle(false);
+        assert_eq!(queue.tracks(), tracks);
+        assert_eq!(queue.current, Some(start));
+    }
+}
+
+#[test]
+fn queue_restore_keeps_saved_order_with_shuffle_on() {
+    let tracks = (0..12)
+        .map(|i| track(&i.to_string(), "unused"))
+        .collect::<Vec<_>>();
+    let mut queue = Queue::default();
+    queue.set_shuffle(true);
+    queue.restore(tracks.clone(), 3);
+    assert_eq!(queue.tracks(), tracks);
+    assert_eq!(queue.current, Some(3));
+}
+
+#[test]
+fn queue_removing_last_current_track_ends_and_restarts() {
+    let mut queue = Queue::default();
+    queue.replace(vec![track("A", "unused"), track("B", "unused")], 1);
+    assert!(queue.remove(1));
+    assert_eq!(queue.current, None);
+    assert_eq!(queue.next(RepeatMode::Off, false), Some(0));
+    assert_eq!(queue.previous(RepeatMode::Off), Some(0));
+    queue.replace(vec![track("A", "unused"), track("B", "unused")], 0);
+    assert!(queue.remove(0));
+    assert_eq!(queue.track().unwrap().title, "B");
+    assert!(queue.remove(0));
+    assert_eq!(queue.current, None);
+    assert_eq!(queue.next(RepeatMode::All, false), None);
+}
+
+#[tokio::test]
+async fn paused_engine_never_asks_for_radio_and_ignores_idle_seek() {
+    let (tx, mut rx) = unbounded_channel();
+    let mut engine = Engine::new(config(), tx);
+    engine.queue.restore(vec![track("A", "unused")], 0);
+    engine.paused = true;
+    engine.near_end();
+    engine.queue.current = None;
+    engine.command(Cmd::Seek(5.0, true)).await.unwrap();
+    assert!(
+        !std::iter::from_fn(|| rx.try_recv().ok())
+            .any(|e| matches!(e, PlayerEvent::NearQueueEnd | PlayerEvent::Error(_)))
+    );
+    assert_eq!(engine.pos, 0.0);
+}
+
+#[tokio::test]
+async fn play_with_empty_queue_stays_paused() {
+    let (tx, mut rx) = unbounded_channel();
+    let mut engine = Engine::new(config(), tx);
+    engine.command(Cmd::Pause(false)).await.unwrap();
+    engine.command(Cmd::TogglePause).await.unwrap();
+    assert!(engine.paused);
+    assert!(
+        !std::iter::from_fn(|| rx.try_recv().ok()).any(|e| matches!(e, PlayerEvent::Paused(false)))
+    );
+}
+
+#[tokio::test]
+async fn real_mpv_jump_after_queue_ended_plays() {
+    let tone = Tone::new();
+    let (mut engine, _rx) = tone_engine(&tone).await;
+    engine.command(Cmd::Stop).await.unwrap();
+    assert!(engine.paused);
+    engine.command(Cmd::Jump(1)).await.unwrap();
+    assert!(!engine.paused);
+    assert_eq!(engine.queue.current, Some(1));
+    pump_until(&mut engine, |e| e.pos > 0.1).await;
+}
+
 #[tokio::test]
 async fn real_mpv_playback_smoke() {
     let tone = Tone::new();

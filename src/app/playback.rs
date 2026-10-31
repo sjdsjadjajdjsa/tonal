@@ -9,11 +9,28 @@ impl Controller {
     pub fn playable(&self, tracks: &mut [Track]) {
         for t in tracks {
             if let Some(path) = self.library.download_path(&t.id).filter(|p| p.is_file()) {
-                if t.play_url != path.to_string_lossy() {
+                let path = path.to_string_lossy().into_owned();
+                if t.play_url != path {
                     self.result(self.library.upsert_tracks(std::slice::from_ref(t)));
+                    let remote = std::mem::replace(&mut t.play_url, path);
+                    self.state.lock().remote_urls.insert(t.id.clone(), remote);
                 }
-                t.play_url = path.to_string_lossy().into_owned();
             }
+        }
+    }
+    fn remote(&self, tracks: &mut [Track]) {
+        let s = self.state.lock();
+        for t in tracks {
+            if let Some(url) = s.remote_urls.get(&t.id) {
+                t.play_url = url.clone();
+            }
+        }
+    }
+    pub fn shuffle_play(&self) {
+        let len = self.state.lock().display.len();
+        if len > 0 {
+            self.player.set_shuffle(true);
+            self.play(rand::random_range(0..len));
         }
     }
     pub fn play(&self, index: usize) {
@@ -49,10 +66,11 @@ impl Controller {
     pub fn event(&self, event: PlayerEvent) {
         match event {
             PlayerEvent::QueueChanged {
-                tracks,
+                mut tracks,
                 keys,
                 current,
             } => {
+                self.remote(&mut tracks);
                 {
                     let mut s = self.state.lock();
                     s.queue = tracks.clone();
@@ -67,8 +85,9 @@ impl Controller {
                 });
                 self.artwork(tracks, true);
             }
-            PlayerEvent::NowPlaying(track) => {
-                if let Some(t) = &track {
+            PlayerEvent::NowPlaying(mut track) => {
+                if let Some(t) = &mut track {
+                    self.remote(std::slice::from_mut(t));
                     log::info!("Now playing: {} — {}", t.artist, t.title);
                     if t.source == SourceKind::YouTube {
                         self.check_youtube_runtime();
@@ -85,7 +104,7 @@ impl Controller {
                     s.lyric_index = None;
                     s.position
                 };
-                let initial_duration = track.as_ref().and_then(|t| t.duration_secs).unwrap_or(1.0);
+                let initial_duration = track.as_ref().and_then(|t| t.duration_secs).unwrap_or(0.0);
                 self.media.set_track(track.as_ref());
                 self.media
                     .set_playback(!self.state.lock().paused, initial_position);
@@ -107,8 +126,8 @@ impl Controller {
                     }
                     w.set_position(initial_position as f32);
                     w.set_elapsed(models::time(initial_position).into());
-                    w.set_duration(initial_duration as f32);
-                    w.set_total(models::time(initial_duration).into());
+                    w.set_duration(initial_duration.max(1.0) as f32);
+                    w.set_total(total(initial_duration).into());
                     w.set_now_title(title.into());
                     w.set_now_artist(artist.into());
                     w.set_now_artists(slint::ModelRc::new(slint::VecModel::from(now_artists)));
@@ -119,17 +138,8 @@ impl Controller {
                     models::update(w.get_lyrics(), models::lyrics(None, None));
                 });
                 if let Some(t) = track {
-                    let canonical = if self.library.download_path(&t.id).is_some() {
-                        self.library
-                            .downloads()
-                            .ok()
-                            .and_then(|tracks| tracks.into_iter().find(|track| track.id == t.id))
-                            .unwrap_or_else(|| t.clone())
-                    } else {
-                        t.clone()
-                    };
-                    self.result(self.library.record_play(&canonical));
-                    self.result(self.library.upsert_tracks(std::slice::from_ref(&canonical)));
+                    self.result(self.library.record_play(&t));
+                    self.result(self.library.upsert_tracks(std::slice::from_ref(&t)));
                     let this = self.clone();
                     let artwork = t.clone();
                     tokio::spawn(async move {
@@ -146,9 +156,13 @@ impl Controller {
                         }
                     });
                     let this = self.clone();
+                    let playing = t.clone();
                     tokio::spawn(async move {
                         let scrobbler = this.scrobbler.lock().clone();
-                        this.result(scrobbler.now_playing(&t).await);
+                        this.result(scrobbler.now_playing(&playing).await);
+                    });
+                    let this = self.clone();
+                    tokio::spawn(async move {
                         let lyrics = match crate::integrations::lyrics::fetch(&t).await {
                             Ok(l) => l,
                             Err(e) => {
@@ -169,13 +183,12 @@ impl Controller {
                 }
             }
             PlayerEvent::Position { pos, duration } => {
-                let (line, scrobble, session) = {
+                let (line, scrobble, session, jumped, paused) = {
                     let mut s = self.state.lock();
-                    if !s.paused {
-                        let delta = pos - s.position;
-                        if (0.0..=2.0).contains(&delta) {
-                            s.played += delta;
-                        }
+                    let delta = pos - s.position;
+                    let jumped = !(0.0..=2.0).contains(&delta);
+                    if !s.paused && !jumped {
+                        s.played += delta;
                     }
                     s.position = pos;
                     s.duration = duration;
@@ -205,8 +218,11 @@ impl Controller {
                     } else {
                         None
                     };
-                    (line, scrobble, session)
+                    (line, scrobble, session, jumped, s.paused)
                 };
+                if jumped || paused {
+                    self.media.set_playback(!paused, pos);
+                }
                 if let Some(session) = session {
                     self.result(self.library.save_session(&session));
                 }
@@ -222,14 +238,14 @@ impl Controller {
                 }
                 self.ui(move |w| {
                     let elapsed = models::time(pos);
-                    if w.get_elapsed().as_str() != elapsed {
+                    if jumped || w.get_elapsed().as_str() != elapsed {
                         w.set_elapsed(elapsed.into());
                         w.set_position(pos as f32);
                     }
                     if w.get_duration() != duration.max(1.0) as f32 {
                         w.set_duration(duration.max(1.0) as f32);
                     }
-                    let total = models::time(duration);
+                    let total = total(duration);
                     if w.get_total().as_str() != total {
                         w.set_total(total.into());
                     }
@@ -278,7 +294,7 @@ impl Controller {
             PlayerEvent::NearQueueEnd => {
                 let seed = {
                     let s = self.state.lock();
-                    if s.settings.autoplay && s.restore_position.is_none() {
+                    if s.settings.autoplay {
                         s.current.clone()
                     } else {
                         None
@@ -469,6 +485,14 @@ async fn search_copy(
         }
     }
     None
+}
+
+fn total(duration: f64) -> String {
+    if duration > 0.0 {
+        models::time(duration)
+    } else {
+        String::new()
+    }
 }
 
 pub(super) fn now() -> i64 {

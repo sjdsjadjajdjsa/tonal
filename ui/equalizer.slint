@@ -66,7 +66,7 @@ export component EqPanel inherits VerticalLayout {
     out property <length> graph-width: graph.width;
     out property <length> graph-height: graph.height;
     callback choose(string);
-    /// Band, gain in dB, and spot on the axis.
+    /// Band, gain in dB, and spot on the axis; 99 dB or spot -1 keeps that one as saved.
     callback drag(int, float, float);
     callback release();
     callback reset(int);
@@ -336,7 +336,7 @@ export component EqPanel inherits VerticalLayout {
                 if event.kind == PointerEventKind.up && root.band >= 0 {
                     // A click without a drag sets the gain where it landed.
                     if root.axis == 0 {
-                        root.drag(root.band, root.gain-at(self.mouse-y), root.press-spot);
+                        root.drag(root.band, root.gain-at(self.mouse-y), -1);
                     }
                     root.band = -1;
                     root.axis = 0;
@@ -354,10 +354,10 @@ export component EqPanel inherits VerticalLayout {
                     }
                 }
                 if root.axis == 1 {
-                    root.drag(root.band, root.gain-at(self.mouse-y), root.press-spot);
+                    root.drag(root.band, root.gain-at(self.mouse-y), -1);
                 }
                 if root.axis == 2 {
-                    root.drag(root.band, root.gains[root.band], root.press-spot + (self.mouse-x - root.press-x) / root.span);
+                    root.drag(root.band, 99, max(0, root.press-spot + (self.mouse-x - root.press-x) / root.span));
                 }
             }
             double-clicked => { root.reset(root.nearest(self.mouse-x)); }

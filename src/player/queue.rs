@@ -45,6 +45,17 @@ impl Queue {
     }
 
     pub fn replace(&mut self, tracks: Vec<Track>, start: usize) {
+        self.restore(tracks, start);
+        if self.shuffle
+            && let Some(start) = self.current
+        {
+            self.entries.swap(0, start);
+            self.current = Some(0);
+            self.shuffle_rest();
+        }
+    }
+
+    pub fn restore(&mut self, tracks: Vec<Track>, start: usize) {
         self.entries.clear();
         self.original.clear();
         self.current = None;
@@ -54,9 +65,6 @@ impl Queue {
         } else {
             Some(start.min(self.entries.len() - 1))
         };
-        if self.shuffle {
-            self.shuffle_rest();
-        }
     }
 
     pub fn insert(&mut self, tracks: Vec<Track>, next: bool) {
@@ -104,11 +112,7 @@ impl Queue {
         self.original.retain(|key| *key != removed);
         let removed_current = old_key == Some(removed);
         self.current = if removed_current {
-            if self.entries.is_empty() {
-                None
-            } else {
-                Some(index.min(self.entries.len() - 1))
-            }
+            (index < self.entries.len()).then_some(index)
         } else {
             old_key.and_then(|key| self.index_of(key))
         };
@@ -153,7 +157,9 @@ impl Queue {
     }
 
     pub fn next(&self, repeat: RepeatMode, natural: bool) -> Option<usize> {
-        let current = self.current?;
+        let Some(current) = self.current else {
+            return (!self.entries.is_empty()).then_some(0);
+        };
         if natural && repeat == RepeatMode::One {
             return Some(current);
         }
@@ -167,7 +173,9 @@ impl Queue {
     }
 
     pub fn previous(&self, repeat: RepeatMode) -> Option<usize> {
-        let current = self.current?;
+        let Some(current) = self.current else {
+            return self.len().checked_sub(1);
+        };
         if current > 0 {
             Some(current - 1)
         } else if repeat == RepeatMode::All {

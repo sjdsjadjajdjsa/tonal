@@ -31,6 +31,55 @@ pub struct SpotifyAuth {
 }
 
 pub const REDIRECT_URI: &str = "http://127.0.0.1:8898/callback";
+const CALLBACK_ADDR: &str = "127.0.0.1:8898";
+pub const LIKED_ORIGIN: &str = "spotify:liked";
+
+#[derive(Debug)]
+pub struct Superseded;
+
+impl std::fmt::Display for Superseded {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Spotify login was replaced by a newer attempt")
+    }
+}
+
+impl std::error::Error for Superseded {}
+
+fn supersede() -> tokio::sync::oneshot::Receiver<()> {
+    static ACTIVE: parking_lot::Mutex<Option<tokio::sync::oneshot::Sender<()>>> =
+        parking_lot::Mutex::new(None);
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    if let Some(previous) = ACTIVE.lock().replace(tx) {
+        let _ = previous.send(());
+    }
+    rx
+}
+
+async fn bind_callback(addr: &str) -> anyhow::Result<tokio::net::TcpListener> {
+    let mut attempts = 0;
+    loop {
+        match tokio::net::TcpListener::bind(addr).await {
+            Ok(listener) => return Ok(listener),
+            Err(e) if e.kind() == std::io::ErrorKind::AddrInUse && attempts < 30 => {
+                attempts += 1;
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            Err(e) => {
+                return Err(e)
+                    .with_context(|| format!("Could not bind Spotify callback port {addr}"));
+            }
+        }
+    }
+}
+
+pub fn playlist_origin(id: &str) -> String {
+    format!("https://open.spotify.com/playlist/{id}")
+}
+
+pub fn public_origin(input: &str) -> anyhow::Result<String> {
+    let (kind, id) = public_id(input.trim())?;
+    Ok(format!("https://open.spotify.com/{kind}/{id}"))
+}
 
 fn public_id(input: &str) -> anyhow::Result<(String, String)> {
     let (kind, id) = if input.starts_with("spotify:") {
@@ -222,9 +271,11 @@ pub async fn login(client_id: &str) -> anyhow::Result<SpotifyAuth> {
     let verifier = URL_SAFE_NO_PAD.encode(rand::random::<[u8; 32]>());
     let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
     let state = URL_SAFE_NO_PAD.encode(rand::random::<[u8; 32]>());
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:8898")
-        .await
-        .context("Could not bind Spotify callback port 8898")?;
+    let mut cancel = supersede();
+    let listener = tokio::select! {
+        listener = bind_callback(CALLBACK_ADDR) => listener?,
+        Ok(()) = &mut cancel => return Err(Superseded.into()),
+    };
     let mut url = url::Url::parse("https://accounts.spotify.com/authorize")?;
     url.query_pairs_mut().extend_pairs([
         ("client_id", client_id),
@@ -240,9 +291,12 @@ pub async fn login(client_id: &str) -> anyhow::Result<SpotifyAuth> {
     ]);
     let browser_url = url.to_string();
     tokio::task::spawn_blocking(move || open::that(browser_url)).await??;
-    let code = tokio::time::timeout(Duration::from_secs(180), callback(listener, &state))
-        .await
-        .context("Spotify login timed out")??;
+    let code = tokio::select! {
+        code = tokio::time::timeout(Duration::from_secs(180), callback(listener, &state)) => {
+            code.context("Spotify login timed out")??
+        }
+        Ok(()) = &mut cancel => return Err(Superseded.into()),
+    };
     token(
         &[
             ("client_id", client_id),
@@ -367,7 +421,6 @@ pub async fn playlist_tracks(
                 .and_then(reqwest::Error::status)
                 .is_some_and(|s| matches!(s.as_u16(), 403 | 404 | 410)) =>
         {
-            // The Oct 2026 API uses /items and item; access is owner/collaborator only.
             pages(auth, &format!("https://api.spotify.com/v1/playlists/{playlist_id}/items?limit=50")).await
                 .context("Spotify only permits playlist items for owners/collaborators; use public embed import for other playlists")?
         }
@@ -399,6 +452,31 @@ mod tests {
         );
         assert!(public_id("https://example.com/playlist/abc").is_err());
         assert!(public_id("spotify:playlist:bad/id").is_err());
+    }
+    #[test]
+    fn public_origin_is_canonical() {
+        assert_eq!(
+            public_origin(" https://open.spotify.com/intl-de/playlist/abc123?si=x ").unwrap(),
+            playlist_origin("abc123")
+        );
+        assert_eq!(
+            public_origin("spotify:playlist:abc123").unwrap(),
+            playlist_origin("abc123")
+        );
+    }
+    #[tokio::test]
+    async fn new_login_supersedes_previous_and_waits_for_port() {
+        let first = supersede();
+        let _second = supersede();
+        assert!(first.await.is_ok());
+        let held = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = held.local_addr().unwrap().to_string();
+        let release = tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            drop(held);
+        });
+        assert!(bind_callback(&addr).await.is_ok());
+        release.await.unwrap();
     }
     #[test]
     fn reads_current_and_legacy_track_fields() {

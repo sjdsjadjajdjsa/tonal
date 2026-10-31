@@ -23,6 +23,7 @@ impl Controller {
         let generation = {
             let mut s = self.state.lock();
             s.generation += 1;
+            s.playlist = None;
             s.generation
         };
         self.ui(|w| {

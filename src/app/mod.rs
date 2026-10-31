@@ -33,7 +33,13 @@ pub fn run() -> anyhow::Result<()> {
         .build()?;
     let _guard = runtime.enter();
     let library = Library::open_default()?;
-    let settings = library.load_settings();
+    let mut settings = library.load_settings();
+    if let Ok(playlists) = library.playlists()
+        && library_actions::drop_orphan_themes(&mut settings, &playlists)
+        && let Err(e) = library.save_settings(&settings)
+    {
+        log::warn!("Could not save settings after dropping orphan theme pins: {e:#}");
+    }
     crate::sources::set_cookies_browser(&settings.youtube_cookies);
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let player = player::spawn(

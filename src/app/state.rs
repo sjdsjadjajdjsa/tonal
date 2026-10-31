@@ -36,6 +36,7 @@ pub struct State {
     /// Songs swapped for a copy on another source, by queue key. The saved
     /// queue keeps the originals, so a later launch tries YouTube again.
     pub swapped: std::collections::HashMap<u64, Track>,
+    pub remote_urls: std::collections::HashMap<String, String>,
     pub nav: Vec<super::browse::Nav>,
     pub nav_at: usize,
     pub artist_page: Option<crate::model::ArtistPage>,
@@ -70,6 +71,7 @@ impl State {
             warned_youtube_runtime: false,
             youtube_retried: Default::default(),
             swapped: Default::default(),
+            remote_urls: Default::default(),
             nav: Vec::new(),
             nav_at: 0,
             artist_page: None,

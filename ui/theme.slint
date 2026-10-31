@@ -229,10 +229,12 @@ export component Scrubber inherits Rectangle {
 
 export component Switch inherits Rectangle {
     in-out property <bool> checked;
+    in property <bool> enabled: true;
     callback toggled(bool);
     width: 38px;
     height: 22px;
     border-radius: 11px;
+    opacity: root.enabled ? 1 : 0.4;
     background: root.checked ? Theme.accent : Theme.raised;
     animate background { duration: 150ms; }
     Rectangle {
@@ -245,7 +247,8 @@ export component Switch inherits Rectangle {
         animate x { duration: 150ms; easing: ease-out; }
     }
     TouchArea {
-        mouse-cursor: pointer;
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? pointer : default;
         clicked => {
             root.checked = !root.checked;
             root.toggled(root.checked);

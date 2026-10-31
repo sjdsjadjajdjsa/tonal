@@ -162,10 +162,7 @@ impl Controller {
                 });
             }
             "playlist-theme" => self.theme_pin_playlist(),
-            "shuffle-play" => {
-                self.player.set_shuffle(true);
-                self.play(0);
-            }
+            "shuffle-play" => self.shuffle_play(),
             "queue" | "lyrics" | "eq" => {
                 let panel = command.to_owned();
                 self.ui(move |w| {

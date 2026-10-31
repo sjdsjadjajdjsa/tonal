@@ -556,6 +556,7 @@ impl Engine {
     }
     fn near_end(&mut self) {
         if self.config.repeat == RepeatMode::Off
+            && !self.paused
             && self
                 .queue
                 .current
@@ -694,6 +695,9 @@ impl Engine {
         Ok(())
     }
     async fn seek(&mut self, secs: f64, relative: bool) -> Result<()> {
+        if self.queue.current.is_none() || self.held.is_some() {
+            return Ok(());
+        }
         let secs = finite(secs);
         let target = if relative { self.pos + secs } else { secs }.max(0.0);
         let mode = if relative {
@@ -731,6 +735,18 @@ impl Engine {
         self.update_buffering();
         Ok(())
     }
+    async fn resume(&mut self, paused: bool) -> Result<()> {
+        if !paused && self.queue.current.is_none() {
+            if self.queue.len() == 0 {
+                return self.pause(true).await;
+            }
+            self.queue.current = Some(0);
+            self.failures = 0;
+            self.paused = false;
+            return self.start_current().await;
+        }
+        self.pause(paused).await
+    }
     fn update_buffering(&mut self) {
         let buffering =
             !self.paused && self.queue.current.is_some() && (self.cache_paused || self.core_idle);
@@ -751,7 +767,7 @@ impl Engine {
             Cmd::Restore(tracks, start, position) => {
                 self.failures = 0;
                 self.near_key = None;
-                self.queue.replace(tracks, start);
+                self.queue.restore(tracks, start);
                 self.paused = true;
                 self.start_at = Some(position).filter(|p| p.is_finite() && *p > 0.0);
                 self.start_current().await?;
@@ -766,6 +782,9 @@ impl Engine {
                 self.cancel_fade().await?;
                 let removed_current = self.queue.remove(index);
                 if removed_current {
+                    if self.queue.current.is_none() && self.config.repeat == RepeatMode::All {
+                        self.queue.current = self.queue.next(self.config.repeat, false);
+                    }
                     self.start_current().await?;
                 } else {
                     self.queue_changed();
@@ -810,12 +829,18 @@ impl Engine {
             }
             Cmd::Jump(index) => {
                 if index < self.queue.len() {
+                    if self.queue.current.is_none() {
+                        self.paused = false;
+                    }
                     self.queue.current = Some(index);
                     self.failures = 0;
                     self.start_current().await?;
                 }
             }
             Cmd::Next => {
+                if self.queue.current.is_none() {
+                    self.paused = false;
+                }
                 self.queue.current = self.queue.next(self.config.repeat, false);
                 self.failures = 0;
                 self.start_current().await?;
@@ -824,12 +849,15 @@ impl Engine {
                 if self.pos > 3.0 {
                     self.seek(0.0, false).await?;
                 } else {
+                    if self.queue.current.is_none() {
+                        self.paused = false;
+                    }
                     self.queue.current = self.queue.previous(self.config.repeat);
                     self.start_current().await?;
                 }
             }
-            Cmd::TogglePause => self.pause(!self.paused).await?,
-            Cmd::Pause(paused) => self.pause(paused).await?,
+            Cmd::TogglePause => self.resume(!self.paused).await?,
+            Cmd::Pause(paused) => self.resume(paused).await?,
             Cmd::Stop => self.stop_playback().await?,
             Cmd::Seek(secs, relative) => self.seek(secs, relative).await?,
             Cmd::Volume(volume) => {
@@ -1133,9 +1161,9 @@ impl Engine {
                         }
                         self.last_playhead = Some(pos);
                         self.pos = pos;
-                        if !self.paused
-                            && self.queue.current.is_some()
-                            && self.last_position.elapsed() >= Duration::from_millis(250)
+                        if self.queue.current.is_some()
+                            && (self.paused
+                                || self.last_position.elapsed() >= Duration::from_millis(250))
                         {
                             self.last_position = Instant::now();
                             self.emit(PlayerEvent::Position {

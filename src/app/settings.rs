@@ -40,8 +40,8 @@ impl Controller {
             }
             "download_dir" => s.download_dir = value.into(),
             "crossfade_secs" => {
-                if let Ok(v) = value.parse::<f64>() {
-                    s.crossfade_secs = v.clamp(0.0, 30.0);
+                if let Some(v) = seconds(value) {
+                    s.crossfade_secs = v;
                 }
             }
             "normalize" => {
@@ -93,7 +93,7 @@ impl Controller {
             "beat_flash" if models::FLASH.iter().any(|(name, _)| *name == value) => {
                 s.beat_flash = value.into()
             }
-            "accent" => s.accent = value.into(),
+            "accent" if accent_ok(value) => s.accent = value.trim().into(),
             "spotify_client_id" => s.spotify_client_id = value.into(),
             "lastfm_api_key" => s.lastfm_api_key = value.into(),
             "lastfm_api_secret" => s.lastfm_api_secret = value.into(),
@@ -132,6 +132,15 @@ impl Controller {
     }
 }
 
+fn seconds(value: &str) -> Option<f64> {
+    let v = value.trim().replace(',', ".").parse::<f64>().ok()?;
+    v.is_finite().then(|| v.clamp(0.0, 30.0))
+}
+
+fn accent_ok(value: &str) -> bool {
+    value.trim().is_empty() || parse_color(value.trim()).is_some()
+}
+
 pub fn parse_color(value: &str) -> Option<slint::Color> {
     let hex = value.strip_prefix('#')?;
     if hex.len() != 6 {
@@ -143,4 +152,28 @@ pub fn parse_color(value: &str) -> Option<slint::Color> {
         (rgb >> 8) as u8,
         rgb as u8,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn crossfade_is_clamped_and_rejects_junk() {
+        assert_eq!(seconds("45"), Some(30.0));
+        assert_eq!(seconds(" 2,5 "), Some(2.5));
+        assert_eq!(seconds("-3"), Some(0.0));
+        assert_eq!(seconds("abc"), None);
+        assert_eq!(seconds("NaN"), None);
+        assert_eq!(seconds("inf"), None);
+    }
+
+    #[test]
+    fn accent_must_be_a_hex_colour() {
+        assert!(accent_ok("#ff8800"));
+        assert!(accent_ok(" #FF8800 "));
+        assert!(accent_ok(""));
+        assert!(!accent_ok("red"));
+        assert!(!accent_ok("#fff"));
+    }
 }

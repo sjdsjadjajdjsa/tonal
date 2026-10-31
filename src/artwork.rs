@@ -2,13 +2,14 @@ use anyhow::Context;
 use parking_lot::Mutex;
 use sha2::{Digest, Sha256};
 use slint::{Rgba8Pixel, SharedPixelBuffer};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 pub type Pixels = SharedPixelBuffer<Rgba8Pixel>;
 
 const MEMORY_ENTRIES: usize = 128;
+const DISK_CAP_BYTES: u64 = 200 * 1024 * 1024;
 
 fn memory() -> &'static Mutex<Vec<(String, Pixels)>> {
     static CACHE: OnceLock<Mutex<Vec<(String, Pixels)>>> = OnceLock::new();
@@ -26,10 +27,98 @@ fn client() -> &'static reqwest::Client {
     })
 }
 
+fn disk_dir() -> PathBuf {
+    crate::model::paths::cache_dir().join("art")
+}
+
 fn disk_path(url: &str) -> PathBuf {
     let hash = Sha256::digest(url.as_bytes());
     let name: String = hash.iter().take(16).map(|b| format!("{b:02x}")).collect();
-    crate::model::paths::cache_dir().join("art").join(name)
+    disk_dir().join(name)
+}
+
+fn is_remote(url: &str) -> bool {
+    url.starts_with("http://") || url.starts_with("https://")
+}
+
+fn prune_dir(dir: &Path, cap: u64) -> std::io::Result<u64> {
+    let mut files = Vec::new();
+    let mut total = 0u64;
+    for entry in std::fs::read_dir(dir)? {
+        let Ok(entry) = entry else { continue };
+        let Ok(meta) = entry.metadata() else { continue };
+        if !meta.is_file() {
+            continue;
+        }
+        let path = entry.path();
+        if path.extension().is_some_and(|e| e == "tmp") {
+            let _ = std::fs::remove_file(&path);
+            continue;
+        }
+        let modified = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+        total += meta.len();
+        files.push((modified, meta.len(), path));
+    }
+    files.sort_by_key(|(modified, _, _)| *modified);
+    let mut removed = 0;
+    for (_, len, path) in files {
+        if total <= cap {
+            break;
+        }
+        if std::fs::remove_file(&path).is_ok() {
+            total -= len;
+            removed += len;
+        }
+    }
+    Ok(removed)
+}
+
+fn prune_once() {
+    static PRUNED: std::sync::Once = std::sync::Once::new();
+    PRUNED.call_once(|| {
+        std::thread::spawn(|| {
+            if let Err(e) = prune_dir(&disk_dir(), DISK_CAP_BYTES)
+                && e.kind() != std::io::ErrorKind::NotFound
+            {
+                log::warn!("Could not prune artwork cache: {e}");
+            }
+        });
+    });
+}
+
+async fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    if let Some(dir) = path.parent() {
+        tokio::fs::create_dir_all(dir).await?;
+    }
+    let tmp = path.with_extension(format!("{:016x}.tmp", rand::random::<u64>()));
+    if let Err(e) = tokio::fs::write(&tmp, bytes).await {
+        let _ = tokio::fs::remove_file(&tmp).await;
+        return Err(e);
+    }
+    if let Err(e) = tokio::fs::rename(&tmp, path).await {
+        let _ = tokio::fs::remove_file(&tmp).await;
+        return Err(e);
+    }
+    Ok(())
+}
+
+fn evict(url: &str) {
+    if is_remote(url) {
+        let _ = std::fs::remove_file(disk_path(url));
+    }
+}
+
+async fn decode_evicting(
+    url: &str,
+    bytes: Vec<u8>,
+    size: u32,
+    radius: f32,
+) -> anyhow::Result<Pixels> {
+    let result = tokio::task::spawn_blocking(move || decode(&bytes, size, radius)).await?;
+    if result.is_err() {
+        evict(url);
+    }
+    result
 }
 
 fn remember(key: String, pixels: Pixels) {
@@ -51,7 +140,8 @@ fn recall(key: &str) -> Option<Pixels> {
 }
 
 async fn fetch_bytes(url: &str) -> anyhow::Result<Vec<u8>> {
-    if url.starts_with("http://") || url.starts_with("https://") {
+    if is_remote(url) {
+        prune_once();
         let path = disk_path(url);
         if let Ok(bytes) = tokio::fs::read(&path).await {
             return Ok(bytes);
@@ -64,10 +154,9 @@ async fn fetch_bytes(url: &str) -> anyhow::Result<Vec<u8>> {
             .bytes()
             .await?
             .to_vec();
-        if let Some(dir) = path.parent() {
-            let _ = tokio::fs::create_dir_all(dir).await;
+        if let Err(e) = write_atomic(&path, &bytes).await {
+            log::debug!("Could not cache artwork {url}: {e}");
         }
-        let _ = tokio::fs::write(&path, &bytes).await;
         Ok(bytes)
     } else {
         let path = url.strip_prefix("file://").unwrap_or(url);
@@ -112,7 +201,7 @@ pub async fn load(url: &str, size: u32) -> anyhow::Result<Pixels> {
 /// Large artwork for one view: decoded fresh and not kept in the memory cache.
 pub async fn load_large(url: &str, size: u32, radius: f32) -> anyhow::Result<Pixels> {
     let bytes = fetch_bytes(url).await?;
-    tokio::task::spawn_blocking(move || decode(&bytes, size, radius)).await?
+    decode_evicting(url, bytes, size, radius).await
 }
 
 /// A soft color taken from the artwork, calm enough to tint the waves on the gray theme.
@@ -125,16 +214,20 @@ pub async fn color(url: &str) -> Option<[u8; 3]> {
         return *color;
     }
     let bytes = fetch_bytes(url).await.ok()?;
-    let color = tokio::task::spawn_blocking(move || {
+    let decoded = tokio::task::spawn_blocking(move || {
         let image = image::load_from_memory(&bytes).ok()?;
         let small = image
             .resize_exact(16, 16, image::imageops::FilterType::Triangle)
             .to_rgb8();
-        dominant(small.pixels().map(|p| p.0))
+        Some(dominant(small.pixels().map(|p| p.0)))
     })
     .await
     .ok()
     .flatten();
+    if decoded.is_none() {
+        evict(url);
+    }
+    let color = decoded.flatten();
     let mut colors = colors.lock();
     if colors.len() >= MEMORY_ENTRIES {
         colors.remove(0);
@@ -216,7 +309,7 @@ pub async fn load_shaped(url: &str, size: u32, radius: f32) -> anyhow::Result<Pi
         return Ok(pixels);
     }
     let bytes = fetch_bytes(url).await?;
-    let pixels = tokio::task::spawn_blocking(move || decode(&bytes, size, radius)).await??;
+    let pixels = decode_evicting(url, bytes, size, radius).await?;
     remember(key, pixels.clone());
     Ok(pixels)
 }
@@ -241,6 +334,43 @@ mod tests {
         let pixels = (0..256).map(|i| [i as u8, i as u8, i as u8]);
         assert_eq!(dominant(pixels), None);
         assert_eq!(dominant(std::iter::empty()), None);
+    }
+
+    #[test]
+    fn prune_removes_oldest_until_under_cap_and_temp_files() {
+        let dir = std::env::temp_dir().join(format!("tonal-art-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let base = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
+        for (i, name) in ["old", "mid", "new"].iter().enumerate() {
+            let path = dir.join(name);
+            std::fs::write(&path, vec![0u8; 100]).unwrap();
+            std::fs::File::options()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_modified(base + Duration::from_secs(i as u64 * 10))
+                .unwrap();
+        }
+        std::fs::write(dir.join("x.abc.tmp"), b"partial").unwrap();
+        assert_eq!(prune_dir(&dir, 250).unwrap(), 100);
+        assert!(!dir.join("old").exists());
+        assert!(dir.join("mid").exists() && dir.join("new").exists());
+        assert!(!dir.join("x.abc.tmp").exists());
+        assert_eq!(prune_dir(&dir, 1000).unwrap(), 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn atomic_write_replaces_without_leftovers() {
+        let dir = std::env::temp_dir().join(format!("tonal-art-write-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("entry");
+        write_atomic(&path, b"one").await.unwrap();
+        write_atomic(&path, b"two").await.unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"two");
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

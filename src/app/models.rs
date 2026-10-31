@@ -109,30 +109,52 @@ pub fn set_devices(devices: Vec<crate::player::AudioDevice>) -> bool {
     true
 }
 
-/// The mpv device name for a description picked in the Output row.
-pub fn device_named(description: &str) -> Option<String> {
-    if description == SYSTEM_DEFAULT {
+/// Distinct Output row labels paired with their mpv device names. Repeated
+/// descriptions get " (2)", " (3)", …; devices without a description are left out.
+fn device_labels(devices: &[crate::player::AudioDevice]) -> Vec<(String, String)> {
+    let mut taken = std::collections::HashSet::from([SYSTEM_DEFAULT.to_string()]);
+    devices
+        .iter()
+        .filter(|d| !d.description.trim().is_empty())
+        .map(|d| {
+            let mut label = d.description.clone();
+            let mut n = 2;
+            while !taken.insert(label.clone()) {
+                label = format!("{} ({n})", d.description);
+                n += 1;
+            }
+            (label, d.name.clone())
+        })
+        .collect()
+}
+
+/// The mpv device name for a label picked in the Output row.
+pub fn device_named(label: &str) -> Option<String> {
+    if label == SYSTEM_DEFAULT {
         return Some(String::new());
     }
-    DEVICES
-        .lock()
-        .expect("devices poisoned")
-        .iter()
-        .find(|d| d.description == description)
-        .map(|d| d.name.clone())
+    device_labels(&DEVICES.lock().expect("devices poisoned"))
+        .into_iter()
+        .find(|(l, _)| l == label)
+        .map(|(_, name)| name)
 }
 
 /// The Output row's choices and the one showing now.
 fn outputs(current: &str) -> (Vec<String>, String) {
-    let devices = DEVICES.lock().expect("devices poisoned");
+    let labels = device_labels(&DEVICES.lock().expect("devices poisoned"));
     let mut options = vec![SYSTEM_DEFAULT.to_string()];
-    options.extend(devices.iter().map(|d| d.description.clone()));
+    options.extend(labels.iter().map(|(label, _)| label.clone()));
     let shown = match current {
         "" => SYSTEM_DEFAULT.to_string(),
-        name => devices
-            .iter()
-            .find(|d| d.name == name)
-            .map_or_else(|| name.to_string(), |d| d.description.clone()),
+        name => match labels.iter().find(|(_, n)| n == name) {
+            Some((label, _)) => label.clone(),
+            None => {
+                let short = name.rsplit('/').next().unwrap_or(name);
+                let label = format!("{short} (not connected)");
+                options.push(label.clone());
+                label
+            }
+        },
     };
     (options, shown)
 }
@@ -241,14 +263,29 @@ pub fn settings(s: &Settings) -> Vec<SettingRow> {
                     false,
                 ),
                 ("eq", "Equalizer", s.eq_preset.clone(), "", "action", false),
-                (
-                    "visualizer",
-                    "Wave visualizer",
-                    s.visualizer.to_string(),
-                    "Flowing waves under the player while music plays.",
-                    "toggle",
-                    false,
-                ),
+                if crate::visualizer::available() {
+                    (
+                        "visualizer",
+                        "Wave visualizer",
+                        s.visualizer.to_string(),
+                        "Flowing waves under the player while music plays.",
+                        "toggle",
+                        false,
+                    )
+                } else {
+                    (
+                        "visualizer",
+                        "Wave visualizer",
+                        "unavailable".into(),
+                        if cfg!(windows) {
+                            "Needs Windows 10 version 2004 or newer."
+                        } else {
+                            "Needs PipeWire's pw-record and pw-dump."
+                        },
+                        "toggle",
+                        false,
+                    )
+                },
             ],
         ),
         (
@@ -458,6 +495,40 @@ mod tests {
             fields
                 .iter()
                 .any(|f| f.key == "lastfm_api_secret" && f.secret)
+        );
+    }
+    #[test]
+    fn missing_output_is_listed_as_not_connected() {
+        let (options, shown) = outputs("pipewire/alsa_output.gone");
+        assert_eq!(shown, "alsa_output.gone (not connected)");
+        assert!(options.contains(&shown));
+        assert_eq!(outputs("").1, SYSTEM_DEFAULT);
+    }
+    #[test]
+    fn output_labels_are_unique_and_skip_blank_descriptions() {
+        let device = |name: &str, description: &str| crate::player::AudioDevice {
+            name: name.into(),
+            description: description.into(),
+        };
+        let labels = device_labels(&[
+            device("alsa/hdmi0", "HDMI"),
+            device("alsa/blank", " "),
+            device("alsa/hdmi1", "HDMI"),
+            device("alsa/odd", "HDMI (2)"),
+            device("alsa/fake", SYSTEM_DEFAULT),
+        ]);
+        let pairs: Vec<_> = labels
+            .iter()
+            .map(|(l, n)| (l.as_str(), n.as_str()))
+            .collect();
+        assert_eq!(
+            pairs,
+            [
+                ("HDMI", "alsa/hdmi0"),
+                ("HDMI (2)", "alsa/hdmi1"),
+                ("HDMI (2) (2)", "alsa/odd"),
+                ("System default (2)", "alsa/fake"),
+            ]
         );
     }
 }

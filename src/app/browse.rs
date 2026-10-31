@@ -207,6 +207,11 @@ impl Controller {
         }
     }
 
+    pub fn current_nav(&self) -> Option<Nav> {
+        let s = self.state.lock();
+        s.nav.get(s.nav_at).cloned()
+    }
+
     /// Reloads a page only while it is the one on screen.
     pub fn refresh_page(&self, page: &str) {
         let current = {
@@ -220,13 +225,8 @@ impl Controller {
 
     pub fn forget_playlist(&self, id: i64) {
         let mut s = self.state.lock();
-        let at = s.nav_at.min(s.nav.len());
-        let before = s.nav[..at]
-            .iter()
-            .filter(|n| **n == Nav::Playlist(id))
-            .count();
-        s.nav.retain(|n| *n != Nav::Playlist(id));
-        s.nav_at = at.saturating_sub(before).min(s.nav.len().saturating_sub(1));
+        let nav = std::mem::take(&mut s.nav);
+        (s.nav, s.nav_at) = without_playlist(nav, s.nav_at, id);
     }
 
     pub fn forget_local_pages(&self) {
@@ -306,6 +306,7 @@ impl Controller {
             s.generation += 1;
             s.playlist = None;
             s.display.clear();
+            s.album_page = None;
             s.generation
         };
         self.clear_collection();
@@ -385,8 +386,7 @@ impl Controller {
     }
 
     fn fill_artist(&self, generation: u64, page: ArtistPage) {
-        let mut top = page.top.clone();
-        self.playable(&mut top);
+        let top = page.top.clone();
         {
             let mut s = self.state.lock();
             if s.generation != generation {
@@ -491,8 +491,7 @@ impl Controller {
     }
 
     fn fill_album(&self, generation: u64, page: AlbumPage) {
-        let mut tracks = page.tracks.clone();
-        self.playable(&mut tracks);
+        let tracks = page.tracks.clone();
         {
             let mut s = self.state.lock();
             if s.generation != generation {
@@ -599,10 +598,7 @@ impl Controller {
     pub fn artist_action(&self, action: &str) {
         match action {
             "play" => self.play(0),
-            "shuffle" => {
-                self.player.set_shuffle(true);
-                self.play(0);
-            }
+            "shuffle" => self.shuffle_play(),
             _ => {
                 let seed = self.state.lock().display.first().cloned();
                 if let Some(seed) = seed {
@@ -619,10 +615,7 @@ impl Controller {
     pub fn album_action(&self, action: &str) {
         match action {
             "play" => self.play(0),
-            "shuffle" => {
-                self.player.set_shuffle(true);
-                self.play(0);
-            }
+            "shuffle" => self.shuffle_play(),
             _ => {
                 let page = self.state.lock().album_page.clone();
                 let Some(page) = page else { return };
@@ -640,9 +633,46 @@ impl Controller {
     }
 }
 
+fn without_playlist(nav: Vec<Nav>, at: usize, id: i64) -> (Vec<Nav>, usize) {
+    let at = at.min(nav.len().saturating_sub(1));
+    let mut kept: Vec<Nav> = Vec::new();
+    let mut kept_at = 0;
+    for (i, n) in nav.into_iter().enumerate() {
+        if n != Nav::Playlist(id) && kept.last() != Some(&n) {
+            kept.push(n);
+        }
+        if i == at {
+            kept_at = kept.len().saturating_sub(1);
+        }
+    }
+    (kept, kept_at)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn forgetting_a_playlist_keeps_back_on_the_page_before_it() {
+        let home = Nav::Page("Home".into());
+        let liked = Nav::Page("Liked".into());
+        let nav = vec![
+            home.clone(),
+            Nav::Playlist(7),
+            liked.clone(),
+            Nav::Playlist(7),
+            home.clone(),
+        ];
+        let (kept, at) = without_playlist(nav.clone(), 3, 7);
+        assert_eq!(kept, [home.clone(), liked.clone(), home.clone()]);
+        assert_eq!(kept[at], liked);
+        let (kept, at) = without_playlist(nav, 1, 7);
+        assert_eq!(kept[at], home);
+        assert_eq!(
+            without_playlist(vec![Nav::Playlist(7)], 0, 7),
+            (Vec::new(), 0)
+        );
+    }
 
     fn track(title: &str, artist: &str, album: &str) -> Track {
         Track {

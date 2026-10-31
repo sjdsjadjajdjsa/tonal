@@ -1,13 +1,96 @@
 use super::{controller::Controller, playback::now};
+use crate::integrations::spotify::{self, SpotifyAuth, SpotifyTrack, Superseded};
+use crate::model::{Playlist, Track};
 use futures::{StreamExt, stream};
 
+const LIKED_NAME: &str = "Spotify · Liked songs";
+
+#[derive(Debug, PartialEq)]
+enum SyncPlan {
+    Unchanged,
+    Append(usize),
+    Replace,
+}
+
+fn sync_plan(existing: &[String], new: &[String]) -> SyncPlan {
+    if existing == new {
+        SyncPlan::Unchanged
+    } else if new.starts_with(existing) {
+        SyncPlan::Append(existing.len())
+    } else {
+        SyncPlan::Replace
+    }
+}
+
+fn existing_playlist<'a>(
+    playlists: &'a [Playlist],
+    origin: &str,
+    legacy_name: Option<&str>,
+) -> Option<&'a Playlist> {
+    playlists
+        .iter()
+        .find(|p| {
+            p.origin.as_deref().is_some_and(|o| {
+                o == origin || spotify::public_origin(o).ok().as_deref() == Some(origin)
+            })
+        })
+        .or_else(|| {
+            let name = legacy_name?;
+            playlists
+                .iter()
+                .find(|p| p.origin.is_none() && p.name == name)
+        })
+}
+
 impl Controller {
+    fn save_spotify_token(&self, refresh_token: &str) -> anyhow::Result<()> {
+        let mut state = self.state.lock();
+        state.settings.spotify_refresh_token = Some(refresh_token.to_string());
+        self.library.save_settings(&state.settings)
+    }
+
+    async fn fresh_spotify_auth(
+        &self,
+        client_id: &str,
+        auth: &mut SpotifyAuth,
+    ) -> anyhow::Result<()> {
+        if auth.expires_at > now() + 60 {
+            return Ok(());
+        }
+        *auth = spotify::refresh(client_id, &auth.refresh_token).await?;
+        self.save_spotify_token(&auth.refresh_token)
+    }
+
+    fn sync_playlist_tracks(&self, playlist: &Playlist, tracks: &[Track]) -> anyhow::Result<()> {
+        let existing: Vec<String> = self
+            .library
+            .playlist_tracks(playlist.id)?
+            .into_iter()
+            .map(|t| t.id)
+            .collect();
+        let new: Vec<String> = tracks.iter().map(|t| t.id.clone()).collect();
+        let plan = if existing.len() == playlist.track_count {
+            sync_plan(&existing, &new)
+        } else {
+            SyncPlan::Replace
+        };
+        match plan {
+            SyncPlan::Unchanged => self.library.upsert_tracks(tracks),
+            SyncPlan::Append(from) => {
+                self.library.upsert_tracks(&tracks[..from])?;
+                self.library.add_to_playlist(playlist.id, &tracks[from..])
+            }
+            SyncPlan::Replace => self.library.replace_playlist_tracks(playlist.id, tracks),
+        }
+    }
+
     async fn import_tracks(
         &self,
         name: String,
-        origin: Option<String>,
-        tracks: Vec<crate::integrations::spotify::SpotifyTrack>,
-    ) -> anyhow::Result<()> {
+        origin: String,
+        legacy_name: Option<&str>,
+        tracks: Vec<SpotifyTrack>,
+    ) -> anyhow::Result<Option<i64>> {
         let total = tracks.len();
         let mut done = 0;
         let mut matched = Vec::new();
@@ -45,24 +128,48 @@ impl Controller {
         }
         matched.sort_by_key(|(i, _)| *i);
         let tracks = matched.into_iter().map(|(_, t)| t).collect::<Vec<_>>();
-        let id = self.library.create_playlist(&name, origin.as_deref())?;
-        self.library.add_to_playlist(id, &tracks)?;
+        if tracks.is_empty() {
+            self.status(format!("Skipped {name} · no tracks matched"));
+            return Ok(None);
+        }
+        let playlists = self.library.playlists()?;
+        let id = match existing_playlist(&playlists, &origin, legacy_name) {
+            Some(playlist) => {
+                self.sync_playlist_tracks(playlist, &tracks)?;
+                playlist.id
+            }
+            None => {
+                let id = self.library.create_playlist(&name, Some(&origin))?;
+                self.library.add_to_playlist(id, &tracks)?;
+                id
+            }
+        };
         self.refresh_playlists();
-        self.go(super::browse::Nav::Playlist(id));
+        if self.state.lock().playlist == Some(id) {
+            self.playlist(id);
+        }
         self.status(format!(
-            "Imported {} tracks · {failures} unmatched",
+            "Imported {name} · {} tracks · {failures} unmatched",
             tracks.len()
         ));
-        Ok(())
+        Ok(Some(id))
     }
     pub(super) fn import_public(&self, url: String) {
+        let Some(origin) = self.result(spotify::public_origin(&url)) else {
+            return;
+        };
         let this = self.clone();
+        let from = self.current_nav();
         self.status("Fetching Spotify playlist…");
         tokio::spawn(async move {
-            if let Some((name, tracks)) =
-                this.result(crate::integrations::spotify::fetch_public(&url).await)
+            if let Some((name, tracks)) = this.result(spotify::fetch_public(&url).await)
+                && let Some(Some(id)) =
+                    this.result(this.import_tracks(name, origin, None, tracks).await)
             {
-                this.result(this.import_tracks(name, Some(url), tracks).await);
+                let target = super::browse::Nav::Playlist(id);
+                if this.current_nav() == from && from.as_ref() != Some(&target) {
+                    this.go(target);
+                }
             }
         });
     }
@@ -73,32 +180,29 @@ impl Controller {
         tokio::spawn(async move {
             let result: anyhow::Result<()> = async {
                 let mut auth = if let Some(token) = s.spotify_refresh_token.as_deref() {
-                    match crate::integrations::spotify::refresh(&s.spotify_client_id, token).await {
+                    match spotify::refresh(&s.spotify_client_id, token).await {
                         Ok(auth) => auth,
-                        Err(_) => crate::integrations::spotify::login(&s.spotify_client_id).await?,
+                        Err(_) => spotify::login(&s.spotify_client_id).await?,
                     }
                 } else {
-                    crate::integrations::spotify::login(&s.spotify_client_id).await?
+                    spotify::login(&s.spotify_client_id).await?
                 };
-                {
-                    let mut state = this.state.lock();
-                    state.settings.spotify_refresh_token = Some(auth.refresh_token.clone());
-                    this.library.save_settings(&state.settings)?;
-                }
-                let liked = crate::integrations::spotify::liked_tracks(&auth).await?;
-                this.import_tracks("Spotify · Liked songs".into(), None, liked)
+                this.save_spotify_token(&auth.refresh_token)?;
+                let liked = spotify::liked_tracks(&auth).await?;
+                this.import_tracks(
+                    LIKED_NAME.into(),
+                    spotify::LIKED_ORIGIN.into(),
+                    Some(LIKED_NAME),
+                    liked,
+                )
+                .await?;
+                this.fresh_spotify_auth(&s.spotify_client_id, &mut auth)
                     .await?;
-                for list in crate::integrations::spotify::my_playlists(&auth).await? {
-                    if auth.expires_at <= now() + 60 {
-                        auth = crate::integrations::spotify::refresh(
-                            &s.spotify_client_id,
-                            &auth.refresh_token,
-                        )
+                let mut imported = 0;
+                let mut skipped = 0;
+                for list in spotify::my_playlists(&auth).await? {
+                    this.fresh_spotify_auth(&s.spotify_client_id, &mut auth)
                         .await?;
-                        let mut state = this.state.lock();
-                        state.settings.spotify_refresh_token = Some(auth.refresh_token.clone());
-                        this.library.save_settings(&state.settings)?;
-                    }
                     this.status(format!(
                         "Importing {} · {} tracks{}",
                         list.name,
@@ -109,19 +213,42 @@ impl Controller {
                             ""
                         }
                     ));
-                    let tracks =
-                        crate::integrations::spotify::playlist_tracks(&auth, &list.id).await?;
-                    this.import_tracks(
-                        list.name,
-                        Some(format!("https://open.spotify.com/playlist/{}", list.id)),
-                        tracks,
-                    )
-                    .await?;
+                    let tracks = match spotify::playlist_tracks(&auth, &list.id).await {
+                        Ok(tracks) => tracks,
+                        Err(e) => {
+                            log::warn!(
+                                "Skipping Spotify playlist {} ({}): {e:#}",
+                                list.name,
+                                list.id
+                            );
+                            skipped += 1;
+                            continue;
+                        }
+                    };
+                    if this
+                        .import_tracks(list.name, spotify::playlist_origin(&list.id), None, tracks)
+                        .await?
+                        .is_some()
+                    {
+                        imported += 1;
+                    }
                 }
+                this.status(if skipped > 0 {
+                    format!(
+                        "Spotify import finished · {imported} playlists · {skipped} unavailable"
+                    )
+                } else {
+                    format!("Spotify import finished · {imported} playlists")
+                });
                 Ok(())
             }
             .await;
-            this.result(result);
+            match result {
+                Err(e) if e.downcast_ref::<Superseded>().is_some() => {}
+                result => {
+                    this.result(result);
+                }
+            }
         });
     }
     pub(super) fn lastfm_login(&self) {
@@ -143,5 +270,72 @@ impl Controller {
                 this.status("Connected to Last.fm");
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ids(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect()
+    }
+
+    fn playlist(id: i64, name: &str, origin: Option<&str>) -> Playlist {
+        Playlist {
+            id,
+            name: name.into(),
+            track_count: 0,
+            origin: origin.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn sync_plan_keeps_appends_or_replaces() {
+        assert_eq!(
+            sync_plan(&ids(&["a", "b"]), &ids(&["a", "b"])),
+            SyncPlan::Unchanged
+        );
+        assert_eq!(
+            sync_plan(&ids(&["a"]), &ids(&["a", "b"])),
+            SyncPlan::Append(1)
+        );
+        assert_eq!(sync_plan(&[], &ids(&["a"])), SyncPlan::Append(0));
+        assert_eq!(
+            sync_plan(&ids(&["b", "a"]), &ids(&["a", "b"])),
+            SyncPlan::Replace
+        );
+        assert_eq!(
+            sync_plan(&ids(&["a", "b"]), &ids(&["a"])),
+            SyncPlan::Replace
+        );
+    }
+
+    #[test]
+    fn reimport_finds_playlist_by_origin() {
+        let origin = spotify::playlist_origin("abc");
+        let lists = vec![
+            playlist(1, LIKED_NAME, None),
+            playlist(
+                2,
+                "Mine",
+                Some("https://open.spotify.com/playlist/abc?si=x"),
+            ),
+            playlist(3, "Other", Some(&spotify::playlist_origin("zzz"))),
+            playlist(4, "Liked", Some(spotify::LIKED_ORIGIN)),
+        ];
+        assert_eq!(
+            existing_playlist(&lists, &origin, None).map(|p| p.id),
+            Some(2)
+        );
+        assert_eq!(
+            existing_playlist(&lists, spotify::LIKED_ORIGIN, Some(LIKED_NAME)).map(|p| p.id),
+            Some(4)
+        );
+        assert_eq!(
+            existing_playlist(&lists[..1], spotify::LIKED_ORIGIN, Some(LIKED_NAME)).map(|p| p.id),
+            Some(1)
+        );
+        assert!(existing_playlist(&lists, &spotify::playlist_origin("new"), None).is_none());
     }
 }

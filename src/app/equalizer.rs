@@ -230,14 +230,15 @@ impl Controller {
     }
 
     /// A dot moved: up and down is its gain, sideways its frequency (`spot` on the axis).
+    /// A gain past ±12 dB keeps the saved gain, a spot below 0 the saved frequency.
     pub(super) fn eq_drag(&self, band: usize, gain: f64, spot: f64) {
         if band >= 6 {
             return;
         }
         {
             let mut s = self.state.lock();
-            let gain = gain.clamp(-MAX, MAX);
-            let freq = clamp_freq(&s.settings.eq_freqs, band, freq_of(spot));
+            let (gain, freq) =
+                dragged(&s.settings.eq_gains, &s.settings.eq_freqs, band, gain, spot);
             if gain == s.settings.eq_gains[band] && freq == s.settings.eq_freqs[band] {
                 return;
             }
@@ -257,7 +258,7 @@ impl Controller {
         {
             let mut s = self.state.lock();
             s.settings.eq_gains[band] = 0.0;
-            s.settings.eq_freqs[band] = EQ_BANDS[band];
+            s.settings.eq_freqs[band] = clamp_freq(&s.settings.eq_freqs, band, EQ_BANDS[band]);
             s.settings.eq_preamp = headroom(&s.settings.eq_gains);
             let flat = s.settings.eq_gains == [0.0; 6] && s.settings.eq_freqs == EQ_BANDS;
             s.settings.eq_preset = if flat { "Flat" } else { "Custom" }.into();
@@ -431,6 +432,16 @@ impl Controller {
     }
 }
 
+fn dragged(gains: &[f64; 6], freqs: &[f64; 6], band: usize, gain: f64, spot: f64) -> (f64, f64) {
+    let gain = if gain.abs() <= MAX { gain } else { gains[band] };
+    let freq = if spot >= 0.0 {
+        clamp_freq(freqs, band, freq_of(spot))
+    } else {
+        freqs[band]
+    };
+    (gain, freq)
+}
+
 fn labels(freqs: &[f64; 6]) -> ModelRc<SharedString> {
     ModelRc::new(VecModel::from(
         freqs
@@ -527,6 +538,18 @@ mod tests {
         for (i, f) in bands.iter().enumerate() {
             assert_eq!(clamp_freq(&bands, i, *f), *f, "band {i} at its default");
         }
+    }
+
+    #[test]
+    fn drags_keep_what_they_do_not_move() {
+        let gains = [6.0, 4.0, 1.0, 0.0, 0.0, 0.0];
+        let freqs = EQ_BANDS;
+        assert_eq!(dragged(&gains, &freqs, 0, 99.0, spot_of(80.0)), (6.0, 80.0));
+        assert_eq!(dragged(&gains, &freqs, 1, -3.0, -1.0), (-3.0, freqs[1]));
+        assert_eq!(dragged(&gains, &freqs, 1, 12.0, -1.0), (12.0, freqs[1]));
+        let mut moved = EQ_BANDS;
+        moved[0] = 120.0;
+        assert_eq!(clamp_freq(&moved, 1, EQ_BANDS[1]), 192.0);
     }
 
     #[test]

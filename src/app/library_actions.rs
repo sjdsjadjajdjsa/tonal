@@ -1,5 +1,5 @@
 use super::{controller::Controller, models};
-use crate::model::{SourceKind, Track};
+use crate::model::{Playlist, Settings, SourceKind, Track};
 use slint::Model;
 
 impl Controller {
@@ -9,10 +9,17 @@ impl Controller {
         }
     }
     pub fn playlist(&self, id: i64) {
-        {
+        let changed = {
             let mut s = self.state.lock();
-            s.playlist = Some(id);
             s.generation += 1;
+            s.playlist.replace(id) != Some(id)
+        };
+        if changed {
+            self.ui(|w| {
+                if matches!(w.get_dialog().as_str(), "rename" | "delete") {
+                    w.set_dialog("".into());
+                }
+            });
         }
         if let Some(tracks) = self.result(self.library.playlist_tracks(id)) {
             let name = self
@@ -58,6 +65,7 @@ impl Controller {
                 w.set_now_liked(liked);
             }
         });
+        self.refresh_page("Liked songs");
     }
     pub fn track_action(&self, index: usize, action: &str) {
         let (track, playlist) = {
@@ -87,6 +95,7 @@ impl Controller {
                         .result(self.library.remove_from_playlist(id, index))
                         .is_some()
                 {
+                    self.refresh_playlists();
                     self.playlist(id);
                 }
             }
@@ -151,6 +160,7 @@ impl Controller {
                     .result(this.library.set_download(&track, &path))
                     .is_some()
             {
+                this.refresh_page("Downloads");
                 this.status(format!("Downloaded {}", track.title));
             }
             let _ = task.await;
@@ -185,6 +195,7 @@ impl Controller {
                     self.go(super::browse::Nav::Playlist(id));
                 }
             }
+            "rename" | "delete" if id.is_none() => self.status("Open the playlist first"),
             "rename" if !value.trim().is_empty() => {
                 if let Some(id) = id
                     && self
@@ -199,6 +210,10 @@ impl Controller {
                 if let Some(id) = id
                     && self.result(self.library.delete_playlist(id)).is_some()
                 {
+                    let pinned = self.state.lock().settings.playlist_themes.remove(&id);
+                    if pinned.is_some() {
+                        self.save_settings();
+                    }
                     self.refresh_playlists();
                     self.forget_playlist(id);
                     self.go(super::browse::Nav::Page("Home".into()));
@@ -228,5 +243,36 @@ impl Controller {
             self.status("Added to playlist");
         }
         self.ui(|w| w.set_dialog("".into()));
+    }
+}
+
+/// Drops theme pins whose playlist no longer exists; true when any were removed.
+pub(super) fn drop_orphan_themes(settings: &mut Settings, playlists: &[Playlist]) -> bool {
+    let before = settings.playlist_themes.len();
+    settings
+        .playlist_themes
+        .retain(|id, _| playlists.iter().any(|p| p.id == *id));
+    settings.playlist_themes.len() != before
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn orphan_theme_pins_are_dropped() {
+        let mut settings = Settings::default();
+        for id in [1, 2, 3] {
+            settings.playlist_themes.insert(id, Default::default());
+        }
+        let playlists = [Playlist {
+            id: 2,
+            name: "kept".into(),
+            origin: None,
+            track_count: 0,
+        }];
+        assert!(drop_orphan_themes(&mut settings, &playlists));
+        assert_eq!(settings.playlist_themes.keys().collect::<Vec<_>>(), [&2]);
+        assert!(!drop_orphan_themes(&mut settings, &playlists));
     }
 }

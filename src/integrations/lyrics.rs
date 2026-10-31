@@ -65,7 +65,7 @@ pub fn parse_lrc(text: &str) -> Vec<(f64, String)> {
         }
     }
     for (time, _) in &mut result {
-        *time = (*time + offset).max(0.0);
+        *time = (*time - offset).max(0.0);
     }
     result.sort_by(|a, b| a.0.total_cmp(&b.0));
     result
@@ -153,7 +153,10 @@ pub async fn fetch(track: &Track) -> anyhow::Result<Option<Lyrics>> {
             score
         };
         entries.sort_by(|a, b| score(b).total_cmp(&score(a)));
-        found = entries.into_iter().find_map(lyrics);
+        found = entries
+            .into_iter()
+            .filter(|e| matches(track, e))
+            .find_map(lyrics);
     }
     let clean = clean_title(&track.title);
     if found.as_ref().is_none_or(|l| l.synced.is_empty()) && clean != track.title.trim() {
@@ -170,7 +173,7 @@ pub async fn fetch(track: &Track) -> anyhow::Result<Option<Lyrics>> {
             .await?;
         let best = entries
             .into_iter()
-            .filter(|e| e.synced_lyrics.is_some())
+            .filter(|e| e.synced_lyrics.is_some() && matches(track, e))
             .min_by(|a, b| {
                 let gap = |e: &Entry| track.duration_secs.map_or(0.0, |d| (d - e.duration).abs());
                 gap(a).total_cmp(&gap(b))
@@ -195,6 +198,67 @@ pub async fn fetch(track: &Track) -> anyhow::Result<Option<Lyrics>> {
         }
     }
     Ok(found)
+}
+
+fn normalise(text: &str) -> String {
+    text.chars()
+        .map(|c| {
+            if c.is_alphanumeric() {
+                c.to_lowercase().next().unwrap_or(c)
+            } else {
+                ' '
+            }
+        })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn similar(a: &str, b: &str) -> bool {
+    let (a, b) = (format!(" {a} "), format!(" {b} "));
+    a.trim() != "" && b.trim() != "" && (a.contains(&b) || b.contains(&a))
+}
+
+fn artists(text: &str) -> Vec<String> {
+    let mut text = format!(" {} ", text.to_lowercase());
+    for marker in [
+        ",",
+        "&",
+        ";",
+        "/",
+        " x ",
+        " and ",
+        " feat.",
+        " feat ",
+        " ft.",
+        " featuring ",
+        " with ",
+    ] {
+        text = text.replace(marker, "|");
+    }
+    text.split('|')
+        .map(normalise)
+        .filter(|a| !a.is_empty())
+        .collect()
+}
+
+fn matches(track: &Track, entry: &Entry) -> bool {
+    let title = similar(
+        &normalise(&clean_title(&track.title)),
+        &normalise(&clean_title(&entry.track_name)),
+    );
+    let theirs = normalise(&entry.artist_name);
+    let ours = normalise(&track.artist);
+    let artist = similar(&ours, &theirs)
+        || artists(&track.artist)
+            .iter()
+            .any(|a| artists(&entry.artist_name).iter().any(|b| a == b));
+    let duration = match track.duration_secs.filter(|d| d.is_finite() && *d > 0.0) {
+        Some(d) if entry.duration > 0.0 => (d - entry.duration).abs() <= 5.0,
+        _ => true,
+    };
+    title && artist && duration
 }
 
 fn clean_title(title: &str) -> String {
@@ -233,6 +297,44 @@ mod tests {
         assert_eq!(super::clean_title("HUMBLE."), "HUMBLE.");
     }
     use super::*;
+    fn entry(title: &str, artist: &str, duration: f64) -> Entry {
+        Entry {
+            track_name: title.into(),
+            artist_name: artist.into(),
+            duration,
+            instrumental: false,
+            synced_lyrics: Some("[00:01.00]Hi".into()),
+            plain_lyrics: None,
+        }
+    }
+    #[test]
+    fn search_results_must_really_match() {
+        let track = Track {
+            title: "Get Lucky (Radio Edit)".into(),
+            artist: "Daft Punk feat. Pharrell Williams".into(),
+            duration_secs: Some(248.0),
+            ..Default::default()
+        };
+        assert!(matches(&track, &entry("Get Lucky", "Daft Punk", 250.0)));
+        assert!(matches(
+            &track,
+            &entry("get lucky!", "Pharrell Williams & Daft Punk", 0.0)
+        ));
+        assert!(!matches(&track, &entry("Get Lucky", "Daft Punk", 369.0)));
+        assert!(!matches(
+            &track,
+            &entry("Lose Yourself", "Daft Punk", 248.0)
+        ));
+        assert!(!matches(
+            &track,
+            &entry("Get Lucky", "Some Cover Band", 248.0)
+        ));
+        let unknown = Track {
+            duration_secs: None,
+            ..track
+        };
+        assert!(matches(&unknown, &entry("Get Lucky", "DAFT PUNK", 600.0)));
+    }
     #[test]
     fn parses_multiple_timestamps_and_sorts() {
         let parsed = parse_lrc(
@@ -252,7 +354,11 @@ mod tests {
     fn supports_offset_and_blank_lines() {
         assert_eq!(
             parse_lrc("[00:01.00]Hi\n[00:02.00]\n[offset:-500]"),
-            vec![(0.5, "Hi".into()), (1.5, "".into())]
+            vec![(1.5, "Hi".into()), (2.5, "".into())]
+        );
+        assert_eq!(
+            parse_lrc("[offset:+500]\n[00:01.00]Hi\n[00:00.20]Go"),
+            vec![(0.0, "Go".into()), (0.5, "Hi".into())]
         );
         assert!(parse_lrc("plain lyrics\n[ti:Title]").is_empty());
     }

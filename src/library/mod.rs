@@ -277,6 +277,21 @@ impl Library {
         Ok(())
     }
 
+    pub fn replace_playlist_tracks(&self, id: i64, tracks: &[Track]) -> anyhow::Result<()> {
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        upsert(&tx, tracks)?;
+        tx.execute("DELETE FROM playlist_tracks WHERE playlist_id=?1", [id])?;
+        for (i, t) in tracks.iter().enumerate() {
+            tx.execute(
+                "INSERT INTO playlist_tracks VALUES (?1,?2,?3)",
+                params![id, i as i64, t.id],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     fn edit_playlist(&self, id: i64, edit: impl FnOnce(&mut Vec<String>)) -> anyhow::Result<()> {
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
@@ -583,6 +598,41 @@ mod tests {
         l.delete_playlist(id)?;
         assert!(l.playlists()?.is_empty());
         assert!(l.playlist_tracks(id)?.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn replace_playlist_tracks_renumbers_and_keeps_other_playlists() -> anyhow::Result<()> {
+        let db = Db::new();
+        let l = &db.library;
+        let id = l.create_playlist("one", None)?;
+        let other = l.create_playlist("two", None)?;
+        l.add_to_playlist(id, &[track("a"), track("b"), track("c")])?;
+        l.add_to_playlist(other, &[track("a")])?;
+        let new = vec![track("c"), track("d")];
+        l.replace_playlist_tracks(id, &new)?;
+        assert_eq!(l.playlist_tracks(id)?, new);
+        assert_eq!(l.playlist_tracks(other)?, vec![track("a")]);
+        l.add_to_playlist(id, &[track("e")])?;
+        assert_eq!(l.playlist_tracks(id)?.len(), 3);
+        l.replace_playlist_tracks(id, &[])?;
+        assert!(l.playlist_tracks(id)?.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn deleted_playlist_ids_are_reused_and_counts_follow_removals() -> anyhow::Result<()> {
+        let db = Db::new();
+        let l = &db.library;
+        let first = l.create_playlist("first", None)?;
+        let second = l.create_playlist("second", None)?;
+        l.add_to_playlist(second, &[track("a"), track("b")])?;
+        l.remove_from_playlist(second, 0)?;
+        assert_eq!(l.playlists()?[1].track_count, 1);
+        l.delete_playlist(second)?;
+        assert_eq!(l.create_playlist("third", None)?, second);
+        assert_ne!(first, second);
+        assert_eq!(l.playlists()?[1].track_count, 0);
         Ok(())
     }
 

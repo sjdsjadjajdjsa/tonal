@@ -1,9 +1,118 @@
 use crate::model::{Settings, Track};
 use anyhow::Context;
 use md5::{Digest, Md5};
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+
+const QUEUE_LIMIT: usize = 500;
+const QUEUE_MAX_AGE: i64 = 14 * 24 * 3600;
+const QUEUE_ATTEMPTS: u32 = 20;
+const FLUSH_BATCH: usize = 50;
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+struct Pending {
+    track: Track,
+    started: i64,
+    lastfm: bool,
+    listenbrainz: bool,
+    #[serde(default)]
+    attempts: u32,
+}
+
+impl Pending {
+    fn same(&self, other: &Pending) -> bool {
+        self.track.id == other.track.id && self.started == other.started
+    }
+
+    /// Records a retry; each service is `Some(failed)` when it was retried, `None` otherwise.
+    fn retried(&mut self, lastfm: Option<bool>, listenbrainz: Option<bool>) {
+        if lastfm == Some(true) || listenbrainz == Some(true) {
+            self.attempts += 1;
+        }
+        self.lastfm = lastfm.unwrap_or(self.lastfm);
+        self.listenbrainz = listenbrainz.unwrap_or(self.listenbrainz);
+    }
+}
+
+fn queue_path() -> PathBuf {
+    crate::model::paths::data_dir().join("scrobble-queue.json")
+}
+
+fn queue_lock() -> &'static parking_lot::Mutex<()> {
+    static LOCK: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+    &LOCK
+}
+
+fn load_queue(path: &Path) -> Vec<Pending> {
+    std::fs::read(path)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .unwrap_or_default()
+}
+
+fn save_queue(path: &Path, queue: &[Pending]) -> anyhow::Result<()> {
+    if queue.is_empty() {
+        match std::fs::remove_file(path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.into()),
+            _ => return Ok(()),
+        }
+    }
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, serde_json::to_vec(queue)?)?;
+    std::fs::rename(&tmp, path)?;
+    Ok(())
+}
+
+fn prune(queue: &mut Vec<Pending>, now: i64) {
+    queue.retain(|p| {
+        (p.lastfm || p.listenbrainz)
+            && p.attempts < QUEUE_ATTEMPTS
+            && p.started >= now - QUEUE_MAX_AGE
+    });
+    if queue.len() > QUEUE_LIMIT {
+        let excess = queue.len() - QUEUE_LIMIT;
+        queue.drain(..excess);
+    }
+}
+
+fn merge(queue: &mut Vec<Pending>, entry: Pending) {
+    if let Some(existing) = queue.iter_mut().find(|p| p.same(&entry)) {
+        existing.lastfm |= entry.lastfm;
+        existing.listenbrainz |= entry.listenbrainz;
+    } else {
+        queue.push(entry);
+    }
+}
+
+fn enqueue(path: &Path, entry: Pending, now: i64) -> anyhow::Result<()> {
+    let _guard = queue_lock().lock();
+    let mut queue = load_queue(path);
+    merge(&mut queue, entry);
+    prune(&mut queue, now);
+    save_queue(path, &queue)
+}
+
+fn settle(path: &Path, processed: Vec<Pending>, now: i64) -> anyhow::Result<()> {
+    let _guard = queue_lock().lock();
+    let mut queue = load_queue(path);
+    queue.retain(|p| !processed.iter().any(|done| done.same(p)));
+    for entry in processed {
+        if entry.lastfm || entry.listenbrainz {
+            merge(&mut queue, entry);
+        }
+    }
+    prune(&mut queue, now);
+    save_queue(path, &queue)
+}
+
+fn pending_snapshot(path: &Path) -> Vec<Pending> {
+    let _guard = queue_lock().lock();
+    load_queue(path)
+}
 
 #[derive(Clone)]
 pub struct Scrobbler {
@@ -183,8 +292,63 @@ impl Scrobbler {
             self.lastfm(track, Some(started_at_unix)),
             self.listenbrainz(track, Some(started_at_unix))
         );
-        lastfm?;
-        listenbrainz
+        if lastfm.is_err() || listenbrainz.is_err() {
+            let entry = Pending {
+                track: track.clone(),
+                started: started_at_unix,
+                lastfm: lastfm.is_err(),
+                listenbrainz: listenbrainz.is_err(),
+                attempts: 0,
+            };
+            if let Err(e) = enqueue(&queue_path(), entry, super::now()) {
+                log::warn!("Could not queue scrobble for retry: {e:#}");
+            }
+        }
+        self.flush(lastfm.is_ok(), listenbrainz.is_ok()).await;
+        lastfm.context("Scrobble queued for retry")?;
+        listenbrainz.context("Scrobble queued for retry")
+    }
+
+    async fn flush(&self, lastfm: bool, listenbrainz: bool) {
+        static FLUSHING: AtomicBool = AtomicBool::new(false);
+        if !(lastfm || listenbrainz) || FLUSHING.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        let path = queue_path();
+        let pending = pending_snapshot(&path);
+        let mut processed = Vec::new();
+        for mut entry in pending
+            .into_iter()
+            .filter(|p| (p.lastfm && lastfm) || (p.listenbrainz && listenbrainz))
+            .take(FLUSH_BATCH)
+        {
+            let lastfm_failed = if entry.lastfm && lastfm {
+                Some(
+                    self.lastfm(&entry.track, Some(entry.started))
+                        .await
+                        .is_err(),
+                )
+            } else {
+                None
+            };
+            let listenbrainz_failed = if entry.listenbrainz && listenbrainz {
+                Some(
+                    self.listenbrainz(&entry.track, Some(entry.started))
+                        .await
+                        .is_err(),
+                )
+            } else {
+                None
+            };
+            entry.retried(lastfm_failed, listenbrainz_failed);
+            processed.push(entry);
+        }
+        if !processed.is_empty()
+            && let Err(e) = settle(&path, processed, super::now())
+        {
+            log::warn!("Could not update scrobble retry queue: {e:#}");
+        }
+        FLUSHING.store(false, Ordering::Release);
     }
 }
 
@@ -262,5 +426,95 @@ mod tests {
         assert!(should_scrobble(60.0, 120.0));
         assert!(should_scrobble(240.0, 1000.0));
         assert!(!should_scrobble(f64::NAN, 100.0));
+    }
+    fn pending(id: &str, started: i64) -> Pending {
+        Pending {
+            track: Track {
+                id: id.into(),
+                ..Default::default()
+            },
+            started,
+            lastfm: true,
+            listenbrainz: false,
+            attempts: 0,
+        }
+    }
+    #[test]
+    fn retry_queue_persists_merges_and_settles() {
+        let dir = std::env::temp_dir().join(format!("tonal-scrobble-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("queue.json");
+        let now = 1_000_000_000;
+        enqueue(&path, pending("a", now - 10), now).unwrap();
+        enqueue(
+            &path,
+            Pending {
+                lastfm: false,
+                listenbrainz: true,
+                ..pending("a", now - 10)
+            },
+            now,
+        )
+        .unwrap();
+        enqueue(&path, pending("b", now - 5), now).unwrap();
+        enqueue(&path, pending("old", now - QUEUE_MAX_AGE - 1), now).unwrap();
+        let queue = load_queue(&path);
+        assert_eq!(queue.len(), 2);
+        assert!(queue[0].lastfm && queue[0].listenbrainz);
+        let done = Pending {
+            lastfm: false,
+            listenbrainz: false,
+            ..queue[1].clone()
+        };
+        let retry = Pending {
+            lastfm: false,
+            attempts: 1,
+            ..queue[0].clone()
+        };
+        settle(&path, vec![retry, done], now).unwrap();
+        let queue = load_queue(&path);
+        assert_eq!(queue.len(), 1);
+        assert_eq!(queue[0].track.id, "a");
+        assert!(!queue[0].lastfm && queue[0].listenbrainz && queue[0].attempts == 1);
+        let last = Pending {
+            listenbrainz: false,
+            ..queue[0].clone()
+        };
+        settle(&path, vec![last], now).unwrap();
+        assert!(!path.exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+    #[test]
+    fn retry_queue_is_capped_oldest_first() {
+        let now = 1_000_000_000;
+        let mut queue: Vec<_> = (0..QUEUE_LIMIT + 3)
+            .map(|i| pending(&i.to_string(), now - 100 + i as i64))
+            .collect();
+        queue.push(Pending {
+            attempts: QUEUE_ATTEMPTS,
+            ..pending("tired", now)
+        });
+        prune(&mut queue, now);
+        assert_eq!(queue.len(), QUEUE_LIMIT);
+        assert_eq!(queue[0].track.id, "3");
+    }
+    #[test]
+    fn retry_counts_only_services_that_were_retried() {
+        let both = Pending {
+            listenbrainz: true,
+            ..pending("a", 0)
+        };
+        let mut entry = both.clone();
+        entry.retried(Some(false), None);
+        assert!(!entry.lastfm && entry.listenbrainz);
+        assert_eq!(entry.attempts, 0);
+        entry.retried(None, Some(true));
+        assert!(entry.listenbrainz);
+        assert_eq!(entry.attempts, 1);
+        let mut entry = both;
+        entry.retried(Some(true), Some(false));
+        assert!(entry.lastfm && !entry.listenbrainz);
+        assert_eq!(entry.attempts, 1);
     }
 }

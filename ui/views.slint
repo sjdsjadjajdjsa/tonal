@@ -64,25 +64,29 @@ export component SettingsView inherits Rectangle {
                             horizontal-alignment: right;
                             font-size: 11.5px;
                             color: Theme.faint;
-                            opacity: row.has-hover ? 1 : 0;
+                            opacity: row.has-hover || field.value == "unavailable" ? 1 : 0;
                             animate opacity { duration: 140ms; easing: ease-out; }
                         }
                         if field.kind == "toggle": VerticalLayout {
                             alignment: center;
                             Switch {
                                 checked: field.value == "true";
+                                enabled: field.value != "unavailable";
                                 toggled(on) => { root.change(field.key, on ? "true" : "false"); }
                             }
                         }
                         if field.kind == "text": VerticalLayout {
                             alignment: center;
                             TextField {
+                                property <string> saved: field.value;
+                                changed saved => { self.text = self.saved; }
                                 width: 280px;
                                 height: 36px;
                                 text: field.value;
                                 secret: field.secret;
                                 committed(value) => {
                                     if value != field.value { root.change(field.key, value); }
+                                    self.text = field.value;
                                 }
                             }
                         }
