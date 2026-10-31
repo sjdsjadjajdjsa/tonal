@@ -344,9 +344,9 @@ impl Controller {
     }
 
     /// Finds a playable copy of `track`. YouTube's own retry (new access
-    /// strategy) and the SoundCloud and Audius searches all start at once.
-    /// YouTube is preferred: a copy found elsewhere waits up to
-    /// `YOUTUBE_PREFERENCE` for the retry before it plays instead.
+    /// strategy) and the SoundCloud and Audius searches all start at once, but
+    /// YouTube always wins when its retry works: another source's copy plays
+    /// only after the retry has given up, and is ready by then.
     async fn find_copy(&self, track: &Track) -> Option<Track> {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<(bool, Option<Track>)>();
         let mut youtube_running = self.start_youtube_retry(track, &tx);
@@ -354,15 +354,7 @@ impl Controller {
         drop(tx);
         let mut other: Option<Track> = None;
         loop {
-            let next = if other.is_some() {
-                match tokio::time::timeout(Self::YOUTUBE_PREFERENCE, rx.recv()).await {
-                    Ok(next) => next,
-                    Err(_) => return other,
-                }
-            } else {
-                rx.recv().await
-            };
-            match next {
+            match rx.recv().await {
                 None => return other,
                 Some((true, Some(found))) => return Some(found),
                 Some((true, None)) => youtube_running = false,
@@ -377,9 +369,6 @@ impl Controller {
             }
         }
     }
-
-    /// How long a copy found on another source waits for YouTube's retry.
-    const YOUTUBE_PREFERENCE: std::time::Duration = std::time::Duration::from_secs(12);
 
     /// Once per song, looks for a YouTube access strategy that loads it again.
     /// Sends exactly one `(true, _)` answer; false when no retry was started.

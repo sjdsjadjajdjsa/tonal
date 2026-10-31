@@ -449,6 +449,7 @@ pub async fn unblock(url: &str) -> Result<String, String> {
     let deadline = Instant::now() + Duration::from_secs(120);
     let have_cookies = super::cookies_browser().is_some();
     let mut cookies_broken = false;
+    let mut backoff = Duration::from_secs(4);
     let mut last = String::from("YouTube refused every strategy");
     for strategy in candidates(current(), have_cookies) {
         if Instant::now() > deadline {
@@ -472,11 +473,8 @@ pub async fn unblock(url: &str) -> Result<String, String> {
                     Failure::Fatal => return Err(error),
                     Failure::Cookies => cookies_broken = true,
                     Failure::RateLimited => {
-                        // More probes from a rate-limited IP only extend the ban:
-                        // stop here, let the other sources play, and make the
-                        // next retry wait it out first.
-                        *cooldown = Some(Instant::now() + Duration::from_secs(30));
-                        return Err(error);
+                        *cooldown = Some(Instant::now() + backoff);
+                        backoff = (backoff * 2).min(Duration::from_secs(30));
                     }
                     Failure::Blocked => {}
                 }
