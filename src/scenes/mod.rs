@@ -1,3 +1,4 @@
+mod depth;
 mod draw;
 mod painters;
 #[cfg(test)]
@@ -346,6 +347,7 @@ fn paint_look(canvas: &mut Canvas, look: &Preset, time: f32, audio: Audio) {
         sparkle: audio.sparkle,
     };
     paint(look.scene, canvas, &ctx);
+    depth::apply(look.scene, canvas, &ctx);
     let keep = 1.0 - look.dim.clamp(0.0, 0.85);
     canvas.fill_with(|u, v, c| {
         let (du, dv) = (u - 0.5, v - 0.5);
@@ -403,7 +405,9 @@ pub struct Renderer {
 fn detail(scene: Scene) -> f32 {
     match scene {
         Scene::Nebula => 0.66,
-        Scene::Halftone | Scene::Ribbons | Scene::Topo => 0.78,
+        Scene::Halftone => 0.72,
+        Scene::Ribbons | Scene::Topo => 0.78,
+        Scene::Tide | Scene::Liquid => 0.85,
         _ => 1.0,
     }
 }
