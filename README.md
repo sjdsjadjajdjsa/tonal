@@ -124,7 +124,7 @@ Every player was measured the same way by [`bench/bench.py`](bench/bench.py): st
 | --- | --- | --- | --- | --- |
 | **Tonal (waves off)** | 118 MB | 0.5% | 0.1% | same as Tonal |
 | **Tonal** | 128 MB | 5.9% | 0.1% | YouTube, SoundCloud, Audius, local |
-| **Tonal (live theme)** | 134 MB | 20.1% | 12.0% | same as Tonal |
+| **Tonal (live theme)** | 131 MB | 21.8% | 13.4% | same as Tonal |
 | Strawberry | 133 MB | 1.8% | 0.6% | local files, Subsonic servers, internet radio; Tidal and Qobuz with a paid plan, Spotify with Premium |
 | Amberol | 182 MB | 0.8% | 0.9% | local files |
 | Tauon | 228 MB | 3.0% | 0.6% | local files, Plex, Jellyfin and Airsonic servers |
@@ -140,7 +140,7 @@ The last row is a joke. Nobody measured it, and nobody could find the download l
 - Strawberry, Amberol and Tauon play a local MP3. The others stream, which costs more.
 - "Plays" is checked against each project's own README, release notes and source, October 2026. Tauon removed Spotify in v10. Riff only imports Spotify playlists; it never plays Spotify audio.
 - Tonal's waves cost about 5.5% of one core, because the window is redrawn by the CPU 30 times a second. Turn them off in Settings and Tonal is the lightest player measured here.
-- "Live theme" is Northern lights (Aurora scene, Glass style, Pulse) at 15 fps. A moving scene costs about 12% of one core, more while it reacts to music. The default Classic look paints nothing.
+- "Live theme" is Northern lights (Aurora scene, Glass style, Pulse) at 15 fps. A moving scene costs about 13% of one core, more while it reacts to music. The default Classic look paints nothing.
 - [Spotifast](https://github.com/crmne/spotifast) states "100–250 MB of RAM" in its README, and playback needs Spotify Premium, so it isn't measured here.
 - "Before playing" is the 15 seconds right after the 30-second wait, with the app open and nothing playing.
 

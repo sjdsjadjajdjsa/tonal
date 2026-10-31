@@ -340,39 +340,39 @@
     "runs": [
       {
         "idle": {
-          "cpu": 11.96,
-          "mb": 126.3,
+          "cpu": 13.41,
+          "mb": 122.6,
           "processes": 2
         },
         "playing": {
-          "cpu": 20.22,
-          "mb": 134.1,
+          "cpu": 21.99,
+          "mb": 130.7,
           "processes": 3
         },
         "verified_playing": true
       },
       {
         "idle": {
-          "cpu": 12.03,
-          "mb": 126.0,
+          "cpu": 13.34,
+          "mb": 124.5,
           "processes": 2
         },
         "playing": {
-          "cpu": 20.02,
-          "mb": 133.8,
+          "cpu": 21.63,
+          "mb": 132.2,
           "processes": 3
         },
         "verified_playing": true
       }
     ],
     "idle": {
-      "cpu": 11.995000000000001,
-      "mb": 126.15,
+      "cpu": 13.375,
+      "mb": 123.55,
       "processes": 2.0
     },
     "playing": {
-      "cpu": 20.119999999999997,
-      "mb": 133.95,
+      "cpu": 21.81,
+      "mb": 131.45,
       "processes": 3.0
     },
     "verified_playing": true

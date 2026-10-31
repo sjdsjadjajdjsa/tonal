@@ -10,14 +10,14 @@
 <rect x="190" y="133" width="540" height="16" rx="4" fill="#3a3a40" opacity="0.35"/>
 <rect x="190" y="133" width="51.2" height="16" rx="4" fill="#1ed760"/>
 <text x="249.2" y="145" font-size="12" font-weight="600" fill="#f3f3f5">128 MB</text>
-<text x="178" y="175" font-size="13" text-anchor="end" font-weight="400" fill="#f3f3f5">Strawberry</text>
+<text x="178" y="175" font-size="13" text-anchor="end" font-weight="600" fill="#f3f3f5">Tonal (live theme)</text>
 <rect x="190" y="163" width="540" height="16" rx="4" fill="#3a3a40" opacity="0.35"/>
-<rect x="190" y="163" width="53.3" height="16" rx="4" fill="#6e6e74"/>
-<text x="251.3" y="175" font-size="12" font-weight="400" fill="#a2a2a8">133 MB</text>
-<text x="178" y="205" font-size="13" text-anchor="end" font-weight="600" fill="#f3f3f5">Tonal (live theme)</text>
+<rect x="190" y="163" width="52.7" height="16" rx="4" fill="#1ed760"/>
+<text x="250.7" y="175" font-size="12" font-weight="600" fill="#f3f3f5">131 MB</text>
+<text x="178" y="205" font-size="13" text-anchor="end" font-weight="400" fill="#f3f3f5">Strawberry</text>
 <rect x="190" y="193" width="540" height="16" rx="4" fill="#3a3a40" opacity="0.35"/>
-<rect x="190" y="193" width="53.7" height="16" rx="4" fill="#1ed760"/>
-<text x="251.7" y="205" font-size="12" font-weight="600" fill="#f3f3f5">134 MB</text>
+<rect x="190" y="193" width="53.3" height="16" rx="4" fill="#6e6e74"/>
+<text x="251.3" y="205" font-size="12" font-weight="400" fill="#a2a2a8">133 MB</text>
 <text x="178" y="235" font-size="13" text-anchor="end" font-weight="400" fill="#f3f3f5">Amberol</text>
 <rect x="190" y="223" width="540" height="16" rx="4" fill="#3a3a40" opacity="0.35"/>
 <rect x="190" y="223" width="73.0" height="16" rx="4" fill="#6e6e74"/>
@@ -73,8 +73,8 @@
 <text x="286.3" y="647" font-size="12" font-weight="400" fill="#a2a2a8">10.4 %</text>
 <text x="178" y="677" font-size="13" text-anchor="end" font-weight="600" fill="#f3f3f5">Tonal (live theme)</text>
 <rect x="190" y="665" width="540" height="16" rx="4" fill="#3a3a40" opacity="0.35"/>
-<rect x="190" y="665" width="170.1" height="16" rx="4" fill="#1ed760"/>
-<text x="368.1" y="677" font-size="12" font-weight="600" fill="#f3f3f5">20.1 %</text>
+<rect x="190" y="665" width="184.4" height="16" rx="4" fill="#1ed760"/>
+<text x="382.4" y="677" font-size="12" font-weight="600" fill="#f3f3f5">21.8 %</text>
 <text x="178" y="707" font-size="13" text-anchor="end" font-weight="400" fill="#f3f3f5">Riff</text>
 <rect x="190" y="695" width="540" height="16" rx="4" fill="#3a3a40" opacity="0.35"/>
 <rect x="190" y="695" width="514.3" height="16" rx="4" fill="#6e6e74"/>
