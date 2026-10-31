@@ -140,6 +140,15 @@ pub async fn update_ytdlp() -> anyhow::Result<String> {
         .to_string())
 }
 
+/// True when the yt-dlp on PATH was installed or updated less than `age` ago.
+pub fn ytdlp_installed_within(age: Duration) -> bool {
+    find_on_path("yt-dlp")
+        .and_then(|path| std::fs::canonicalize(path).ok())
+        .and_then(|path| std::fs::metadata(path).ok()?.modified().ok())
+        .and_then(|modified| modified.elapsed().ok())
+        .is_some_and(|elapsed| elapsed < age)
+}
+
 /// True when the yt-dlp on PATH is Homebrew's (the usual macOS install).
 fn homebrew_owns_ytdlp() -> bool {
     find_on_path("brew").is_some()

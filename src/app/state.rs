@@ -29,8 +29,10 @@ pub struct State {
     pub muted_from: Option<f64>,
     pub toast: u64,
     pub warned_youtube_runtime: bool,
-    /// Track ids already given their one fallback attempt.
-    pub fallback_tried: std::collections::HashSet<String>,
+    /// When each song last got a YouTube retry. A retry that plays leaves the
+    /// song on YouTube, so a later failure may try YouTube again, but not in a
+    /// loop of fail, retry, fail.
+    pub youtube_retried: std::collections::HashMap<String, Instant>,
     pub nav: Vec<super::browse::Nav>,
     pub nav_at: usize,
     pub artist_page: Option<crate::model::ArtistPage>,
@@ -63,7 +65,7 @@ impl State {
             muted_from: None,
             toast: 0,
             warned_youtube_runtime: false,
-            fallback_tried: Default::default(),
+            youtube_retried: Default::default(),
             nav: Vec::new(),
             nav_at: 0,
             artist_page: None,

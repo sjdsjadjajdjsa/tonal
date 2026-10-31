@@ -321,18 +321,10 @@ impl Controller {
     /// song is skipped only once every source has come up empty.
     fn recover(&self, key: u64, track: Track, error: String) {
         log::warn!("Load failed for {}: {error}", track.title);
-        let tried = self.state.lock().fallback_tried.contains(&track.id);
         let this = self.clone();
         tokio::spawn(async move {
-            if tried {
-                if this.is_current(key) {
-                    this.status(format!("Couldn't play {}", track.title));
-                }
-                this.player.skip_failed(key);
-                return;
-            }
             match this.find_copy(&track).await {
-                Some(found) => this.apply_fallback(key, &track, found),
+                Some(found) => this.apply_fallback(key, found),
                 None => {
                     if this.is_current(key) {
                         this.status(format!("Couldn't play {}", track.title));
@@ -370,15 +362,23 @@ impl Controller {
         }
     }
 
-    /// Once per song, looks for a YouTube access strategy that loads it again.
-    /// Sends exactly one `(true, _)` answer; false when no retry was started.
+    /// Looks for a YouTube access strategy that loads the song again, at most
+    /// once per song every `YOUTUBE_RETRY_GAP`. Sends exactly one `(true, _)`
+    /// answer; false when no retry was started.
     fn start_youtube_retry(&self, track: &Track, tx: &CopySender) -> bool {
-        let id = format!("unblock:{}", track.id);
+        if !crate::sources::is_youtube_url(&track.play_url) {
+            return false;
+        }
         {
             let mut s = self.state.lock();
-            if !crate::sources::is_youtube_url(&track.play_url) || !s.fallback_tried.insert(id) {
+            let now = Instant::now();
+            if s.youtube_retried
+                .get(&track.id)
+                .is_some_and(|at| now.duration_since(*at) < Self::YOUTUBE_RETRY_GAP)
+            {
                 return false;
             }
+            s.youtube_retried.insert(track.id.clone(), now);
         }
         let tx = tx.clone();
         let original = track.clone();
@@ -398,6 +398,9 @@ impl Controller {
         true
     }
 
+    /// Shortest time between two YouTube retries of the same song.
+    const YOUTUBE_RETRY_GAP: Duration = Duration::from_secs(5 * 60);
+
     /// Searches SoundCloud and Audius for the same song; each sends `(false,
     /// Some(copy))` for its best playable match.
     fn start_searches(&self, track: &Track, tx: &CopySender) {
@@ -415,13 +418,8 @@ impl Controller {
     }
 
     /// Swaps a copy into queue entry `key`: the engine plays it while the entry
-    /// is still the held, current one, and otherwise repairs the slot. A copy
-    /// from another source spends the song's one fallback; a YouTube retry does
-    /// not, so if it fails again SoundCloud and Audius still get their turn.
-    fn apply_fallback(&self, key: u64, original: &Track, found: Track) {
-        if found.id != original.id {
-            self.state.lock().fallback_tried.insert(original.id.clone());
-        }
+    /// is still the held, current one, and otherwise repairs the slot.
+    fn apply_fallback(&self, key: u64, found: Track) {
         let label = found.source.label();
         let mut tracks = vec![found];
         self.playable(&mut tracks);
