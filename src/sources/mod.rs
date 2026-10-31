@@ -2,7 +2,6 @@ mod audius;
 pub mod download;
 pub mod local;
 mod pot;
-pub(crate) mod resolve;
 mod soundcloud;
 mod youtube;
 mod youtube_browse;
@@ -73,12 +72,35 @@ pub fn ytdl_raw_options() -> String {
 }
 
 /// Tries each YouTube access layer until yt-dlp resolves `url`, remembering the
-/// one that worked for every later yt-dlp and mpv load. Returns a description
-/// of the working layer and the stream URL it resolved, or yt-dlp's last error.
-pub async fn unblock_youtube(url: &str) -> Result<(String, Option<String>), String> {
+/// one that worked for every later yt-dlp and mpv load. Returns a description of
+/// the working layer, or yt-dlp's last error.
+pub async fn unblock_youtube(url: &str) -> Result<String, String> {
     pot::unblock(url).await
 }
 
+/// Asks yt-dlp whether `url` would play, without downloading it. Returns
+/// yt-dlp's error line when it would not.
+pub async fn playable_check(url: &str) -> Result<(), String> {
+    let mut command = ytdlp();
+    command
+        .args(["--simulate", "--no-warnings", "--no-playlist"])
+        .args(["-f", "bestaudio/best", url])
+        .kill_on_drop(true);
+    let output = tokio::time::timeout(Duration::from_secs(60), command.output())
+        .await
+        .map_err(|_| "yt-dlp timed out".to_string())?
+        .map_err(|e| e.to_string())?;
+    if output.status.success() {
+        return Ok(());
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    Err(stderr
+        .lines()
+        .find_map(|l| l.strip_prefix("ERROR: "))
+        .unwrap_or("yt-dlp could not play it")
+        .trim()
+        .to_string())
+}
 /// yt-dlp needs a JavaScript runtime to solve YouTube's challenges. It looks for
 /// Deno by default; this also enables Node or Bun when one of those is installed.
 pub fn js_runtime() -> Option<&'static str> {
@@ -87,10 +109,13 @@ pub fn js_runtime() -> Option<&'static str> {
         .find(|name| on_path(name))
 }
 
-/// Updates yt-dlp in place when it is the standalone build (bundled or downloaded).
-/// Returns the version line yt-dlp prints, or an error that says how to update it
-/// when a package manager owns it.
+/// Updates yt-dlp: Homebrew's with `brew upgrade`, the standalone build
+/// (bundled or downloaded) in place. Returns what changed, or an error that
+/// says how to update it when another package manager owns it.
 pub async fn update_ytdlp() -> anyhow::Result<String> {
+    if homebrew_owns_ytdlp() {
+        return brew_upgrade_ytdlp().await;
+    }
     let output = tokio::time::timeout(
         Duration::from_secs(120),
         ytdlp_plain().args(["--update-to", "stable"]).output(),
@@ -113,6 +138,33 @@ pub async fn update_ytdlp() -> anyhow::Result<String> {
         .unwrap_or("yt-dlp updated")
         .trim()
         .to_string())
+}
+
+/// True when the yt-dlp on PATH is Homebrew's (the usual macOS install).
+fn homebrew_owns_ytdlp() -> bool {
+    find_on_path("brew").is_some()
+        && find_on_path("yt-dlp")
+            .and_then(|path| std::fs::canonicalize(path).ok())
+            .is_some_and(|path| path.to_string_lossy().contains("/Cellar/"))
+}
+
+/// Upgrades Homebrew's yt-dlp; a no-op when it is already the newest.
+async fn brew_upgrade_ytdlp() -> anyhow::Result<String> {
+    let mut command = tokio::process::Command::new("brew");
+    command.args(["upgrade", "yt-dlp"]).kill_on_drop(true);
+    let output = tokio::time::timeout(Duration::from_secs(300), command.output()).await??;
+    let text = String::from_utf8_lossy(&output.stdout).to_string()
+        + &String::from_utf8_lossy(&output.stderr);
+    anyhow::ensure!(
+        output.status.success(),
+        "{}",
+        text.lines().last().unwrap_or("brew upgrade yt-dlp failed")
+    );
+    Ok(if text.contains("already installed") {
+        "yt-dlp is up to date".into()
+    } else {
+        "Updated yt-dlp with Homebrew".into()
+    })
 }
 
 fn ytdlp_plain() -> tokio::process::Command {
@@ -350,26 +402,15 @@ pub fn is_youtube_url(url: &str) -> bool {
         })
 }
 
-/// True for URLs mpv can only play after yt-dlp resolves them: YouTube and
-/// SoundCloud. Audius and local files load directly.
-pub fn is_streamed_url(url: &str) -> bool {
-    is_youtube_url(url)
-        || url::Url::parse(url)
-            .ok()
-            .and_then(|url| url.host_str().map(str::to_ascii_lowercase))
-            .is_some_and(|host| host == "soundcloud.com" || host == "www.soundcloud.com")
-}
-
 /// Debug hook: TONAL_DEBUG_FAKE_BOT=1 makes every YouTube load fail as if bot-blocked.
 #[cfg(feature = "debug-hooks")]
 fn fake_bot(url: &str) -> bool {
     is_youtube_url(url) && std::env::var_os("TONAL_DEBUG_FAKE_BOT").is_some_and(|v| v == "1")
 }
 
-/// The URL mpv loads for a track. mpv always gets the page URL so its yt-dlp
-/// hook resolves it with the right headers; a bare stream URL fails to play.
-/// Only the debug hook changes it, to an unloadable path so YouTube fails the
-/// way a bot block does.
+/// The URL mpv loads for a track: the page URL, which mpv's yt-dlp hook
+/// resolves with Tonal's access strategy. Only the debug hook changes it, to an
+/// unloadable path so YouTube fails the way a bot block does.
 pub fn mpv_url(url: &str) -> String {
     #[cfg(feature = "debug-hooks")]
     if fake_bot(url) {
@@ -387,19 +428,21 @@ pub fn missing_tools() -> Vec<String> {
 }
 
 fn on_path(name: &str) -> bool {
-    std::env::var_os("PATH").is_some_and(|paths| {
-        std::env::split_paths(&paths).any(|dir| {
-            #[cfg(windows)]
-            {
-                [".exe", ".cmd", ".bat", ""]
-                    .iter()
-                    .any(|suffix| dir.join(format!("{name}{suffix}")).is_file())
-            }
-            #[cfg(not(windows))]
-            {
-                dir.join(name).is_file()
-            }
-        })
+    find_on_path(name).is_some()
+}
+
+/// Full path of the first `name` executable on PATH.
+pub fn find_on_path(name: &str) -> Option<std::path::PathBuf> {
+    #[cfg(windows)]
+    let suffixes: &[&str] = &[".exe", ".cmd", ".bat", ""];
+    #[cfg(not(windows))]
+    let suffixes: &[&str] = &[""];
+    let paths = std::env::var_os("PATH")?;
+    std::env::split_paths(&paths).find_map(|dir| {
+        suffixes
+            .iter()
+            .map(|suffix| dir.join(format!("{name}{suffix}")))
+            .find(|path| path.is_file())
     })
 }
 

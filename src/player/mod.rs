@@ -30,12 +30,6 @@ pub enum PlayerEvent {
         track: Track,
         error: String,
     },
-    /// The playing track is nearing its end; `track` is the entry that plays
-    /// next. The app makes sure it loads and swaps in a fallback before the gap.
-    CheckNext {
-        key: u64,
-        track: Track,
-    },
     /// Short format tag of what plays, like "FLAC 24/96" or "Opus 160k".
     Quality(String),
     /// Output devices of the audio backend mpv uses.
@@ -364,9 +358,13 @@ struct Engine {
     rg_tagged: bool,
     /// Queue key of the failed YouTube entry waiting for the app's answer.
     held: Option<u64>,
-    /// Current queue key whose next entry was already sent for a pre-check.
-    precheck_key: Option<u64>,
+    /// When the current load counts as hung: mpv's yt-dlp hook has no timeout,
+    /// so a stuck extraction would otherwise never fail over.
+    load_deadline: Option<Instant>,
 }
+
+/// How long a song may take to load before it is treated as a failed load.
+const LOAD_TIMEOUT: Duration = Duration::from_secs(45);
 
 impl Engine {
     fn new(mut config: PlayerConfig, events: UnboundedSender<PlayerEvent>) -> Self {
@@ -405,7 +403,7 @@ impl Engine {
             devices: Vec::new(),
             rg_tagged: false,
             held: None,
-            precheck_key: None,
+            load_deadline: None,
         }
     }
 
@@ -415,6 +413,7 @@ impl Engine {
             let deadline = self.fade.as_ref().map_or_else(Instant::now, |fade| {
                 fade.last_tick + Duration::from_millis(100)
             });
+            let load_deadline = self.load_deadline;
             let result = tokio::select! {
                 command = commands.recv() => match command {
                     Some(Cmd::Shutdown) | None => break,
@@ -422,6 +421,8 @@ impl Engine {
                 },
                 Some(message) = self.ipc_rx.recv() => self.message(message).await,
                 _ = tokio::time::sleep_until(deadline), if ticking => self.tick_fade().await,
+                _ = tokio::time::sleep_until(load_deadline.unwrap_or_else(Instant::now)),
+                    if load_deadline.is_some() => self.load_timed_out().await,
             };
             if let Err(error) = self.handle_result(result).await {
                 self.emit(PlayerEvent::Error(format!("{error:#}")));
@@ -569,7 +570,6 @@ impl Engine {
         self.pos = 0.0;
         self.played = 0.0;
         self.last_playhead = None;
-        self.precheck_key = None;
         self.duration = self
             .queue
             .track()
@@ -606,7 +606,11 @@ impl Engine {
         held && self.queue.key() == Some(key)
     }
     async fn start_current(&mut self) -> Result<()> {
+        // Any new load (user skip, jump, an answer) ends a hold on a failed entry.
         self.held = None;
+        self.load_deadline = None;
+        // Commit the target track/position before any transport operation, so a
+        // failed cancellation, spawn, pause or load recovers the requested track.
         self.announce();
         self.pos = self.start_at.unwrap_or(0.0);
         self.cancel_fade().await?;
@@ -622,8 +626,10 @@ impl Engine {
         }
         self.cache_paused = false;
         self.emit(PlayerEvent::Paused(self.paused));
+        // Apply pause before loading: a paused replacement must never start audibly.
         self.active_send(json!(["set_property", "pause", self.paused]))
             .await?;
+        self.load_deadline = Some(Instant::now() + LOAD_TIMEOUT);
         self.active
             .as_mut()
             .expect("active mpv")
@@ -638,6 +644,7 @@ impl Engine {
     }
     async fn stop_playback(&mut self) -> Result<()> {
         self.held = None;
+        self.load_deadline = None;
         self.cancel_fade().await?;
         self.pending = None;
         self.quality = Quality::default();
@@ -868,11 +875,13 @@ impl Engine {
                 if equalizer != self.config.equalizer {
                     let before = std::mem::replace(&mut self.config.equalizer, equalizer);
                     let rebuild = before.correction != self.config.equalizer.correction;
+                    // Bit-perfect runs without the filter; it comes back on respawn.
                     let commands = if self.config.bit_perfect {
                         Vec::new()
                     } else if rebuild {
                         vec![json!(["set_property", "af", self.af()])]
                     } else {
+                        // Only what changed, so a drag sends one or two commands.
                         let old = before.commands();
                         self.config
                             .equalizer
@@ -954,16 +963,18 @@ impl Engine {
         self.near_end();
         Ok(())
     }
-    /// the app fallback, anything else is reported and skipped.
+    /// The current entry failed to load. A YouTube song is held for the app's
+    /// fallback; anything else is reported and skipped.
     async fn failed_load(&mut self, file_error: &str) -> Result<()> {
         self.failures += 1;
         self.pending = None;
-        if let Some(track) = self.queue.track() {
-            crate::sources::resolve::forget(&track.play_url);
-        }
+        self.load_deadline = None;
+        // Every YouTube load error is held for a fallback, not only bot blocks, on purpose: music should always play.
         if let (Some(key), Some(track)) = (self.queue.key(), self.queue.track())
             && crate::sources::is_youtube_url(&track.play_url)
         {
+            // Hold here while the app looks for the song elsewhere, so a
+            // blocked YouTube does not race through the whole queue.
             self.pending_entry = None;
             if let Some(mpv) = &mut self.active {
                 mpv.entry_id = None;
@@ -991,6 +1002,16 @@ impl Engine {
             self.start_current().await?;
         }
         Ok(())
+    }
+    /// The current load never finished: stop it and fail over like any failed
+    /// load, so a hung yt-dlp under mpv cannot leave the queue silent.
+    async fn load_timed_out(&mut self) -> Result<()> {
+        self.load_deadline = None;
+        if let Some(mpv) = &mut self.active {
+            mpv.entry_id = None;
+        }
+        self.active_send(json!(["stop"])).await?;
+        self.failed_load("load timed out").await
     }
 
     async fn message(&mut self, message: Message) -> Result<()> {
@@ -1071,7 +1092,6 @@ impl Engine {
                     .and_then(|key| self.queue.index_of(key))
                     .and_then(|index| self.queue.at(index).cloned());
                 if let (Some(key), Some(track)) = (key, track) {
-                    crate::sources::resolve::forget(&track.play_url);
                     self.emit(PlayerEvent::LoadFailed {
                         key,
                         track,
@@ -1122,19 +1142,6 @@ impl Engine {
                                 pos,
                                 duration: self.duration,
                             });
-                        }
-                        if !self.paused
-                            && self.duration > 60.0
-                            && pos > self.duration - 45.0
-                            && let Some(current) = self.queue.key()
-                            && self.precheck_key != Some(current)
-                            && let Some(index) = self.queue.next(self.config.repeat, true)
-                            && let Some(key) = self.queue.key_at(index)
-                            && key != current
-                            && let Some(track) = self.queue.at(index).cloned()
-                        {
-                            self.precheck_key = Some(current);
-                            self.emit(PlayerEvent::CheckNext { key, track });
                         }
                         self.maybe_fade().await?;
                     }
@@ -1205,7 +1212,7 @@ impl Engine {
                 None => {}
             },
             Some("start-file") => self.quality.reset(),
-            Some("file-loaded") => {}
+            Some("file-loaded") => self.load_deadline = None,
             Some("end-file") if value["reason"] == "eof" => {
                 if self.fade.is_some() {
                     self.finish_fade().await?;

@@ -218,6 +218,18 @@ impl Mpv {
             "--audio-client-name=tonal-{}-{id}",
             std::process::id()
         ));
+        // The hook would otherwise prefer a yt-dlp in mpv's config dir, which can
+        // be older than the one Tonal probes with and fail where it works.
+        if let Some(path) = crate::sources::find_on_path("yt-dlp")
+            .and_then(|path| path.to_str().map(str::to_owned))
+            .filter(|path| !path.contains(','))
+        {
+            command.arg(format!("--script-opts=ytdl_hook-ytdl_path={path}"));
+        }
+        // Deno under the hook must never stop to ask a question.
+        command
+            .env("DENO_NO_PROMPT", "1")
+            .env("DENO_NO_UPDATE_CHECK", "1");
 
         #[cfg(test)]
         command.arg("--ao=null");

@@ -307,12 +307,6 @@ impl Controller {
                 None => self.status(error),
             },
             PlayerEvent::LoadFailed { key, track, error } => self.recover(key, track, error),
-            PlayerEvent::CheckNext { key, track } => {
-                let this = self.clone();
-                tokio::spawn(async move {
-                    this.precheck(key, track).await;
-                });
-            }
         }
     }
     /// True while queue entry `key` is still the current song. The entry is found
@@ -327,125 +321,118 @@ impl Controller {
     /// song is skipped only once every source has come up empty.
     fn recover(&self, key: u64, track: Track, error: String) {
         log::warn!("Load failed for {}: {error}", track.title);
-        crate::sources::resolve::forget(&track.play_url);
         let tried = self.state.lock().fallback_tried.contains(&track.id);
         let this = self.clone();
         tokio::spawn(async move {
             if tried {
+                if this.is_current(key) {
+                    this.status(format!("Couldn't play {}", track.title));
+                }
                 this.player.skip_failed(key);
-                this.status(format!("Couldn't play {}", track.title));
                 return;
             }
-            let mut race = this.start_race(&track);
-            let winner = race.recv().await;
-            if winner.is_none() {
-                this.player.skip_failed(key);
-            }
-            match winner {
-                Some(found) => this.apply_fallback(key, &track.id, found),
-                None => this.status(format!("Couldn't play {}", track.title)),
+            match this.find_copy(&track).await {
+                Some(found) => this.apply_fallback(key, &track, found),
+                None => {
+                    if this.is_current(key) {
+                        this.status(format!("Couldn't play {}", track.title));
+                    }
+                    this.player.skip_failed(key);
+                }
             }
         });
     }
 
-    /// The engine says `track` plays next. Makes sure it can: a song that will
-    /// not load gets its fallback swapped in before the gap instead of after it.
-    async fn precheck(&self, key: u64, track: Track) {
-        if std::path::Path::new(&track.play_url).is_file()
-            || !crate::sources::is_streamed_url(&track.play_url)
-            || crate::sources::resolve::lookup(&track.play_url).is_some()
-        {
-            return;
-        }
-        match crate::sources::resolve::resolve(&track.play_url).await {
-            Ok(_) => {}
-            Err(why) => {
-                log::debug!("Pre-check failed for {}: {why}", track.title);
-                if self.state.lock().fallback_tried.contains(&track.id) {
-                    return;
+    /// Finds a playable copy of `track`. YouTube's own retry (new access
+    /// strategy) and the SoundCloud and Audius searches all start at once.
+    /// YouTube is preferred: a copy found elsewhere waits up to
+    /// `YOUTUBE_PREFERENCE` for the retry before it plays instead.
+    async fn find_copy(&self, track: &Track) -> Option<Track> {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<(bool, Option<Track>)>();
+        let mut youtube_running = self.start_youtube_retry(track, &tx);
+        self.start_searches(track, &tx);
+        drop(tx);
+        let mut other: Option<Track> = None;
+        loop {
+            let next = if other.is_some() {
+                match tokio::time::timeout(Self::YOUTUBE_PREFERENCE, rx.recv()).await {
+                    Ok(next) => next,
+                    Err(_) => return other,
                 }
-                let mut race = self.start_race(&track);
-                if let Some(found) = race.recv().await {
-                    self.apply_fallback(key, &track.id, found);
+            } else {
+                rx.recv().await
+            };
+            match next {
+                None => return other,
+                Some((true, Some(found))) => return Some(found),
+                Some((true, None)) => youtube_running = false,
+                Some((false, found)) => {
+                    if other.is_none() {
+                        other = found;
+                    }
                 }
+            }
+            if !youtube_running && other.is_some() {
+                return other;
             }
         }
     }
 
-    /// Searches every source for `track` at once and returns the channel the
-    /// first playable copy arrives on. YouTube's own retry keeps running after
-    /// the race is over, so any access strategy it finds is remembered either way.
-    fn start_race(&self, track: &Track) -> tokio::sync::mpsc::UnboundedReceiver<Track> {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        let unblock_id = format!("unblock:{}", track.id);
-        let retry_youtube = {
+    /// How long a copy found on another source waits for YouTube's retry.
+    const YOUTUBE_PREFERENCE: std::time::Duration = std::time::Duration::from_secs(12);
+
+    /// Once per song, looks for a YouTube access strategy that loads it again.
+    /// Sends exactly one `(true, _)` answer; false when no retry was started.
+    fn start_youtube_retry(&self, track: &Track, tx: &CopySender) -> bool {
+        let id = format!("unblock:{}", track.id);
+        {
             let mut s = self.state.lock();
-            let retry = crate::sources::is_youtube_url(&track.play_url)
-                && !s.fallback_tried.contains(&unblock_id);
-            s.fallback_tried.insert(unblock_id);
-            retry
-        };
-        if retry_youtube {
-            let tx = tx.clone();
-            let url = track.play_url.clone();
-            let original = track.clone();
-            tokio::spawn(async move {
-                match crate::sources::unblock_youtube(&url).await {
-                    Ok((how, direct)) => {
-                        log::info!("YouTube retry for {} ({how})", original.title);
-                        if let Some(direct) = direct {
-                            crate::sources::resolve::remember(&url, &direct);
-                        }
-                        let _ = tx.send(original);
-                    }
-                    Err(why) => log::info!("YouTube stays blocked for {}: {why}", original.title),
-                }
-            });
+            if !crate::sources::is_youtube_url(&track.play_url) || !s.fallback_tried.insert(id) {
+                return false;
+            }
         }
+        let tx = tx.clone();
+        let original = track.clone();
+        tokio::spawn(async move {
+            let found = match crate::sources::unblock_youtube(&original.play_url).await {
+                Ok(how) => {
+                    log::info!("YouTube retry for {} ({how})", original.title);
+                    Some(original)
+                }
+                Err(why) => {
+                    log::info!("YouTube stays blocked for {}: {why}", original.title);
+                    None
+                }
+            };
+            let _ = tx.send((true, found));
+        });
+        true
+    }
+
+    /// Searches SoundCloud and Audius for the same song; each sends `(false,
+    /// Some(copy))` for its best playable match.
+    fn start_searches(&self, track: &Track, tx: &CopySender) {
         for source in [SourceKind::SoundCloud, SourceKind::Audius] {
             let tx = tx.clone();
             let title = track.title.clone();
             let artist = track.artist.clone();
             let duration = track.duration_secs;
             tokio::spawn(async move {
-                let matches =
-                    match crate::sources::match_tracks(source, &title, &artist, duration).await {
-                        Ok(matches) => matches,
-                        Err(e) => {
-                            log::debug!("{} fallback search: {e:#}", source.label());
-                            return;
-                        }
-                    };
-                for found in matches.into_iter().take(3) {
-                    if source != SourceKind::SoundCloud {
-                        let _ = tx.send(found);
-                        return;
-                    }
-                    // SoundCloud lists DRM-only uploads yt-dlp cannot play, so
-                    // check the best few before offering one; the check also
-                    // caches the stream URL so the swap starts instantly.
-                    match crate::sources::resolve::resolve(&found.play_url).await {
-                        Ok(_) => {
-                            let _ = tx.send(found);
-                            return;
-                        }
-                        Err(why) => log::debug!("Skipping {}: {why}", found.title),
-                    }
+                if let Some(found) = search_copy(source, &title, &artist, duration).await {
+                    let _ = tx.send((false, Some(found)));
                 }
             });
         }
-        rx
     }
 
-    /// Swaps a fallback into queue entry `key`: the engine plays it while the
-    /// entry is still the held, current one, and otherwise repairs the slot.
-    /// The original song marks its one fallback attempt as used only now that a
-    /// copy was actually found, so a transient search failure does not spend it.
-    fn apply_fallback(&self, key: u64, original_id: &str, found: Track) {
-        self.state
-            .lock()
-            .fallback_tried
-            .insert(original_id.to_owned());
+    /// Swaps a copy into queue entry `key`: the engine plays it while the entry
+    /// is still the held, current one, and otherwise repairs the slot. A copy
+    /// from another source spends the song's one fallback; a YouTube retry does
+    /// not, so if it fails again SoundCloud and Audius still get their turn.
+    fn apply_fallback(&self, key: u64, original: &Track, found: Track) {
+        if found.id != original.id {
+            self.state.lock().fallback_tried.insert(original.id.clone());
+        }
         let label = found.source.label();
         let mut tracks = vec![found];
         self.playable(&mut tracks);
@@ -462,6 +449,35 @@ impl Controller {
         self.result(self.library.save_settings(&s.settings));
     }
 }
+type CopySender = tokio::sync::mpsc::UnboundedSender<(bool, Option<Track>)>;
+
+/// Best playable match for a song on `source`. SoundCloud lists DRM-only
+/// uploads yt-dlp cannot play, so its top few are checked before one is used.
+async fn search_copy(
+    source: SourceKind,
+    title: &str,
+    artist: &str,
+    duration: Option<f64>,
+) -> Option<Track> {
+    let matches = match crate::sources::match_tracks(source, title, artist, duration).await {
+        Ok(matches) => matches,
+        Err(e) => {
+            log::debug!("{} fallback search: {e:#}", source.label());
+            return None;
+        }
+    };
+    for found in matches.into_iter().take(3) {
+        if source != SourceKind::SoundCloud {
+            return Some(found);
+        }
+        match crate::sources::playable_check(&found.play_url).await {
+            Ok(()) => return Some(found),
+            Err(why) => log::debug!("Skipping {}: {why}", found.title),
+        }
+    }
+    None
+}
+
 pub(super) fn now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

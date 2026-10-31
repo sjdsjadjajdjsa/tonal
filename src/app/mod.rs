@@ -34,6 +34,13 @@ pub fn run() -> anyhow::Result<()> {
     let library = Library::open_default()?;
     let settings = library.load_settings();
     crate::sources::set_cookies_browser(&settings.youtube_cookies);
+    // YouTube changes break old yt-dlp builds within days, so keep it current.
+    runtime.spawn(async {
+        match crate::sources::update_ytdlp().await {
+            Ok(version) => log::info!("yt-dlp: {version}"),
+            Err(e) => log::info!("yt-dlp not updated: {e:#}"),
+        }
+    });
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let player = player::spawn(
         PlayerConfig {

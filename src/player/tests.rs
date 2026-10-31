@@ -135,6 +135,32 @@ async fn real_mpv_failed_prefetched_entry_recovers() {
     );
 }
 
+#[tokio::test]
+async fn real_mpv_hung_load_times_out_and_moves_on() {
+    let tone = Tone::new();
+    // Accepts the connection and never answers, like a stuck extraction.
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let (tx, mut rx) = unbounded_channel();
+    let mut engine = Engine::new(config(), tx);
+    let mut tracks = tone.tracks();
+    tracks[0].play_url = format!("http://127.0.0.1:{port}/hang");
+    engine.command(Cmd::Play(tracks, 0)).await.unwrap();
+    assert!(engine.load_deadline.is_some());
+    engine.load_timed_out().await.unwrap();
+    assert_eq!(engine.queue.current, Some(1));
+    assert!(
+        std::iter::from_fn(|| rx.try_recv().ok()).any(|e| matches!(e, PlayerEvent::Error(_))),
+        "the hung song reports its failure"
+    );
+    pump_until(&mut engine, |e| e.pos > 0.1).await;
+    assert!(
+        engine.load_deadline.is_none(),
+        "file-loaded clears the watchdog"
+    );
+    drop(listener);
+}
+
 /// Makes the current entry a YouTube song and fails its load the way mpv does,
 /// returning the queue key the engine reports in `LoadFailed`.
 async fn fail_current_youtube(engine: &mut Engine, rx: &mut UnboundedReceiver<PlayerEvent>) -> u64 {
@@ -212,32 +238,6 @@ async fn real_mpv_replace_follows_moved_failed_entry() {
             .any(|e| matches!(e, PlayerEvent::NowPlaying(Some(t)) if t.title == "fallback"))
     );
     pump_until(&mut engine, |e| e.pos > 0.1).await;
-}
-
-#[tokio::test]
-async fn real_mpv_check_next_fires_once_near_the_end() {
-    let tone = Tone::with_secs(70);
-    let (mut engine, mut rx) = tone_engine(&tone).await;
-    engine.command(Cmd::Seek(30.0, false)).await.unwrap();
-    pump_until(&mut engine, |e| e.precheck_key.is_some()).await;
-    let next = engine.queue.key_at(1).unwrap();
-    let (key, track) = std::iter::from_fn(|| rx.try_recv().ok())
-        .find_map(|event| match event {
-            PlayerEvent::CheckNext { key, track } => Some((key, track)),
-            _ => None,
-        })
-        .expect("CheckNext");
-    assert_eq!(key, next);
-    assert_eq!(track.title, "tone-two");
-    // Seeking back and near the end again does not fire it a second time.
-    engine.command(Cmd::Seek(10.0, false)).await.unwrap();
-    pump_until(&mut engine, |e| e.pos > 9.0 && e.pos < 30.0).await;
-    engine.command(Cmd::Seek(40.0, false)).await.unwrap();
-    pump_until(&mut engine, |e| e.pos >= 40.0).await;
-    assert!(
-        !std::iter::from_fn(|| rx.try_recv().ok())
-            .any(|e| matches!(e, PlayerEvent::CheckNext { .. }))
-    );
 }
 
 async fn pump_until(engine: &mut Engine, predicate: impl Fn(&Engine) -> bool) {
