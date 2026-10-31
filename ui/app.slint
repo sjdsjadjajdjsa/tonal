@@ -778,7 +778,18 @@ export component AppWindow inherits Window {
 
     if ThemeStudio.peek && ThemeStudio.on: Rectangle {
         Image { width: root.width; height: root.height; source: ThemeStudio.image; image-fit: fill; }
-        TouchArea { clicked => { ThemeStudio.peek = false; } }
+        TouchArea { clicked => { ThemeStudio.peek = false; keys.focus(); } }
+        FocusScope {
+            init => { self.focus(); }
+            key-pressed(event) => {
+                if event.text == Key.Escape {
+                    ThemeStudio.peek = false;
+                    keys.focus();
+                    return accept;
+                }
+                reject
+            }
+        }
         Rectangle {
             y: root.height - 64px;
             width: hint.preferred-width + 32px;
