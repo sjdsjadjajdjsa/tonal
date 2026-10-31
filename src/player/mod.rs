@@ -1065,10 +1065,7 @@ impl Engine {
             // still plays, drop the dead prefetch and let the app fix the entry
             // before the gap.
             if self.gapless_eof && !self.gapless_position {
-                self.queue.current = self
-                    .pending
-                    .take()
-                    .and_then(|key| self.queue.index_of(key));
+                self.queue.current = self.pending.take().and_then(|key| self.queue.index_of(key));
                 if let Some(mpv) = &mut self.active {
                     mpv.entry_id = self.pending_entry.take();
                 }

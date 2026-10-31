@@ -309,9 +309,7 @@ impl Controller {
                 }
                 None => self.status(error),
             },
-            PlayerEvent::LoadFailed { key, track, error } => {
-                self.recover(key, track, error)
-            }
+            PlayerEvent::LoadFailed { key, track, error } => self.recover(key, track, error),
             PlayerEvent::CheckNext { key, track } => {
                 let this = self.clone();
                 tokio::spawn(async move {
@@ -449,15 +447,14 @@ impl Controller {
             let artist = track.artist.clone();
             let duration = track.duration_secs;
             tokio::spawn(async move {
-                let matches = match crate::sources::match_tracks(source, &title, &artist, duration)
-                    .await
-                {
-                    Ok(matches) => matches,
-                    Err(e) => {
-                        log::debug!("{} fallback search: {e:#}", source.label());
-                        return;
-                    }
-                };
+                let matches =
+                    match crate::sources::match_tracks(source, &title, &artist, duration).await {
+                        Ok(matches) => matches,
+                        Err(e) => {
+                            log::debug!("{} fallback search: {e:#}", source.label());
+                            return;
+                        }
+                    };
                 for found in matches.into_iter().take(3) {
                     if source != SourceKind::SoundCloud {
                         let _ = tx.send(found);
@@ -484,7 +481,10 @@ impl Controller {
     /// The original song marks its one fallback attempt as used only now that a
     /// copy was actually found, so a transient search failure does not spend it.
     fn apply_fallback(&self, key: u64, original_id: &str, found: Track) {
-        self.state.lock().fallback_tried.insert(original_id.to_owned());
+        self.state
+            .lock()
+            .fallback_tried
+            .insert(original_id.to_owned());
         let label = found.source.label();
         let mut tracks = vec![found];
         self.playable(&mut tracks);

@@ -129,7 +129,8 @@ async fn real_mpv_failed_prefetched_entry_recovers() {
         seen.push(format!("{e:?}"));
     }
     assert!(
-        seen.iter().any(|e| e.starts_with("Error") || e.starts_with("LoadFailed")),
+        seen.iter()
+            .any(|e| e.starts_with("Error") || e.starts_with("LoadFailed")),
         "the broken prefetched entry reports its failure"
     );
 }
