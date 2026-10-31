@@ -2,6 +2,122 @@ use super::controller::Controller;
 use crate::AppWindow;
 use slint::ComponentHandle;
 
+/// Runs a test script, one step per line, by sending input straight to the window so the
+/// real pointer and keyboard focus stay untouched: `wait ms`, `click x y`, `dclick x y`,
+/// `rclick x y`, `move x y`, `scroll x y dy`,
+/// `type text`, `key name`, `shot path`, `cmd command`, `page name`, `log text`.
+fn run_script(
+    app: Controller,
+    weak: slint::Weak<AppWindow>,
+    mut steps: std::collections::VecDeque<String>,
+) {
+    use slint::platform::{Key, PointerEventButton, WindowEvent};
+    let Some(line) = steps.pop_front() else {
+        log::info!("SCRIPT done");
+        return;
+    };
+    let (verb, rest) = line.split_once(' ').unwrap_or((line.as_str(), ""));
+    let mut wait = 150;
+    if let Some(w) = weak.upgrade() {
+        let win = w.window();
+        let num = |i: usize| {
+            rest.split_whitespace()
+                .nth(i)
+                .and_then(|v| v.parse::<f32>().ok())
+                .unwrap_or(0.0)
+        };
+        let at = slint::LogicalPosition::new(num(0), num(1));
+        let key = |text: slint::SharedString| {
+            win.dispatch_event(WindowEvent::KeyPressed { text: text.clone() });
+            win.dispatch_event(WindowEvent::KeyReleased { text });
+        };
+        match verb {
+            "wait" => wait = num(0) as u64,
+            "click" => {
+                win.dispatch_event(WindowEvent::PointerMoved { position: at });
+                win.dispatch_event(WindowEvent::PointerPressed {
+                    position: at,
+                    button: PointerEventButton::Left,
+                });
+                win.dispatch_event(WindowEvent::PointerReleased {
+                    position: at,
+                    button: PointerEventButton::Left,
+                });
+            }
+            "dclick" => {
+                win.dispatch_event(WindowEvent::PointerMoved { position: at });
+                for _ in 0..2 {
+                    win.dispatch_event(WindowEvent::PointerPressed {
+                        position: at,
+                        button: PointerEventButton::Left,
+                    });
+                    win.dispatch_event(WindowEvent::PointerReleased {
+                        position: at,
+                        button: PointerEventButton::Left,
+                    });
+                }
+            }
+            "rclick" => {
+                win.dispatch_event(WindowEvent::PointerMoved { position: at });
+                win.dispatch_event(WindowEvent::PointerPressed {
+                    position: at,
+                    button: PointerEventButton::Right,
+                });
+                win.dispatch_event(WindowEvent::PointerReleased {
+                    position: at,
+                    button: PointerEventButton::Right,
+                });
+            }
+            "move" => win.dispatch_event(WindowEvent::PointerMoved { position: at }),
+            "scroll" => {
+                win.dispatch_event(WindowEvent::PointerMoved { position: at });
+                win.dispatch_event(WindowEvent::PointerScrolled {
+                    position: at,
+                    delta_x: 0.0,
+                    delta_y: num(2),
+                });
+            }
+            "type" => rest.chars().for_each(|c| key(c.to_string().into())),
+            "key" => match rest {
+                "enter" => key(Key::Return.into()),
+                "escape" => key(Key::Escape.into()),
+                "tab" => key(Key::Tab.into()),
+                "ctrl+a" => {
+                    win.dispatch_event(WindowEvent::KeyPressed {
+                        text: Key::Control.into(),
+                    });
+                    key("a".into());
+                    win.dispatch_event(WindowEvent::KeyReleased {
+                        text: Key::Control.into(),
+                    });
+                }
+                other => key(other.into()),
+            },
+            "shot" => match win.take_snapshot() {
+                Ok(px) => {
+                    if let Err(e) = image::save_buffer(
+                        rest,
+                        px.as_bytes(),
+                        px.width(),
+                        px.height(),
+                        image::ColorType::Rgba8,
+                    ) {
+                        log::error!("Script shot: {e}");
+                    }
+                }
+                Err(e) => log::error!("Script shot: {e}"),
+            },
+            "cmd" => app.command(rest),
+            "page" => app.load_page(rest),
+            "log" => log::info!("SCRIPT {rest}"),
+            _ => log::warn!("SCRIPT unknown step: {line}"),
+        }
+    }
+    slint::Timer::single_shot(std::time::Duration::from_millis(wait), move || {
+        run_script(app, weak, steps)
+    });
+}
+
 /// Opens the now playing view once a song is loaded.
 fn open_now_playing(weak: slint::Weak<AppWindow>, tries: u32) {
     slint::Timer::single_shot(std::time::Duration::from_millis(500), move || {
@@ -174,6 +290,21 @@ pub(super) fn debug_hooks(app: &Controller, window: &AppWindow) {
                 }
             });
         }
+    }
+    if let Some(text) = std::env::var("TONAL_DEBUG_SCRIPT")
+        .ok()
+        .and_then(|f| std::fs::read_to_string(f).ok())
+    {
+        let steps = text
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .map(String::from)
+            .collect();
+        let (app, weak) = (app.clone(), window.as_weak());
+        slint::Timer::single_shot(std::time::Duration::from_secs(4), move || {
+            run_script(app, weak, steps)
+        });
     }
     if let Ok(title) = std::env::var("TONAL_DEBUG_TITLE") {
         window.set_window_title(title.into());
