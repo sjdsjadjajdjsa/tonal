@@ -1,0 +1,107 @@
+import { Theme } from "theme.slint";
+
+/// A vertical scroll bar tinted with the theme's accent colour.
+component Bar inherits Rectangle {
+    in-out property <length> value;
+    in property <length> maximum;
+    in property <length> page-size;
+    callback scrolled();
+
+    private property <length> track: root.height - 8px;
+    private property <length> thumb-size: root.maximum <= 0 ? 0 : max(min(32px, root.track), root.track * root.page-size / (root.maximum + root.page-size));
+    private property <bool> active: area.has-hover || area.pressed;
+
+    width: 14px;
+    visible: root.maximum > 0;
+    border-radius: 7px;
+    background: root.active ? Theme.accent.with-alpha(0.08) : transparent;
+    animate background { duration: 150ms; }
+
+    thumb := Rectangle {
+        width: root.active ? 6px : 3px;
+        height: root.thumb-size;
+        x: parent.width - 4px - self.width;
+        y: 4px + (root.track - self.height) * (-root.value / root.maximum);
+        border-radius: self.width / 2;
+        background: Theme.accent.with-alpha(area.pressed ? 0.9 : root.active ? 0.75 : 0.45);
+        animate width { duration: 150ms; easing: ease-out; }
+        animate background { duration: 150ms; }
+    }
+
+    area := TouchArea {
+        private property <length> start-value;
+        private property <length> start-y;
+        private property <length> start-maximum;
+        function remember() {
+            self.start-value = -root.value;
+            self.start-y = self.mouse-y;
+            self.start-maximum = root.maximum;
+        }
+        pointer-event(event) => {
+            if event.button == PointerEventButton.left && event.kind == PointerEventKind.down {
+                if self.mouse-y < thumb.y || self.mouse-y > thumb.y + thumb.height {
+                    root.value = -clamp((self.mouse-y - 4px - root.thumb-size / 2) * root.maximum / max(1px, root.track - root.thumb-size), 0, root.maximum);
+                    root.scrolled();
+                }
+                self.remember();
+            }
+        }
+        moved => {
+            if self.pressed {
+                if self.start-maximum != root.maximum {
+                    self.remember();
+                }
+                root.value = -clamp(self.start-value + (self.mouse-y - self.start-y) * root.maximum / max(1px, root.track - root.thumb-size), 0, root.maximum);
+                root.scrolled();
+            }
+        }
+        scroll-event(event) => {
+            if event.delta-y != 0 {
+                root.value = clamp(root.value + event.delta-y, -root.maximum, 0);
+                root.scrolled();
+                return accept;
+            }
+            reject
+        }
+    }
+}
+
+/// A scroll area whose bar follows the theme, with the same properties as the standard one.
+export component ScrollView {
+    out property <length> visible-width <=> flickable.width;
+    out property <length> visible-height <=> flickable.height;
+    in-out property <length> content-width <=> flickable.content-width;
+    in-out property <length> content-height <=> flickable.content-height;
+    in-out property <length> content-x <=> flickable.content-x;
+    in-out property <length> content-y <=> flickable.content-y;
+    callback scrolled <=> flickable.flicked;
+
+    min-height: 50px;
+    min-width: 50px;
+    horizontal-stretch: 1;
+    vertical-stretch: 1;
+    preferred-height: 100%;
+    preferred-width: 100%;
+
+    flickable := Flickable {
+        mouse-drag-pan-enabled: false;
+        content-y <=> bar.value;
+        width: parent.width;
+        height: parent.height;
+        @children
+    }
+
+    bar := Bar {
+        x: parent.width - self.width;
+        height: parent.height;
+        maximum: flickable.content-height - flickable.height;
+        page-size: flickable.height;
+        scrolled => { root.scrolled(); }
+    }
+}
+
+/// Named ListView so the compiler only builds the rows that are on screen.
+export component ListView inherits ScrollView {
+    @children
+    accessible-role: list;
+}
