@@ -324,7 +324,7 @@ impl Controller {
         let this = self.clone();
         tokio::spawn(async move {
             match this.find_copy(&track).await {
-                Some(found) => this.apply_fallback(key, found),
+                Some(found) => this.apply_fallback(key, &track, found),
                 None => {
                     if this.is_current(key) {
                         this.status(format!("Couldn't play {}", track.title));
@@ -418,8 +418,13 @@ impl Controller {
     }
 
     /// Swaps a copy into queue entry `key`: the engine plays it while the entry
-    /// is still the held, current one, and otherwise repairs the slot.
-    fn apply_fallback(&self, key: u64, found: Track) {
+    /// is still the held, current one, and otherwise repairs the slot. A copy
+    /// from another source is only for now: the saved queue keeps the original.
+    fn apply_fallback(&self, key: u64, original: &Track, found: Track) {
+        if found.source != original.source {
+            let mut s = self.state.lock();
+            s.swapped.entry(key).or_insert_with(|| original.clone());
+        }
         let label = found.source.label();
         let mut tracks = vec![found];
         self.playable(&mut tracks);

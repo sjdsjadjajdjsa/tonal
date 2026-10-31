@@ -11,6 +11,7 @@ mod model;
 mod player;
 mod sources;
 mod visualizer;
+mod ytdl_wait;
 
 slint::include_modules!();
 
@@ -37,6 +38,9 @@ fn bundled_tools_on_path() {
 }
 
 fn main() -> anyhow::Result<()> {
+    if let Some(code) = ytdl_wait::run() {
+        std::process::exit(code);
+    }
     // glibc gives every thread its own malloc arena; two are plenty here and save several MB.
     #[cfg(all(target_os = "linux", target_env = "gnu"))]
     unsafe {

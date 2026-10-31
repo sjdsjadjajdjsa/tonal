@@ -407,7 +407,7 @@ async fn probe(url: &str, strategy: Strategy) -> Result<(), String> {
         command.args(["--js-runtimes", runtime]);
     }
     command.args(args(strategy)).args([
-        "--simulate",
+        "-J",
         "--no-playlist",
         "--no-warnings",
         "-f",
@@ -419,7 +419,9 @@ async fn probe(url: &str, strategy: Strategy) -> Result<(), String> {
         .map_err(|_| "yt-dlp timed out".to_string())?
         .map_err(|e| e.to_string())?;
     if output.status.success() {
-        return Ok(());
+        // A link alone proves little: YouTube can hand one out and then refuse
+        // the stream, so the strategy only counts once audio actually arrives.
+        return super::stream_plays(&output.stdout, strategy.ipv4).await;
     }
     let stderr = String::from_utf8_lossy(&output.stderr);
     Err(stderr

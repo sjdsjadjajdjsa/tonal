@@ -78,6 +78,42 @@ pub async fn unblock_youtube(url: &str) -> Result<String, String> {
     pot::unblock(url).await
 }
 
+/// True when the stream in yt-dlp's `-J` output actually sends audio: waits
+/// until YouTube allows it, then fetches its first bytes with yt-dlp's headers,
+/// over IPv4 when yt-dlp was forced to it (links are tied to the address).
+pub(crate) async fn stream_plays(json: &[u8], ipv4: bool) -> Result<(), String> {
+    let info: serde_json::Value =
+        serde_json::from_slice(json).map_err(|e| format!("yt-dlp output: {e}"))?;
+    let format = info["requested_formats"]
+        .as_array()
+        .and_then(|formats| formats.first())
+        .unwrap_or(&info);
+    let url = format["url"].as_str().ok_or("yt-dlp gave no stream link")?;
+    if let Some(at) = crate::ytdl_wait::available_at(json) {
+        tokio::time::sleep(crate::ytdl_wait::wait_for(at, crate::ytdl_wait::now())).await;
+    }
+    let mut builder = reqwest::Client::builder().timeout(Duration::from_secs(20));
+    if ipv4 {
+        builder = builder.local_address(std::net::IpAddr::from([0, 0, 0, 0]));
+    }
+    let client = builder.build().map_err(|e| e.to_string())?;
+    let mut request = client.get(url).header("Range", "bytes=0-1023");
+    for (name, value) in format["http_headers"].as_object().into_iter().flatten() {
+        if let Some(value) = value.as_str() {
+            request = request.header(name.as_str(), value);
+        }
+    }
+    let response = request.send().await.map_err(|e| e.to_string())?;
+    if response.status().is_success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "YouTube refused the stream: HTTP {}",
+            response.status().as_u16()
+        ))
+    }
+}
+
 /// Asks yt-dlp whether `url` would play, without downloading it. Returns
 /// yt-dlp's error line when it would not.
 pub async fn playable_check(url: &str) -> Result<(), String> {
@@ -138,15 +174,6 @@ pub async fn update_ytdlp() -> anyhow::Result<String> {
         .unwrap_or("yt-dlp updated")
         .trim()
         .to_string())
-}
-
-/// True when the yt-dlp on PATH was installed or updated less than `age` ago.
-pub fn ytdlp_installed_within(age: Duration) -> bool {
-    find_on_path("yt-dlp")
-        .and_then(|path| std::fs::canonicalize(path).ok())
-        .and_then(|path| std::fs::metadata(path).ok()?.modified().ok())
-        .and_then(|modified| modified.elapsed().ok())
-        .is_some_and(|elapsed| elapsed < age)
 }
 
 /// True when the yt-dlp on PATH is Homebrew's (the usual macOS install).

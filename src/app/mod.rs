@@ -34,18 +34,6 @@ pub fn run() -> anyhow::Result<()> {
     let library = Library::open_default()?;
     let settings = library.load_settings();
     crate::sources::set_cookies_browser(&settings.youtube_cookies);
-    // YouTube changes break old yt-dlp builds within days, so keep it current.
-    // A recent install is left alone: upgrading swaps yt-dlp (and Homebrew's
-    // Python and Deno) underneath the songs that are loading.
-    runtime.spawn(async {
-        if crate::sources::ytdlp_installed_within(std::time::Duration::from_secs(10 * 86_400)) {
-            return;
-        }
-        match crate::sources::update_ytdlp().await {
-            Ok(version) => log::info!("yt-dlp: {version}"),
-            Err(e) => log::info!("yt-dlp not updated: {e:#}"),
-        }
-    });
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let player = player::spawn(
         PlayerConfig {

@@ -33,6 +33,9 @@ pub struct State {
     /// song on YouTube, so a later failure may try YouTube again, but not in a
     /// loop of fail, retry, fail.
     pub youtube_retried: std::collections::HashMap<String, Instant>,
+    /// Songs swapped for a copy on another source, by queue key. The saved
+    /// queue keeps the originals, so a later launch tries YouTube again.
+    pub swapped: std::collections::HashMap<u64, Track>,
     pub nav: Vec<super::browse::Nav>,
     pub nav_at: usize,
     pub artist_page: Option<crate::model::ArtistPage>,
@@ -66,6 +69,7 @@ impl State {
             toast: 0,
             warned_youtube_runtime: false,
             youtube_retried: Default::default(),
+            swapped: Default::default(),
             nav: Vec::new(),
             nav_at: 0,
             artist_page: None,
@@ -75,8 +79,20 @@ impl State {
         }
     }
     pub fn session(&self) -> Session {
+        let tracks = self
+            .queue
+            .iter()
+            .enumerate()
+            .map(|(i, track)| {
+                self.queue_keys
+                    .get(i)
+                    .and_then(|key| self.swapped.get(key))
+                    .unwrap_or(track)
+                    .clone()
+            })
+            .collect();
         Session {
-            tracks: self.queue.clone(),
+            tracks,
             current: self.index,
             position: self.position,
         }

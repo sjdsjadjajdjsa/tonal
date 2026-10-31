@@ -11,6 +11,9 @@ mod job;
 mod model;
 #[path = "../src/sources/mod.rs"]
 mod sources;
+#[path = "../src/ytdl_wait.rs"]
+#[allow(dead_code)]
+mod ytdl_wait;
 
 use model::{SourceKind, Track};
 use std::time::Instant;
