@@ -8,10 +8,18 @@ All notable changes to Tonal. Versions follow [Semantic Versioning](https://semv
 - Living themes: 15 animated background scenes (aurora, dunes, tide, misty pines, ink mountains, sakura, deep space, soft bloom, liquid glass, synthwave, contours, halftone, paper cut, city rain, ribbons) in 18 palettes, with mist and near layers for depth.
 - Themes page: a gallery with live previews on hover, Surprise me, Peek, and your own saved themes. Pick the scene, palette, panel style (Clear, Glass, Neon, Solid), how it reacts to music, motion, dim, grain and smoothness.
 - Every look has numbered variants; Rotate crossfades to the next one every 1, 5, 15 or 60 minutes.
-- Waves take two colours from the theme, the back wave trails the front one, and both brighten on kick drums.
+- Waves take two colours from the theme, the back wave trails the front one, and both brighten on kick drums. Settings has a Beat flash choice (Off, Soft, Strong).
+- "From the album" palette: the scene takes its colours from the playing song's cover and changes with each song. Two gallery looks use it, Cover glow and Album waves.
+- Playlist themes: the palette button on a playlist pins the current look to it, and the look switches in when you play that playlist.
+- Share codes: Share on the Themes page shows a short code to copy; paste someone else's code there to load their theme.
+
+### Fixed
+- Switching to Classic clears the background at once instead of after the mouse leaves the card.
+- Esc leaves Peek.
 
 ### Changed
 - The default Classic look paints nothing, so Tonal costs the same as before unless a scene is picked. A moving scene uses about 13% of one core at 15 fps.
+- While music is paused, a scene slows to a quarter speed and paints at most 6 times a second. It stops painting while the window is minimized or reported hidden.
 - Release builds use optimization level 2: the binary is 24.0 MB instead of 24.6 MB at the same CPU.
 
 ## 0.3.0 - 2026-10-31

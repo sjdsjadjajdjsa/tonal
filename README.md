@@ -28,7 +28,7 @@ Most music apps are a web browser in disguise. Tonal draws its own window with [
 - **Album grid:** browse your local files as albums, sorted by artist, year or recently added.
 - **Listening stats:** your top artists and albums this month and of all time, on Home. They never leave your computer.
 - **Album colors:** the waves and the equalizer take a soft color from the cover.
-- **Living themes:** 15 animated background scenes (aurora, dunes, ocean tide, misty pines, liquid glass, synthwave, sakura petals, city rain and more), 18 color palettes, endless seed variants that can crossfade on a timer, four panel styles (Clear, Glass, Neon, Solid) and optional music reactivity. The default Classic look paints nothing and costs 0% CPU.
+- **Living themes:** 15 animated background scenes (aurora, dunes, ocean tide, misty pines, liquid glass, synthwave, sakura petals, city rain and more), 18 color palettes, endless seed variants that can crossfade on a timer, four panel styles (Clear, Glass, Neon, Solid) and optional music reactivity. A "From the album" palette follows the playing song's cover, playlists can keep their own theme, and themes can be shared as a short code. The default Classic look paints nothing and costs 0% CPU.
 - **Flowing visualizer:** a soft wave across the bottom of the window that moves with the music. It only runs while something plays, and settles into a still line when you pause.
 - **Equalizer:** drag six points on a smooth curve, or pick a preset. Hold the compare button to hear the song without it.
 - **Good playback:** gapless, crossfade, volume levelling, shuffle and repeat, all done by mpv.
