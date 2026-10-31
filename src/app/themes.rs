@@ -128,11 +128,11 @@ fn run(e: Arc<Engine>, weak: slint::Weak<AppWindow>) {
             rotated = Instant::now();
             fresh = true;
         }
+        if !alive && !cleared {
+            clear(&weak);
+            cleared = true;
+        }
         if !alive && hover.is_none() {
-            if !cleared {
-                clear(&weak);
-                cleared = true;
-            }
             let mut w = e.wanted.lock();
             if w.generation == seen {
                 e.wake.wait(&mut w);
