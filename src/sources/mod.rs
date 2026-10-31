@@ -366,15 +366,16 @@ fn fake_bot(url: &str) -> bool {
     is_youtube_url(url) && std::env::var_os("TONAL_DEBUG_FAKE_BOT").is_some_and(|v| v == "1")
 }
 
-/// The URL mpv loads for a track: a cached stream URL when one is fresh, so
-/// plays start without yt-dlp. Only the debug hook changes it, to an
-/// unloadable path so YouTube fails the way a bot block does.
+/// The URL mpv loads for a track. mpv always gets the page URL so its yt-dlp
+/// hook resolves it with the right headers; a bare stream URL fails to play.
+/// Only the debug hook changes it, to an unloadable path so YouTube fails the
+/// way a bot block does.
 pub fn mpv_url(url: &str) -> String {
     #[cfg(feature = "debug-hooks")]
     if fake_bot(url) {
         return "/nonexistent/tonal-debug-fake-bot-block".into();
     }
-    resolve::lookup(url).unwrap_or_else(|| url.to_string())
+    url.to_string()
 }
 
 pub fn missing_tools() -> Vec<String> {

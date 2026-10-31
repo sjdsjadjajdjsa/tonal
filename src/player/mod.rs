@@ -203,7 +203,6 @@ enum Cmd {
     Equalizer(Equalizer),
     Gapless(bool),
     YtdlOptions,
-    RefreshPrefetch,
     AudioDevice(String),
     ReplayGain(bool),
     BitPerfect(bool),
@@ -299,11 +298,6 @@ impl PlayerHandle {
     }
     pub fn refresh_ytdl_options(&self) {
         let _ = self.tx.send(Cmd::YtdlOptions);
-    }
-    /// Re-syncs mpv's gapless prefetch with the queue, e.g. after a stream URL
-    /// was cached for the next entry.
-    pub fn refresh_prefetch(&self) {
-        let _ = self.tx.send(Cmd::RefreshPrefetch);
     }
     pub fn set_gapless(&self, on: bool) {
         let _ = self.tx.send(Cmd::Gapless(on));
@@ -954,9 +948,6 @@ impl Engine {
                     mpv.send(json!(["set_property", "ytdl-raw-options", options]))
                         .await?;
                 }
-            }
-            Cmd::RefreshPrefetch => {
-                self.sync_prefetch().await?;
             }
             Cmd::Shutdown => {}
         }

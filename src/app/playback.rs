@@ -178,9 +178,6 @@ impl Controller {
                     }
                     s.position = pos;
                     s.duration = duration;
-                    if pos > 2.0 {
-                        s.stall = 0;
-                    }
                     let active = s
                         .lyrics
                         .as_ref()
@@ -325,13 +322,9 @@ impl Controller {
         let index = s.queue_keys.iter().position(|k| *k == key);
         index.is_some() && s.index == index
     }
-    /// How long a failed song may hold the queue silent while the raced
-    /// fallback looks for a playable copy of it.
-    const FALLBACK_GRACE: Duration = Duration::from_secs(4);
-
-    /// A song failed to load. Every source is searched at once and the first
-    /// playable copy either plays or repairs the entry, so the queue is never
-    /// silent for longer than `FALLBACK_GRACE`.
+    /// A song failed to load. The queue holds on it while every source is
+    /// searched at once; the first playable copy plays in its place, and the
+    /// song is skipped only once every source has come up empty.
     fn recover(&self, key: u64, track: Track, error: String) {
         log::warn!("Load failed for {}: {error}", track.title);
         crate::sources::resolve::forget(&track.play_url);
@@ -343,36 +336,11 @@ impl Controller {
                 this.status(format!("Couldn't play {}", track.title));
                 return;
             }
-            let stall = {
-                let mut s = this.state.lock();
-                s.stall += 1;
-                s.stall
-            };
             let mut race = this.start_race(&track);
-            let winner = if stall < 5 {
-                match tokio::select! {
-                    found = race.recv() => found,
-                    _ = tokio::time::sleep(Self::FALLBACK_GRACE) => None,
-                } {
-                    Some(found) => Some(found),
-                    None => {
-                        this.player.skip_failed(key);
-                        race.recv().await
-                    }
-                }
-            } else {
-                // Nothing has played for five songs in a row: give the lookup a
-                // real chance instead of racing through the queue, but not
-                // forever — a dead network must still stop within half a minute.
-                let found = tokio::select! {
-                    found = race.recv() => found,
-                    _ = tokio::time::sleep(Duration::from_secs(30)) => None,
-                };
-                if found.is_none() {
-                    this.player.skip_failed(key);
-                }
-                found
-            };
+            let winner = race.recv().await;
+            if winner.is_none() {
+                this.player.skip_failed(key);
+            }
             match winner {
                 Some(found) => this.apply_fallback(key, &track.id, found),
                 None => this.status(format!("Couldn't play {}", track.title)),
@@ -380,24 +348,17 @@ impl Controller {
         });
     }
 
-    /// The engine says `track` plays next. Makes sure it can: a fresh stream
-    /// URL is cached for an instant start, and a song that will not load gets
-    /// its fallback swapped in before the gap instead of after it.
+    /// The engine says `track` plays next. Makes sure it can: a song that will
+    /// not load gets its fallback swapped in before the gap instead of after it.
     async fn precheck(&self, key: u64, track: Track) {
         if std::path::Path::new(&track.play_url).is_file()
             || !crate::sources::is_streamed_url(&track.play_url)
+            || crate::sources::resolve::lookup(&track.play_url).is_some()
         {
             return;
         }
-        if crate::sources::resolve::lookup(&track.play_url).is_some() {
-            self.player.refresh_prefetch();
-            return;
-        }
         match crate::sources::resolve::resolve(&track.play_url).await {
-            Ok(_) => {
-                // mpv prefetched the original URL; re-sync so the cached one plays.
-                self.player.refresh_prefetch();
-            }
+            Ok(_) => {}
             Err(why) => {
                 log::debug!("Pre-check failed for {}: {why}", track.title);
                 if self.state.lock().fallback_tried.contains(&track.id) {

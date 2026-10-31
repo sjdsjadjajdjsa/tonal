@@ -61,7 +61,7 @@ fn queue_set_replaces_in_place_and_keeps_order() {
 }
 
 #[tokio::test]
-async fn failed_answer_with_stale_key_is_ignored_and_hold_released() {
+async fn real_mpv_failed_answer_with_stale_key_is_ignored_and_hold_released() {
     let (tx, _rx) = unbounded_channel();
     let mut engine = Engine::new(config(), tx);
     engine
