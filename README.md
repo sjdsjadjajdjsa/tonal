@@ -40,6 +40,8 @@ Most music apps are a web browser in disguise. Tonal draws its own window with [
 
 ## Screenshots
 
+![Living themes moving while a song plays: Northern lights, Misty pines on Now playing, Outrun, Sakura drift, the Themes gallery and City rain](docs/images/themes-reel.webp)
+
 | Home | Themes |
 | --- | --- |
 | ![Home with recently played songs over the Liquid glass theme](docs/images/home.webp) | ![The theme browser and customizer over the Outrun synthwave scene](docs/images/themes.webp) |
