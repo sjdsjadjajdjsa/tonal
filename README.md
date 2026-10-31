@@ -141,6 +141,7 @@ The last row is a joke. Nobody measured it, and nobody could find the download l
 - "Plays" is checked against each project's own README, release notes and source, October 2026. Tauon removed Spotify in v10. Riff only imports Spotify playlists; it never plays Spotify audio.
 - Tonal's waves cost about 5.5% of one core, because the window is redrawn by the CPU 30 times a second. Turn them off in Settings and Tonal is the lightest player measured here.
 - "Live theme" is Northern lights (Aurora scene, Glass style, Pulse) at 15 fps. A moving scene costs about 13% of one core, more while it reacts to music. The default Classic look paints nothing.
+- Since 0.3.0, a moving scene slows to 10 fps while another window has focus, to 8 fps on battery, and stops when the window is hidden. Measured the same way on an unfocused window, the live theme went from 37.5% to 23.9% of one core while playing, and from 20% to under 1% while hidden on another workspace.
 - [Spotifast](https://github.com/crmne/spotifast) states "100–250 MB of RAM" in its README, and playback needs Spotify Premium, so it isn't measured here.
 - "Before playing" is the 15 seconds right after the 30-second wait, with the app open and nothing playing.
 

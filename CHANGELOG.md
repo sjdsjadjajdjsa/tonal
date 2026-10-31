@@ -16,10 +16,20 @@ All notable changes to Tonal. Versions follow [Semantic Versioning](https://semv
 ### Fixed
 - Switching to Classic clears the background at once instead of after the mouse leaves the card.
 - Esc leaves Peek.
+- Shuffle play starts on a random song, seeking while paused moves the time, and Play, Next and the queue work again after the queue ends.
+- Delete and Rename dialogs close when the open playlist changes, so they never act on the wrong one.
+- Spotify import keeps going past a playlist it can't read and replaces an imported playlist instead of adding a copy.
+- Failed Last.fm scrobbles are kept and sent again later.
+- Quick pause and resume no longer stacks up wave capture threads; lyrics no longer show for a different song with a similar name.
+
+### Changed (performance)
+- A moving scene slows to 10 fps while another window has focus and to 8 fps on battery, and stops painting when Hyprland or another compositor stops drawing the window. Live theme while playing: 37.5% to 23.9% of one core unfocused; hidden on another workspace: 20% to under 1%.
+- Painting a scene frame is about 12% cheaper.
+- Scroll bars use the theme colour.
 
 ### Changed
 - The default Classic look paints nothing, so Tonal costs the same as before unless a scene is picked. A moving scene uses about 13% of one core at 15 fps.
-- While music is paused, a scene slows to a quarter speed and paints at most 6 times a second. It stops painting while the window is minimized or reported hidden.
+- While music is paused, a scene slows to a quarter speed and paints at most 6 times a second. It stops painting while the window is minimized or hidden, slows to 10 fps while another window has focus and to 8 fps on battery. Scroll bars follow the theme colour.
 - Release builds use optimization level 2: the binary is 24.0 MB instead of 24.6 MB at the same CPU.
 
 ## 0.3.0 - 2026-10-31
