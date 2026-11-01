@@ -7,37 +7,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "docs"))
-from banner import text_path, wave  # noqa: E402
+from art import LOOKS, PAD, W, frame, text, tile  # noqa: E402
 
 RESULTS = json.loads((ROOT / "bench/results.json").read_text())
 # Spotifast is not measured here: playback needs Spotify Premium. This is the range
 # its README states.
 CLAIMED = {"Spotifast": (100, 250, "their claim, needs Premium")}
 
-LOOKS = {
-    "dark": dict(
-        bg="#0e0f12", text="#ececee", muted="#8d8d96", track="#1b1c21", bar="#3b3c44",
-        accent="#1ed760", accent2="#0fa34a", tile="#15161a", line="#26272d", glow="0.16",
-    ),
-    "light": dict(
-        bg="#f5f6f7", text="#111113", muted="#6b6b74", track="#e6e8eb", bar="#c3c6cc",
-        accent="#13a64b", accent2="#0b7d37", tile="#ffffff", line="#e1e3e6", glow="0.10",
-    ),
-}
-
-W, PAD, ROW, BAR = 1280, 56, 38, 14
+ROW, BAR = 38, 14
 COL = (W - 2 * PAD - 48) / 2
 LABEL = 170
-
-
-def text(font, words, size, x, y, fill, anchor="start", opacity=1.0, tracking=0.0):
-    d, width = text_path(font, words, size, 0, 0, tracking)
-    if anchor == "end":
-        x -= width
-    elif anchor == "middle":
-        x -= width / 2
-    alpha = f' fill-opacity="{opacity}"' if opacity < 1 else ""
-    return f'<path transform="translate({x:.1f} {y:.1f})" d="{d}" fill="{fill}"{alpha}/>', width
 
 
 def panel(c, x0, y0, title, unit, rows, maximum, fmt):
@@ -78,7 +57,7 @@ def tiles(c, y, facts):
     width = (W - 2 * PAD - gap * (len(facts) - 1)) / len(facts)
     for i, (big, small) in enumerate(facts):
         x = PAD + i * (width + gap)
-        out.append(f'<rect x="{x:.1f}" y="{y}" width="{width:.1f}" height="92" rx="18" fill="{c["tile"]}" stroke="{c["line"]}"/>')
+        out.append(tile(c, x, y, width, 92, 18))
         out.append(text("Inter-Bold.ttf", big, 34, x + 24, y + 48, c["accent"], tracking=-0.02)[0])
         out.append(text("Inter-Regular.ttf", small, 14, x + 24, y + 74, c["muted"])[0])
     return out, y + 92
@@ -126,24 +105,11 @@ def draw(look):
         )[0]
     )
     height = int(foot + 70)
-    ripple = wave(900, 10, height - 8, [(1, 1.0, 0.0), (2, 0.4, 1.1)], W + 900).replace(" L", " L").replace(
-        f"M0,360", f"M0,{height}"
-    ).replace(f",360 Z", f",{height} Z")
-    return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {height}" width="{W}" height="{height}" role="img" aria-label="Memory and CPU of music players while playing a song">
-<defs>
-<clipPath id="card"><rect width="{W}" height="{height}" rx="28"/></clipPath>
-<radialGradient id="glow" cx="0.92" cy="0" r="0.6"><stop offset="0" stop-color="{c["accent"]}" stop-opacity="{c["glow"]}"/><stop offset="1" stop-color="{c["accent"]}" stop-opacity="0"/></radialGradient>
-<linearGradient id="tonal" x1="0" x2="1"><stop offset="0" stop-color="{c["accent2"]}"/><stop offset="1" stop-color="{c["accent"]}"/></linearGradient>
-<filter id="soft" x="-50%" y="-200%" width="200%" height="500%"><feGaussianBlur stdDeviation="5"/></filter>
-</defs>
-<g clip-path="url(#card)">
-<rect width="{W}" height="{height}" fill="{c["bg"]}"/>
-<rect width="{W}" height="{height}" fill="url(#glow)"/>
-<path d="{ripple}" fill="{c["accent"]}" fill-opacity="0.08"><animateTransform attributeName="transform" type="translate" from="0 0" to="-900 0" dur="30s" repeatCount="indefinite"/></path>
-</g>
-{chr(10).join(body)}
-</svg>
-"""
+    defs = (
+        f'<linearGradient id="tonal" x1="0" x2="1"><stop offset="0" stop-color="{c["accent2"]}"/><stop offset="1" stop-color="{c["accent"]}"/></linearGradient>'
+        '<filter id="soft" x="-50%" y="-200%" width="200%" height="500%"><feGaussianBlur stdDeviation="5"/></filter>'
+    )
+    return frame(c, height, body, "Memory and CPU of music players while playing a song", defs=defs)
 
 
 for look in LOOKS:

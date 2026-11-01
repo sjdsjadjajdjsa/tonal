@@ -12,7 +12,7 @@
 [![platforms](https://img.shields.io/badge/Linux%20·%20Windows%20·%20macOS-1ed760?style=flat-square&label=runs%20on&labelColor=0e0f12)](#install)
 [![license](https://img.shields.io/badge/MIT-1ed760?style=flat-square&label=license&labelColor=0e0f12)](LICENSE)
 
-**[Download](https://github.com/sjdsjadjajdjsa/tonal/releases/latest)** &nbsp;·&nbsp; [Features](#what-you-get) &nbsp;·&nbsp; [Screenshots](#screenshots) &nbsp;·&nbsp; [Install](#install) &nbsp;·&nbsp; [Benchmarks](#benchmarks) &nbsp;·&nbsp; [How it works](#how-it-works)
+**[Download](https://github.com/sjdsjadjajdjsa/tonal/releases/latest)** &nbsp;·&nbsp; [Features](#features) &nbsp;·&nbsp; [Screenshots](#screenshots) &nbsp;·&nbsp; [Install](#install) &nbsp;·&nbsp; [Benchmarks](#benchmarks) &nbsp;·&nbsp; [How it works](#how-it-works)
 
 <br>
 
@@ -22,11 +22,17 @@
 
 <br>
 
-Search and stream from YouTube Music, SoundCloud and Audius, play your own files, and bring your Spotify playlists along. No browser inside and no Premium needed.
+Stream YouTube Music, SoundCloud and Audius, play your own files and bring your Spotify playlists along. No browser inside, no Premium needed: Tonal draws its own window with [Slint](https://slint.dev) and hands the audio to [mpv](https://mpv.io).
 
-Most music apps are a web browser in disguise. Tonal draws its own window with [Slint](https://slint.dev) and hands the audio to [mpv](https://mpv.io). With the waves off it uses 0.5% of one core while playing and less memory than any other player in the [benchmarks](#benchmarks). With them on, it stays around 6%.
+## Features
 
-## What you get
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/features-dark.svg">
+  <img alt="One search over four sources, living themes, a six-point equalizer, synced lyrics, endless radio, Spotify import, artist and album pages, your library, downloads, a mini player, gapless playback and crossfade, media keys and scrobbling" src="docs/images/features-light.svg" width="100%">
+</picture>
+
+<details>
+<summary>More about each feature</summary>
 
 ### Listen
 
@@ -57,33 +63,35 @@ Most music apps are a web browser in disguise. Tonal draws its own window with [
 - **Desktop integration:** media keys and MPRIS, so your keyboard, bar widgets and `playerctl` all work.
 - **Mini player** and **scrobbling** to Last.fm and ListenBrainz.
 
+</details>
+
 ## Screenshots
 
 ![Living themes moving while a song plays: Northern lights, Misty pines on Now playing, Outrun, Sakura drift, the Themes gallery and City rain](docs/images/themes-reel.webp)
 
-| Home | Themes |
-| --- | --- |
-| ![Home with recently played songs over the Liquid glass theme](docs/images/home.webp) | ![The theme browser and customizer over the Outrun synthwave scene](docs/images/themes.webp) |
+<img src="docs/images/home.webp" alt="Home with recently played songs over the Liquid glass theme" width="49%"> <img src="docs/images/themes.webp" alt="The theme browser and customizer over the Outrun synthwave scene" width="49%">
+<img src="docs/images/artist.webp" alt="The Weeknd artist page over the Golden hour dunes scene" width="49%"> <img src="docs/images/album.webp" alt="Daft Punk Random Access Memories album page over Sakura drift" width="49%">
+<img src="docs/images/queue.webp" alt="A playlist playing with the queue panel open over City rain" width="49%"> <img src="docs/images/equalizer.webp" alt="The six band equalizer on the Bass preset over Lavender haze" width="49%">
 
-| Search | Artist |
-| --- | --- |
-| ![Search results from YouTube Music for Daft Punk](docs/images/search.webp) | ![The Weeknd artist page over the Golden hour dunes scene](docs/images/artist.webp) |
+<details>
+<summary>Search, settings and the mini player</summary>
 
-| Album | Queue |
-| --- | --- |
-| ![Daft Punk Random Access Memories album page over Sakura drift](docs/images/album.webp) | ![A playlist playing with the queue panel open over City rain](docs/images/queue.webp) |
+<img src="docs/images/search.webp" alt="Search results from YouTube Music for Daft Punk" width="49%"> <img src="docs/images/settings.webp" alt="Settings grouped into Playback and Library cards" width="49%">
+<img src="docs/images/mini.webp" alt="The mini player with artwork, controls, progress and the wave visualizer" width="49%">
 
-| Settings | Mini player |
-| --- | --- |
-| ![Settings grouped into Playback and Library cards](docs/images/settings.webp) | ![The mini player with artwork, controls, progress and the wave visualizer](docs/images/mini.webp) |
-
-| Equalizer |
-| --- |
-| ![The six band equalizer on the Bass preset over Lavender haze](docs/images/equalizer.webp) |
+</details>
 
 ## Install
 
-Download the newest version from [Releases](https://github.com/sjdsjadjajdjsa/tonal/releases/latest).
+<a href="https://github.com/sjdsjadjajdjsa/tonal/releases/latest">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/install-dark.svg">
+  <img alt="Linux: tonal-x86_64.AppImage. Windows: tonal-setup-x86_64.exe. macOS: tonal-macos-arm64.dmg. Arch Linux: packaging/aur/tonal" src="docs/images/install-light.svg" width="100%">
+</picture>
+</a>
+
+<details>
+<summary>Every download, portable mode and YouTube setup</summary>
 
 | | Download | Run |
 | --- | --- | --- |
@@ -100,37 +108,11 @@ To build Tonal.app on macOS yourself, run `sh packaging/macos/build-app.sh` from
 
 For full YouTube support yt-dlp needs a JavaScript runtime: install [Deno](https://deno.com) or Node.js. Tonal picks up whichever it finds. With Deno, Tonal also sets up the [bgutil PO Token provider](https://github.com/Brainicism/bgutil-ytdlp-pot-provider) for yt-dlp on first launch (about 70 MB in its cache folder, no server). When YouTube still refuses a song ("Sign in to confirm you're not a bot"), Tonal retries it with other player clients, then over IPv4, then with and without browser cookies, and remembers what worked. If YouTube blocks your network outright, only Use browser login (a signed-in browser) or another network gets through. The visualizer on Linux needs PipeWire (`pw-record`, `pw-dump`).
 
-## Build it yourself
-
-Needs [Rust](https://rustup.rs) 1.90 or newer, plus mpv and yt-dlp on your `PATH`. On Debian or Ubuntu you also need `libsqlite3-dev libdbus-1-dev libfontconfig-dev libxkbcommon-dev`.
-
-```
-git clone https://github.com/sjdsjadjajdjsa/tonal
-cd tonal
-cargo run --release
-```
-
-`cargo test` runs the tests, including real playback through mpv on a silent output.
-
-## Keys
-
-| Key | Does |
-| --- | --- |
-| `Space` | Play or pause |
-| `Ctrl` `F` | Search |
-| `Ctrl` `←` `→` | Previous, next |
-| `←` `→` | Seek 5 seconds |
-| `Ctrl` `↑` `↓` | Volume |
-| `Ctrl` `L` | Like the current song |
-| `Ctrl` `M` | Mini player |
-| `Ctrl` `N` | Now playing, `Esc` to go back |
-| `Alt` `←` `→` | Back, forward |
-
-Right-click a song for play next, add to queue, start radio, download and add to playlist.
-
-## If YouTube asks you to sign in
+### If YouTube asks you to sign in
 
 YouTube sometimes answers "Sign in to confirm you're not a bot", mostly after a lot of plays in a short time. Open **Settings → YouTube → Use browser login** and type the browser where you're signed in to YouTube (`firefox`, `chromium`, `brave`, `chrome`). Tonal then passes that browser's cookies to yt-dlp. On macOS, also turn Tonal on in System Settings → Privacy & Security → Full Disk Access, and pick Always Allow when the Keychain asks, so yt-dlp can read the browser's login. SoundCloud, Audius and local files keep working either way.
+
+</details>
 
 ## Benchmarks
 
@@ -138,6 +120,9 @@ YouTube sometimes answers "Sign in to confirm you're not a bot", mostly after a 
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/benchmark-dark.svg">
   <img alt="Memory and CPU of music players while playing a song" src="docs/images/benchmark-light.svg">
 </picture>
+
+<details>
+<summary>How it was measured, and every number</summary>
 
 Every player was measured the same way by [`bench/bench.py`](bench/bench.py): start it fresh, wait 30 seconds, then play a song into a silent output and measure 30 seconds of it, twice, and take the median. Memory is PSS summed over every process the app starts (mpv for Tonal, the browser processes for Electron apps), so shared libraries count once. CPU is the share of one core. Arch Linux, Hyprland, Ryzen 5 7600, October 2026.
 
@@ -166,7 +151,26 @@ The last row is a joke. Nobody measured it, and nobody could find the download l
 - [Spotifast](https://github.com/crmne/spotifast) states "100–250 MB of RAM" in its README, and playback needs Spotify Premium, so it isn't measured here.
 - "Before playing" is the 15 seconds right after the 30-second wait, with the app open and nothing playing.
 
+</details>
+
+## Keys
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/keys-dark.svg">
+  <img alt="Space play or pause, Ctrl F search, Ctrl L like, Ctrl arrows previous and next, arrows seek 5 seconds, Ctrl up and down volume, Ctrl N now playing, Ctrl M mini player, Alt arrows back and forward" src="docs/images/keys-light.svg" width="100%">
+</picture>
+
+Right-click a song for play next, add to queue, start radio, download and add to playlist.
+
 ## How it works
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/how-dark.svg">
+  <img alt="Sources feed the player, the player feeds the visualizer, the visualizer feeds the Slint interface. Integrations sit beside the sources and the SQLite library beside the interface." src="docs/images/how-light.svg" width="100%">
+</picture>
+
+<details>
+<summary>The code, and building it yourself</summary>
 
 - `src/player`: the playback engine. One mpv process over JSON IPC (a second one only during crossfades), with its own queue, shuffle history and gapless prefetch.
 - `src/sources`: YouTube Music (InnerTube), SoundCloud (yt-dlp), Audius (public API), local files (lofty), radio, matching and downloads.
@@ -174,9 +178,23 @@ The last row is a joke. Nobody measured it, and nobody could find the download l
 - `src/integrations`: Spotify import, LRCLIB lyrics, Last.fm and ListenBrainz.
 - `src/visualizer`: reads Tonal's own audio (PipeWire on Linux, WASAPI process loopback on Windows, a Core Audio process tap on macOS), runs an FFT and turns it into smooth wave paths.
 - `ui/`: the Slint interface.
-- `docs/banner.py`: draws the banner at the top of this page from the app icon and the bundled Inter font.
+- `docs/banner.py`, `docs/art.py` and `bench/chart.py`: draw the banner and the cards on this page from the app's icons and the bundled Inter font (`pip install fonttools`).
 
 [docs/architecture.md](docs/architecture.md) has the details.
+
+### Build it yourself
+
+Needs [Rust](https://rustup.rs) 1.90 or newer, plus mpv and yt-dlp on your `PATH`. On Debian or Ubuntu you also need `libsqlite3-dev libdbus-1-dev libfontconfig-dev libxkbcommon-dev`.
+
+```
+git clone https://github.com/sjdsjadjajdjsa/tonal
+cd tonal
+cargo run --release
+```
+
+`cargo test` runs the tests, including real playback through mpv on a silent output.
+
+</details>
 
 ## License
 
