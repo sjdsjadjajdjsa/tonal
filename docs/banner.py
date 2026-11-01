@@ -40,7 +40,7 @@ def text_path(font_file, text, size, x, baseline, tracking=0.0):
     return pen.getCommands(), cursor - tracking * size
 
 
-def wave(period, amp, mid, harmonics, width):
+def wave(period, amp, mid, harmonics, width, H=H):
     points = []
     for i in range(0, int(width) + 1, 4):
         t = i / period * 2 * math.pi
@@ -49,8 +49,9 @@ def wave(period, amp, mid, harmonics, width):
     return f"M0,{H} L" + " L".join(points) + f" L{int(width)},{H} Z"
 
 
-def banner(look):
+def banner(look, H=H, rx=28):
     c = LOOKS[look]
+    drop, lift = H - 360, (H - 360) * 0.55
     icon = base64.b64encode((ROOT / "ui" / "icon.png").read_bytes()).decode()
     word, word_w = text_path("Inter-Bold.ttf", "tonal", 112, 0, 0, -0.03)
     line_one, line_w = text_path("Inter-Medium.ttf", "A native music player that moves with your music.", 26, 0, 0)
@@ -67,7 +68,7 @@ def banner(look):
     ]
     layers = []
     for period, amp, mid, harmonics, alpha, secs in waves:
-        d = wave(period, amp, mid, harmonics, W + period)
+        d = wave(period, amp, mid + drop, harmonics, W + period, H)
         layers.append(
             f'<path d="{d}" fill="{c["wave"]}" fill-opacity="{alpha}">'
             f'<animateTransform attributeName="transform" type="translate" from="0 0" to="-{period} 0" '
@@ -75,7 +76,7 @@ def banner(look):
         )
     return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" role="img" aria-label="tonal, a native music player">
 <defs>
-<clipPath id="card"><rect width="{W}" height="{H}" rx="28"/></clipPath>
+<clipPath id="card"><rect width="{W}" height="{H}" rx="{rx}"/></clipPath>
 <radialGradient id="glow" cx="0.5" cy="1.05" r="0.75"><stop offset="0" stop-color="{c["glow"]}" stop-opacity="0.22"/><stop offset="1" stop-color="{c["glow"]}" stop-opacity="0"/></radialGradient>
 </defs>
 <g clip-path="url(#card)">
@@ -83,11 +84,13 @@ def banner(look):
 <rect width="{W}" height="{H}" fill="url(#glow)"/>
 {"".join(layers)}
 </g>
+<g transform="translate(0 {lift:.0f})">
 <image x="{left:.1f}" y="68" width="{icon_size}" height="{icon_size}" href="data:image/png;base64,{icon}"/>
 <rect x="{left + 0.5:.1f}" y="68.5" width="{icon_size - 1}" height="{icon_size - 1}" rx="27" fill="none" stroke="{c["text"]}" stroke-opacity="{c["ring"]}"/>
 <path transform="translate({text_x:.1f} 166)" d="{word}" fill="{c["text"]}"/>
 <path transform="translate({text_x + 6:.1f} 218)" d="{line_one}" fill="{c["text"]}" fill-opacity="0.92"/>
 <path transform="translate({text_x + 6:.1f} 252)" d="{line_two}" fill="{c["muted"]}"/>
+</g>
 </svg>
 """
 
@@ -95,3 +98,4 @@ def banner(look):
 if __name__ == "__main__":
     for look in LOOKS:
         (ROOT / "docs" / "images" / f"banner-{look}.svg").write_text(banner(look))
+    (ROOT / "docs" / "images" / "social-preview.svg").write_text(banner("dark", 640, 0))
