@@ -19,6 +19,21 @@ use tokio::{
 
 static NEXT_SOCKET: AtomicU64 = AtomicU64::new(0);
 
+/// Turns off mpv's on-screen Lua scripts, which Tonal never shows: about 7 MB and
+/// 7 threads less per mpv. A config file because mpv skips options it does not know
+/// there, while the same flags on the command line stop older versions from starting.
+fn lean_config() -> Option<&'static std::path::Path> {
+    static PATH: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
+    PATH.get_or_init(|| {
+        let path = crate::model::paths::cache_dir().join("mpv-lean.conf");
+        std::fs::write(&path, LEAN).ok()?;
+        Some(path)
+    })
+    .as_deref()
+}
+
+const LEAN: &str = "osc=no\ninput-default-bindings=no\nload-stats-overlay=no\nload-console=no\nload-osd-console=no\nload-select=no\nload-positioning=no\nload-commands=no\nload-context-menu=no\n";
+
 /// Linux kills mpv through PR_SET_PDEATHSIG and Windows through a Job Object
 /// (src/job.rs). macOS has neither, so a small shell loop stops mpv once Tonal is
 /// gone, even after Cmd+Q or a crash.
@@ -209,6 +224,9 @@ impl Mpv {
             "--prefetch-playlist=yes",
         ]);
         command.arg(format!("--input-ipc-server={}", endpoint.display()));
+        if let Some(lean) = lean_config() {
+            command.arg(format!("--include={}", lean.display()));
+        }
         command.args(launch.args());
         command.arg(format!(
             "--ytdl-raw-options={}",

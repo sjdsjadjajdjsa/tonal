@@ -2,6 +2,11 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
+## Unreleased
+
+### Changed
+- mpv starts without its on-screen Lua scripts (controls, stats, console, menus), which Tonal never shows: about 7 MB and 7 threads less while playing.
+
 ## 0.4.0 - 2026-10-31
 
 ### Added
