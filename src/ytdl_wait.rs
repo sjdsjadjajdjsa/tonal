@@ -12,12 +12,20 @@ pub const REAL: &str = "TONAL_YTDL_REAL";
 /// Runs as the yt-dlp wrapper when started by mpv, returning the exit code.
 pub fn run() -> Option<i32> {
     let real = std::env::var_os(REAL)?;
-    let output = std::process::Command::new(real)
+    let mut command = std::process::Command::new(real);
+    command
         .args(std::env::args_os().skip(1))
         .env_remove(REAL)
         .stdin(std::process::Stdio::null())
-        .stderr(std::process::Stdio::inherit())
-        .output();
+        .stderr(std::process::Stdio::inherit());
+    // Tonal is a windowed program with no console, so on Windows a console
+    // program it starts would open a terminal window of its own.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(crate::sources::CREATE_NO_WINDOW);
+    }
+    let output = command.output();
     let output = match output {
         Ok(output) => output,
         Err(e) => {

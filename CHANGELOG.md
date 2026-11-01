@@ -4,6 +4,9 @@ All notable changes to Tonal. Versions follow [Semantic Versioning](https://semv
 
 ## Unreleased
 
+### Fixed
+- Windows: a terminal window no longer flashes open each time a YouTube song starts.
+
 ### Changed
 - mpv starts without its on-screen Lua scripts (controls, stats, console, menus), which Tonal never shows: about 7 MB and 7 threads less while playing.
 
