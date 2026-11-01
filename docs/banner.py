@@ -2,6 +2,7 @@
 
 import base64
 import math
+from functools import cache
 from pathlib import Path
 
 from fontTools.pens.boundsPen import BoundsPen
@@ -19,8 +20,13 @@ LOOKS = {
 }
 
 
+@cache
+def load_font(font_file):
+    return TTFont(FONTS / font_file)
+
+
 def text_path(font_file, text, size, x, baseline, tracking=0.0):
-    font = TTFont(FONTS / font_file)
+    font = load_font(font_file)
     glyphs = font.getGlyphSet()
     cmap = font.getBestCmap()
     scale = size / font["head"].unitsPerEm
@@ -86,5 +92,6 @@ def banner(look):
 """
 
 
-for look in LOOKS:
-    (ROOT / "docs" / "images" / f"banner-{look}.svg").write_text(banner(look))
+if __name__ == "__main__":
+    for look in LOOKS:
+        (ROOT / "docs" / "images" / f"banner-{look}.svg").write_text(banner(look))

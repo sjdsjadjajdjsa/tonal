@@ -1,70 +1,150 @@
 #!/usr/bin/env python3
-"""Draws bench/results.json as docs/images/benchmark-{dark,light}.svg."""
+"""Draws bench/results.json as docs/images/benchmark-{dark,light}.svg (needs fonttools)."""
 
 import json
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "docs"))
+from banner import text_path, wave  # noqa: E402
+
 RESULTS = json.loads((ROOT / "bench/results.json").read_text())
 # Spotifast is not measured here: playback needs Spotify Premium. This is the range
 # its README states.
 CLAIMED = {"Spotifast": (100, 250, "their claim, needs Premium")}
 
-THEMES = {
-    "dark": {"text": "#f3f3f5", "muted": "#a2a2a8", "faint": "#3a3a40", "bar": "#6e6e74", "accent": "#1ed760"},
-    "light": {"text": "#1f2328", "muted": "#59636e", "faint": "#d8dee4", "bar": "#9aa1a9", "accent": "#1a7f37"},
+LOOKS = {
+    "dark": dict(
+        bg="#0e0f12", text="#ececee", muted="#8d8d96", track="#1b1c21", bar="#3b3c44",
+        accent="#1ed760", accent2="#0fa34a", tile="#15161a", line="#26272d", glow="0.16",
+    ),
+    "light": dict(
+        bg="#f5f6f7", text="#111113", muted="#6b6b74", track="#e6e8eb", bar="#c3c6cc",
+        accent="#13a64b", accent2="#0b7d37", tile="#ffffff", line="#e1e3e6", glow="0.10",
+    ),
 }
 
-W, LABEL, ROW, TOP = 820, 190, 30, 64
+W, PAD, ROW, BAR = 1280, 56, 38, 14
+COL = (W - 2 * PAD - 48) / 2
+LABEL = 170
 
 
-def panel(theme, title, unit, rows, y0, maximum, fmt):
-    c = THEMES[theme]
-    out = [f'<text x="0" y="{y0}" font-size="15" font-weight="600" fill="{c["text"]}">{title}</text>']
-    span = W - LABEL - 90
+def text(font, words, size, x, y, fill, anchor="start", opacity=1.0, tracking=0.0):
+    d, width = text_path(font, words, size, 0, 0, tracking)
+    if anchor == "end":
+        x -= width
+    elif anchor == "middle":
+        x -= width / 2
+    alpha = f' fill-opacity="{opacity}"' if opacity < 1 else ""
+    return f'<path transform="translate({x:.1f} {y:.1f})" d="{d}" fill="{fill}"{alpha}/>', width
+
+
+def panel(c, x0, y0, title, unit, rows, maximum, fmt):
+    out = [text("Inter-SemiBold.ttf", title, 17, x0, y0, c["text"])[0]]
+    out.append(text("Inter-Regular.ttf", "lower is better", 13, x0 + COL, y0, c["muted"], "end")[0])
+    span = COL - LABEL - 120
     for i, (name, value, note) in enumerate(rows):
-        y = y0 + 18 + i * ROW
+        y = y0 + 26 + i * ROW
+        mid = y + ROW / 2
         tonal = name.startswith("Tonal")
-        colour = c["accent"] if tonal else c["bar"]
-        weight = 600 if tonal else 400
-        out.append(f'<text x="{LABEL - 12}" y="{y + 15}" font-size="13" text-anchor="end" font-weight="{weight}" fill="{c["text"]}">{name}</text>')
-        out.append(f'<rect x="{LABEL}" y="{y + 3}" width="{span}" height="16" rx="4" fill="{c["faint"]}" opacity="0.35"/>')
+        font = "Inter-SemiBold.ttf" if tonal else "Inter-Regular.ttf"
+        out.append(text(font, name, 14, x0 + LABEL - 16, mid + 5, c["text"] if tonal else c["muted"], "end")[0])
+        bx, by = x0 + LABEL, mid - BAR / 2
+        out.append(f'<rect x="{bx}" y="{by}" width="{span}" height="{BAR}" rx="{BAR / 2}" fill="{c["track"]}"/>')
         if isinstance(value, tuple):
             lo, hi = value
-            x0, x1 = LABEL + span * lo / maximum, LABEL + span * hi / maximum
-            out.append(f'<rect x="{x0:.1f}" y="{y + 3}" width="{x1 - x0:.1f}" height="16" rx="4" fill="none" stroke="{c["bar"]}" stroke-dasharray="4 3"/>')
-            label = f"{lo}–{hi} {unit} ({note})"
-            out.append(f'<text x="{x1 + 8:.1f}" y="{y + 15}" font-size="12" fill="{c["muted"]}">{label}</text>')
+            a, b = bx + span * lo / maximum, bx + span * hi / maximum
+            out.append(
+                f'<rect x="{a:.1f}" y="{by + 0.5}" width="{b - a:.1f}" height="{BAR - 1}" rx="{BAR / 2}" '
+                f'fill="{c["bar"]}" fill-opacity="0.25" stroke="{c["muted"]}" stroke-width="1.5" stroke-dasharray="5 4"/>'
+            )
+            out.append(text("Inter-Regular.ttf", f"{lo}–{hi} {unit}  ·  {note}", 13, b + 10, mid + 5, c["muted"])[0])
             continue
-        width = max(2.0, span * value / maximum)
-        out.append(f'<rect x="{LABEL}" y="{y + 3}" width="{width:.1f}" height="16" rx="4" fill="{colour}"/>')
-        out.append(f'<text x="{LABEL + width + 8:.1f}" y="{y + 15}" font-size="12" font-weight="{weight}" fill="{c["text"] if tonal else c["muted"]}">{fmt(value)} {unit}</text>')
-    return out, y0 + 18 + len(rows) * ROW
+        width = max(BAR, span * value / maximum)
+        fill = "url(#tonal)" if tonal else c["bar"]
+        glow = ' filter="url(#soft)"' if tonal else ""
+        if tonal:
+            out.append(f'<rect x="{bx}" y="{by}" width="{width:.1f}" height="{BAR}" rx="{BAR / 2}" fill="{c["accent"]}" opacity="0.5"{glow}/>')
+        out.append(f'<rect x="{bx}" y="{by}" width="{width:.1f}" height="{BAR}" rx="{BAR / 2}" fill="{fill}"/>')
+        out.append(
+            text(font, f"{fmt(value)}{'' if unit == '%' else ' '}{unit}", 13.5, bx + width + 10, mid + 5, c["accent"] if tonal else c["muted"])[0]
+        )
+    return out, y0 + 26 + len(rows) * ROW
 
 
-def draw(theme):
-    c = THEMES[theme]
-    memory = sorted(((n, r["playing"]["mb"], "") for n, r in RESULTS.items()), key=lambda r: r[1])
-    for name, (lo, hi, note) in CLAIMED.items():
-        memory.append((name, (lo, hi), note))
-    cpu = sorted(((n, r["playing"]["cpu"], "") for n, r in RESULTS.items()), key=lambda r: r[1])
-    top = max(r[1] for r in memory if not isinstance(r[1], tuple))
-    body = [
-        f'<text x="0" y="22" font-size="19" font-weight="700" fill="{c["text"]}">Music players while playing a song</text>',
-        f'<text x="0" y="44" font-size="12.5" fill="{c["muted"]}">Lower is better. Memory is PSS over every process the app starts; CPU is share of one core. Linux, Ryzen 5 7600.</text>',
+def tiles(c, y, facts):
+    out, gap = [], 16
+    width = (W - 2 * PAD - gap * (len(facts) - 1)) / len(facts)
+    for i, (big, small) in enumerate(facts):
+        x = PAD + i * (width + gap)
+        out.append(f'<rect x="{x:.1f}" y="{y}" width="{width:.1f}" height="92" rx="18" fill="{c["tile"]}" stroke="{c["line"]}"/>')
+        out.append(text("Inter-Bold.ttf", big, 34, x + 24, y + 48, c["accent"], tracking=-0.02)[0])
+        out.append(text("Inter-Regular.ttf", small, 14, x + 24, y + 74, c["muted"])[0])
+    return out, y + 92
+
+
+def facts():
+    playing = {n: r["playing"] for n, r in RESULTS.items()}
+    lean = playing["Tonal (waves off)"]
+    others = {n: p for n, p in playing.items() if not n.startswith("Tonal")}
+    heaviest = max(others, key=lambda n: others[n]["mb"])
+    out = [
+        (f"{others[heaviest]['mb'] / lean['mb']:.0f}× less", f"memory than {heaviest} while playing"),
+        (f"{lean['cpu']:.1f}% CPU", "playing a song with the waves off"),
     ]
-    part, y = panel(theme, "Memory", "MB", memory, TOP + 18, top * 1.05, lambda v: f"{v:.0f}")
+    if all(lean["mb"] < p["mb"] and lean["cpu"] < p["cpu"] for p in others.values()):
+        out.append((f"{lean['mb']:.0f} MB", f"lightest of the {len(playing) - 2} players measured"))
+    return out
+
+
+def draw(look):
+    c = LOOKS[look]
+    memory = sorted(((n, r["playing"]["mb"], "") for n, r in RESULTS.items()), key=lambda r: r[1])
+    memory += [(n, (lo, hi), note) for n, (lo, hi, note) in CLAIMED.items()]
+    cpu = sorted(((n, r["playing"]["cpu"], "") for n, r in RESULTS.items()), key=lambda r: r[1])
+    body = [
+        text("Inter-Bold.ttf", "How light is Tonal?", 40, PAD, PAD + 38, c["text"], tracking=-0.025)[0],
+        text(
+            "Inter-Regular.ttf",
+            "Music players playing the same song, measured the same way by bench/bench.py. Arch Linux, Ryzen 5 7600.",
+            15, PAD, PAD + 70, c["muted"],
+        )[0],
+    ]
+    part, y = tiles(c, PAD + 100, facts())
     body += part
-    part, y = panel(theme, "CPU", "%", cpu, y + 34, max(r[1] for r in cpu) * 1.05, lambda v: f"{v:.1f}")
-    body += part
-    height = y + 12
-    return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{height}" viewBox="0 0 {W} {height}" '
-        f'font-family="Inter, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">\n'
-        + "\n".join(body)
-        + "\n</svg>\n"
+    top = max(r[1] for r in memory if not isinstance(r[1], tuple))
+    left, ly = panel(c, PAD, y + 60, "Memory", "MB", memory, top * 1.02, lambda v: f"{v:.0f}")
+    right, ry = panel(c, PAD + COL + 48, y + 60, "CPU", "%", cpu, max(r[1] for r in cpu) * 1.02, lambda v: f"{v:.1f}")
+    body += left + right
+    foot = max(ly, ry) + 28
+    body.append(
+        text(
+            "Inter-Regular.ttf",
+            "Memory is PSS over every process the app starts, so shared libraries count once. CPU is the share of one core.",
+            13, PAD, foot, c["muted"], opacity=0.85,
+        )[0]
     )
+    height = int(foot + 70)
+    ripple = wave(900, 10, height - 8, [(1, 1.0, 0.0), (2, 0.4, 1.1)], W + 900).replace(" L", " L").replace(
+        f"M0,360", f"M0,{height}"
+    ).replace(f",360 Z", f",{height} Z")
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {height}" width="{W}" height="{height}" role="img" aria-label="Memory and CPU of music players while playing a song">
+<defs>
+<clipPath id="card"><rect width="{W}" height="{height}" rx="28"/></clipPath>
+<radialGradient id="glow" cx="0.92" cy="0" r="0.6"><stop offset="0" stop-color="{c["accent"]}" stop-opacity="{c["glow"]}"/><stop offset="1" stop-color="{c["accent"]}" stop-opacity="0"/></radialGradient>
+<linearGradient id="tonal" x1="0" x2="1"><stop offset="0" stop-color="{c["accent2"]}"/><stop offset="1" stop-color="{c["accent"]}"/></linearGradient>
+<filter id="soft" x="-50%" y="-200%" width="200%" height="500%"><feGaussianBlur stdDeviation="5"/></filter>
+</defs>
+<g clip-path="url(#card)">
+<rect width="{W}" height="{height}" fill="{c["bg"]}"/>
+<rect width="{W}" height="{height}" fill="url(#glow)"/>
+<path d="{ripple}" fill="{c["accent"]}" fill-opacity="0.08"><animateTransform attributeName="transform" type="translate" from="0 0" to="-900 0" dur="30s" repeatCount="indefinite"/></path>
+</g>
+{chr(10).join(body)}
+</svg>
+"""
 
 
-for name in THEMES:
-    (ROOT / f"docs/images/benchmark-{name}.svg").write_text(draw(name))
+for look in LOOKS:
+    (ROOT / f"docs/images/benchmark-{look}.svg").write_text(draw(look))
