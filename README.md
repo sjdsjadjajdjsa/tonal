@@ -1,40 +1,59 @@
 <div align="center">
 
-# tonal
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/banner-dark.svg">
+  <img alt="tonal, a native music player that moves with your music" src="docs/images/banner-light.svg" width="100%">
+</picture>
 
-[![ci](https://img.shields.io/github/actions/workflow/status/sjdsjadjajdjsa/tonal/ci.yml?branch=main&label=ci&logo=github&logoColor=white)](https://github.com/sjdsjadjajdjsa/tonal/actions/workflows/ci.yml)
-[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey)](#install)
-[![made with](https://img.shields.io/badge/made_with-Rust-orange?logo=rust)](https://www.rust-lang.org)
-[![playback](https://img.shields.io/badge/playback-mpv-690069)](https://mpv.io)
+<br><br>
 
-A lightweight native music player. Search and stream from YouTube Music, SoundCloud and Audius, play your own files, and bring your Spotify playlists along. No browser inside, no Premium, near zero CPU when idle.
+[![release](https://img.shields.io/github/v/release/sjdsjadjajdjsa/tonal?style=flat-square&label=release&labelColor=0e0f12&color=1ed760)](https://github.com/sjdsjadjajdjsa/tonal/releases/latest)
+[![ci](https://img.shields.io/github/actions/workflow/status/sjdsjadjajdjsa/tonal/ci.yml?branch=main&style=flat-square&label=ci&labelColor=0e0f12&color=1ed760)](https://github.com/sjdsjadjajdjsa/tonal/actions/workflows/ci.yml)
+[![platforms](https://img.shields.io/badge/Linux%20·%20Windows%20·%20macOS-1ed760?style=flat-square&label=runs%20on&labelColor=0e0f12)](#install)
+[![license](https://img.shields.io/badge/MIT-1ed760?style=flat-square&label=license&labelColor=0e0f12)](LICENSE)
 
-<a href="https://slint.dev"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-dark.svg"><img src="https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-light.svg" height="32" alt="Made with Slint"></picture></a>
+**[Download](https://github.com/sjdsjadjajdjsa/tonal/releases/latest)** &nbsp;·&nbsp; [Features](#what-you-get) &nbsp;·&nbsp; [Screenshots](#screenshots) &nbsp;·&nbsp; [Install](#install) &nbsp;·&nbsp; [Benchmarks](#benchmarks) &nbsp;·&nbsp; [How it works](#how-it-works)
 
-![A playlist playing, with the flowing wave visualizer along the bottom of the window](docs/images/hero.webp)
+<br>
+
+![A playlist playing over the Northern lights theme, with the flowing wave visualizer along the bottom of the window](docs/images/hero.webp)
 
 </div>
 
-Most music apps are a web browser in disguise. Tonal draws its own window with [Slint](https://slint.dev) and hands the audio to [mpv](https://mpv.io), so it idles at 0% CPU and about 33 MB of memory, and stays around 5% of one core while playing with the visualizer on.
+<br>
+
+Search and stream from YouTube Music, SoundCloud and Audius, play your own files, and bring your Spotify playlists along. No browser inside and no Premium needed.
+
+Most music apps are a web browser in disguise. Tonal draws its own window with [Slint](https://slint.dev) and hands the audio to [mpv](https://mpv.io). With the waves off it uses 0.5% of one core while playing and less memory than any other player in the [benchmarks](#benchmarks). With them on, it stays around 6%.
 
 ## What you get
 
+### Listen
+
 - **Artists and albums:** click any artist or album name to open its page: photo, popular songs, albums, singles and similar artists, or an album with every track. Back and forward work with the arrows, Alt+←/→ and the mouse side buttons.
 - **One search, four sources:** YouTube Music, SoundCloud, Audius and your local files. YouTube results come straight from YouTube Music, in under a second.
-- **Your library:** liked songs, playlists, play history, most played, and a queue you can reorder. The queue and position come back when you reopen the app.
-- **Spotify import:** paste a public playlist or album link and Tonal finds every song on YouTube Music (up to 100 songs). For bigger playlists and your liked songs, log in with your own Spotify developer app (Spotify only allows these for accounts with Premium). Spotify audio itself is never used.
 - **Now playing:** click the cover in the player bar (or `Ctrl` `N`) for a big cover, the waves and synced lyrics.
-- **Album grid:** browse your local files as albums, sorted by artist, year or recently added.
-- **Listening stats:** your top artists and albums this month and of all time, on Home. They never leave your computer.
-- **Album colors:** the waves and the equalizer take a soft color from the cover.
-- **Living themes:** 15 animated background scenes (aurora, dunes, ocean tide, misty pines, liquid glass, synthwave, sakura petals, city rain and more), 18 color palettes, endless seed variants that can crossfade on a timer, four panel styles (Clear, Glass, Neon, Solid) and optional music reactivity. A "From the album" palette follows the playing song's cover, playlists can keep their own theme, and themes can be shared as a short code. The default Classic look paints nothing and costs 0% CPU.
-- **Flowing visualizer:** a soft wave across the bottom of the window that moves with the music. It only runs while something plays, and settles into a still line when you pause.
-- **Equalizer:** drag six points on a smooth curve, or pick a preset. Hold the compare button to hear the song without it.
 - **Good playback:** gapless, crossfade, volume levelling, shuffle and repeat, all done by mpv.
 - **Radio:** when the queue runs out, Tonal keeps going with similar songs.
 - **Synced lyrics** from [LRCLIB](https://lrclib.net), highlighted line by line.
+- **Equalizer:** drag six points on a smooth curve, or pick a preset. Hold the compare button to hear the song without it.
+
+### Your library
+
+- **Likes and playlists:** liked songs, playlists, play history, most played, and a queue you can reorder. The queue and position come back when you reopen the app.
+- **Spotify import:** paste a public playlist or album link and Tonal finds every song on YouTube Music (up to 100 songs). For bigger playlists and your liked songs, log in with your own Spotify developer app (Spotify only allows these for accounts with Premium). Spotify audio itself is never used.
+- **Album grid:** browse your local files as albums, sorted by artist, year or recently added.
+- **Listening stats:** your top artists and albums this month and of all time, on Home. They never leave your computer.
 - **Downloads** for offline listening, with tags and cover art.
+
+### Make it yours
+
+- **Living themes:** 15 animated background scenes (aurora, dunes, ocean tide, misty pines, liquid glass, synthwave, sakura petals, city rain and more), 18 color palettes, endless seed variants that can crossfade on a timer, four panel styles (Clear, Glass, Neon, Solid) and optional music reactivity. A "From the album" palette follows the playing song's cover, playlists can keep their own theme, and themes can be shared as a short code. The default Classic look paints nothing and costs 0% CPU.
+- **Album colors:** the waves and the equalizer take a soft color from the cover.
+- **Flowing visualizer:** a soft wave across the bottom of the window that moves with the music. It only runs while something plays, and settles into a still line when you pause.
+
+### On your desktop
+
 - **Desktop integration:** media keys and MPRIS, so your keyboard, bar widgets and `playerctl` all work.
 - **Mini player** and **scrobbling** to Last.fm and ListenBrainz.
 
@@ -155,6 +174,7 @@ The last row is a joke. Nobody measured it, and nobody could find the download l
 - `src/integrations`: Spotify import, LRCLIB lyrics, Last.fm and ListenBrainz.
 - `src/visualizer`: reads Tonal's own audio (PipeWire on Linux, WASAPI process loopback on Windows, a Core Audio process tap on macOS), runs an FFT and turns it into smooth wave paths.
 - `ui/`: the Slint interface.
+- `docs/banner.py`: draws the banner at the top of this page from the app icon and the bundled Inter font.
 
 [docs/architecture.md](docs/architecture.md) has the details.
 
