@@ -5,7 +5,8 @@ use slint::ComponentHandle;
 /// Runs a test script, one step per line, by sending input straight to the window so the
 /// real pointer and keyboard focus stay untouched: `wait ms`, `click x y`, `dclick x y`,
 /// `rclick x y`, `move x y`, `scroll x y dy`,
-/// `type text`, `key name`, `shot path`, `cmd command`, `page name`, `log text`.
+/// `type text`, `key name`, `shot path`, `cmd command`, `page name`,
+/// `theme action value`, `log text`.
 fn run_script(
     app: Controller,
     weak: slint::Weak<AppWindow>,
@@ -109,6 +110,10 @@ fn run_script(
             },
             "cmd" => app.command(rest),
             "page" => app.load_page(rest),
+            "theme" => {
+                let (action, value) = rest.split_once(' ').unwrap_or((rest, ""));
+                app.theme_action(action, value);
+            }
             "log" => log::info!("SCRIPT {rest}"),
             _ => log::warn!("SCRIPT unknown step: {line}"),
         }
