@@ -2,7 +2,7 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
-## Unreleased
+## 0.4.1 - 2026-11-01
 
 ### Fixed
 - Windows: a terminal window no longer flashes open each time a YouTube song starts.
