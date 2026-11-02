@@ -15,8 +15,13 @@ pub enum ShellRequest {
 
 enum Update {
     Track(Option<Box<Track>>),
-    Playback { playing: bool, position: f64 },
+    Playback {
+        playing: bool,
+        position: f64,
+    },
     Volume(f64),
+    #[cfg_attr(not(windows), allow(dead_code))]
+    Window(usize),
 }
 
 #[derive(Clone)]
@@ -35,6 +40,12 @@ impl MediaControlsHandle {
 
     pub fn set_volume(&self, volume: f64) {
         let _ = self.tx.send(Update::Volume(volume));
+    }
+
+    /// Hands over the window once it exists: Windows' media controls need one.
+    #[cfg(windows)]
+    pub fn set_window(&self, hwnd: *mut std::ffi::c_void) {
+        let _ = self.tx.send(Update::Window(hwnd as usize));
     }
 }
 
@@ -88,10 +99,21 @@ pub fn spawn(
     shell: impl Fn(ShellRequest) + Send + Sync + 'static,
 ) -> MediaControlsHandle {
     let (tx, rx) = mpsc::channel::<Update>();
-    let hwnd = hwnd.map(|h| h as usize);
+    #[cfg_attr(not(windows), allow(unused_mut))]
+    let mut hwnd = hwnd.map(|h| h as usize);
     let spawned = std::thread::Builder::new()
         .name("media-controls".into())
         .spawn(move || {
+            #[cfg_attr(not(windows), allow(unused_mut))]
+            let mut pending = Vec::new();
+            #[cfg(windows)]
+            while hwnd.is_none() {
+                match rx.recv() {
+                    Ok(Update::Window(h)) => hwnd = Some(h),
+                    Ok(update) => pending.push(update),
+                    Err(_) => return,
+                }
+            }
             let config = PlatformConfig {
                 display_name: "Tonal",
                 dbus_name: "tonal",
@@ -108,7 +130,7 @@ pub fn spawn(
                 log::warn!("media controls attach failed: {err:?}");
                 return;
             }
-            for update in rx {
+            for update in pending.into_iter().chain(rx) {
                 let result = match update {
                     Update::Track(Some(track)) => {
                         let cover = cover_url(&track);
@@ -137,6 +159,7 @@ pub fn spawn(
                         }
                     }),
                     Update::Volume(volume) => volume_update(&mut controls, volume),
+                    Update::Window(_) => Ok(()),
                 };
                 if let Err(err) = result {
                     log::debug!("media controls update failed: {err:?}");

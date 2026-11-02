@@ -38,6 +38,29 @@ fn bundled_tools_on_path() {
     }
 }
 
+/// Writes panics to crash.log in the data folder too: Windows and macOS builds have
+/// no terminal, so without it a crash leaves nothing to look at.
+fn crash_log() {
+    let default = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        use std::io::Write;
+        let thread = std::thread::current().name().unwrap_or("main").to_owned();
+        let path = model::paths::data_dir().join("crash.log");
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+        {
+            let _ = writeln!(
+                file,
+                "Tonal {} thread '{thread}': {info}",
+                env!("CARGO_PKG_VERSION")
+            );
+        }
+        default(info);
+    }));
+}
+
 fn main() -> anyhow::Result<()> {
     if let Some(code) = ytdl_wait::run() {
         std::process::exit(code);
@@ -49,6 +72,7 @@ fn main() -> anyhow::Result<()> {
     }
     bundled_tools_on_path();
     env_logger::init();
+    crash_log();
     let _ = rustls::crypto::ring::default_provider().install_default();
     app::run()
 }

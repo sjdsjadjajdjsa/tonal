@@ -26,6 +26,16 @@ use parking_lot::Mutex;
 use slint::{ComponentHandle, ModelRc, VecModel};
 use std::sync::Arc;
 
+/// The native window, once winit has made it: Windows' media controls need it.
+#[cfg(windows)]
+fn win32_hwnd(window: &slint::Window) -> Option<*mut std::ffi::c_void> {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    match window.window_handle().window_handle().map(|h| h.as_raw()) {
+        Ok(RawWindowHandle::Win32(h)) => Some(h.hwnd.get() as *mut std::ffi::c_void),
+        _ => None,
+    }
+}
+
 pub fn run() -> anyhow::Result<()> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
@@ -116,13 +126,8 @@ pub fn run() -> anyhow::Result<()> {
     let weak = window.as_weak();
     #[cfg(windows)]
     let hwnd = {
-        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
         window.show()?;
-        let slint_handle = window.window().window_handle();
-        match slint_handle.window_handle().map(|handle| handle.as_raw()) {
-            Ok(RawWindowHandle::Win32(handle)) => Some(handle.hwnd.get() as *mut std::ffi::c_void),
-            _ => None,
-        }
+        win32_hwnd(window.window())
     };
     #[cfg(not(windows))]
     let hwnd = None;
@@ -181,7 +186,9 @@ pub fn run() -> anyhow::Result<()> {
     {
         use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
         let c = app.clone();
-        window.window().on_winit_window_event(move |_, event| match event {
+        #[cfg(windows)]
+        let given = std::cell::Cell::new(hwnd.is_some());
+        window.window().on_winit_window_event(move |_window, event| match event {
             winit::event::WindowEvent::MouseInput {
                 state: winit::event::ElementState::Pressed,
                 button: button @ (winit::event::MouseButton::Back | winit::event::MouseButton::Forward),
@@ -192,6 +199,13 @@ pub fn run() -> anyhow::Result<()> {
             }
             winit::event::WindowEvent::RedrawRequested => {
                 themes::drawn();
+                #[cfg(windows)]
+                if !given.get()
+                    && let Some(h) = win32_hwnd(_window)
+                {
+                    c.media.set_window(h);
+                    given.set(true);
+                }
                 EventResult::Propagate
             }
             winit::event::WindowEvent::Focused(focused) => {
