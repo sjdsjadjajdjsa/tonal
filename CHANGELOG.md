@@ -2,6 +2,12 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
+## 0.4.2 - 2026-11-02
+
+### Fixed
+- Windows: Tonal could close a second after opening. Media controls started before the window existed and crashed the app; they now wait for the window.
+- A crash now leaves `crash.log` in Tonal's data folder, so builds without a terminal still say what went wrong.
+
 ## 0.4.1 - 2026-11-01
 
 ### Fixed
