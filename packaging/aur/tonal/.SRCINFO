@@ -1,6 +1,6 @@
 pkgbase = tonal
 	pkgdesc = A lightweight native music player. Rust, Slint, mpv.
-	pkgver = 0.4.0
+	pkgver = 0.4.1
 	pkgrel = 1
 	url = https://github.com/sjdsjadjajdjsa/tonal
 	arch = x86_64
@@ -19,7 +19,7 @@ pkgbase = tonal
 	optdepends = pipewire: visualizer
 	options = !lto
 	options = !debug
-	source = tonal-0.4.0.tar.gz::https://github.com/sjdsjadjajdjsa/tonal/archive/refs/tags/v0.4.0.tar.gz
-	sha256sums = c71ad2d1b83e21af2391cd3fbf342272bf786b43246fb95f0b9f2c350f84cd80
+	source = tonal-0.4.1.tar.gz::https://github.com/sjdsjadjajdjsa/tonal/archive/refs/tags/v0.4.1.tar.gz
+	sha256sums = 64d82036265f4d0130b03d514920c248bc0346b0678050b4a14494db531bdabb
 
 pkgname = tonal
