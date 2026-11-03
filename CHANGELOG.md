@@ -2,6 +2,11 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
+## Unreleased
+
+### Fixed
+- Windows: parts of the window could go missing and show the desktop or other windows through holes until they were redrawn. The window is now opaque on Windows.
+
 ## 0.4.2 - 2026-11-02
 
 ### Fixed

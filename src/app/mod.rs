@@ -78,6 +78,14 @@ pub fn run() -> anyhow::Result<()> {
                 .with_fullsize_content_view(true)
         })
         .select()?;
+    // Windows only offers see-through windows by blending GDI output with what's behind,
+    // and then drops parts of the window that weren't repainted since, so the desktop shows
+    // through holes in the app. An opaque window keeps every pixel.
+    #[cfg(windows)]
+    slint::BackendSelector::new()
+        .backend_name("winit".into())
+        .with_winit_window_attributes_hook(|attributes| attributes.with_transparent(false))
+        .select()?;
     log::info!("Creating Tonal window");
     let window = AppWindow::new()?;
     log::info!("Window created");
