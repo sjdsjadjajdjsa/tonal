@@ -2,6 +2,11 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
+## 0.5.1 - 2026-11-05
+
+### Changed
+- Equalizer presets are much stronger, so Bass, Vocal, Bright, Warm and Late night each sound clearly different. A limiter after the equalizer keeps big boosts from clipping.
+
 ## 0.5.0 - 2026-11-05
 
 ### Added
