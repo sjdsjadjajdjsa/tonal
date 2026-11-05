@@ -46,6 +46,11 @@ impl Controller {
         if self.result(self.library.set_liked(&track, liked)).is_none() {
             return;
         }
+        self.sound(if liked {
+            crate::sfx::Sound::Like
+        } else {
+            crate::sfx::Sound::Unlike
+        });
         let current = self
             .state
             .lock()
@@ -85,6 +90,7 @@ impl Controller {
                 } else {
                     self.player.enqueue(tracks);
                 }
+                self.sound(crate::sfx::Sound::Queued);
             }
             "Like / Unlike" => self.like(track),
             "Download" => self.download(track),
@@ -221,6 +227,7 @@ impl Controller {
             }
             "import" => self.import_public(value.to_owned()),
             "theme-save" if !value.trim().is_empty() => self.theme_save(value.trim()),
+            "eq-save" if !value.trim().is_empty() => self.eq_save_preset(value.trim()),
             "theme-code" if !value.trim().is_empty() => self.theme_code(value),
             _ => {
                 self.status("Enter a name first");
@@ -240,6 +247,7 @@ impl Controller {
                 .is_some()
         {
             self.refresh_playlists();
+            self.sound(crate::sfx::Sound::Added);
             self.status("Added to playlist");
         }
         self.ui(|w| w.set_dialog("".into()));

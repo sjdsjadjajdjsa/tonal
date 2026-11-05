@@ -7,7 +7,10 @@ New-Item -ItemType Directory $tmp -Force | Out-Null
 
 Invoke-WebRequest -Uri "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" -OutFile (Join-Path $Dest "yt-dlp.exe")
 
-$release = Invoke-RestMethod -Uri "https://api.github.com/repos/shinchiro/mpv-winbuild-cmake/releases/latest" -Headers @{ "User-Agent" = "tonal-release" }
+# Signed in when the workflow passes its token, so shared runners don't hit the rate limit.
+$headers = @{ "User-Agent" = "tonal-release" }
+if ($env:GITHUB_TOKEN) { $headers["Authorization"] = "Bearer $env:GITHUB_TOKEN" }
+$release = Invoke-RestMethod -Uri "https://api.github.com/repos/shinchiro/mpv-winbuild-cmake/releases/latest" -Headers $headers
 $asset = $release.assets | Where-Object { $_.name -match '^mpv-x86_64-\d{8}-git-[0-9a-f]+\.7z$' } | Select-Object -First 1
 if (-not $asset) { throw "No mpv build found in $($release.tag_name)" }
 $archive = Join-Path $tmp $asset.name

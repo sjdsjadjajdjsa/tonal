@@ -269,6 +269,9 @@ pub fn run() -> anyhow::Result<()> {
     let c = app.clone();
     window.on_eq_choose(move |name| c.eq_choose(&name));
     let c = app.clone();
+    window.on_eq_delete(move |name| c.eq_delete_preset(&name));
+    app.eq_watch_output();
+    let c = app.clone();
     window.on_eq_drag(move |band, gain, spot| c.eq_drag(band as usize, gain as f64, spot as f64));
     let c = app.clone();
     window.on_eq_reset(move |band| c.eq_reset(band as usize));
@@ -326,6 +329,9 @@ pub fn run() -> anyhow::Result<()> {
         }
         match key.as_str() {
             " " if !typing => c.player.toggle_pause(),
+            k if !ctrl && !typing && k.len() == 1 && k.as_bytes()[0].is_ascii_digit() => {
+                c.eq_key((k.as_bytes()[0] - b'0') as usize)
+            }
             "l" if ctrl => c.command("like"),
             "m" if ctrl => c.command("mini"),
             "n" if ctrl => c.command("now"),
@@ -387,6 +393,10 @@ pub fn run() -> anyhow::Result<()> {
     if window.get_source() == 0 {
         app.check_youtube_runtime();
     }
+    let c = app.clone();
+    slint::Timer::single_shot(std::time::Duration::from_secs(6), move || {
+        c.update_check(true)
+    });
     #[cfg(feature = "debug-hooks")]
     debug::debug_hooks(&app, &window);
     log::info!("Starting Tonal event loop");

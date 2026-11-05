@@ -105,6 +105,8 @@ export component AppWindow inherits Window {
     in property <[float]> eq-spots;
     /// Each dot's pop after it lands, 1 fading to 0.
     in property <[float]> eq-pops;
+    /// Names of your own equalizer presets.
+    in property <[string]> eq-saved;
     in property <[string]> eq-labels;
     in property <string> eq-correction;
     in property <string> eq-headphone;
@@ -178,6 +180,7 @@ export component AppWindow inherits Window {
     callback artist-action(string);
     callback album-action(string);
     callback eq-choose(string);
+    callback eq-delete(string);
     callback eq-drag(int, float, float);
     callback eq-headphones-open();
     callback eq-headphones-search(string);
@@ -641,6 +644,13 @@ export component AppWindow inherits Window {
                             line: root.eq-line;
                             spots: root.eq-spots;
             pops: root.eq-pops;
+            saved: root.eq-saved;
+            save => {
+                root.dialog-heading = "Save equalizer preset";
+                root.dialog-value = "";
+                root.dialog = "eq-save";
+            }
+            delete(name) => { root.eq-delete(name); }
                             labels: root.eq-labels;
                             correction: root.eq-correction;
                             headphone: root.eq-headphone;

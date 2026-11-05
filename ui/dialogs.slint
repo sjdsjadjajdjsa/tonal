@@ -49,7 +49,7 @@ export component Dialog inherits Rectangle {
                 spacing: 8px;
                 field := TextField {
                     text <=> root.value;
-                    placeholder: root.kind == "import" ? "https://open.spotify.com/playlist/..." : root.kind == "theme-save" ? "Theme name" : root.kind == "theme-code" ? "tonal1...." : "Playlist name";
+                    placeholder: root.kind == "import" ? "https://open.spotify.com/playlist/..." : root.kind == "theme-save" ? "Theme name" : root.kind == "eq-save" ? "Preset name" : root.kind == "theme-code" ? "tonal1...." : "Playlist name";
                     accepted(text) => { root.submit(text); }
                     init => {
                         self.focus();

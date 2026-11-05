@@ -43,6 +43,8 @@ export component EqPanel inherits VerticalLayout {
     in property <[float]> spots;
     /// Each dot's pop after it lands, 1 fading to 0.
     in property <[float]> pops;
+    /// Names of your own presets.
+    in property <[string]> saved;
     /// Each band's frequency, like "60" or "1.2k".
     in property <[string]> labels;
     /// The headphone correction's response, drawn faintly.
@@ -68,6 +70,9 @@ export component EqPanel inherits VerticalLayout {
     out property <length> graph-width: graph.width;
     out property <length> graph-height: graph.height;
     callback choose(string);
+    /// Opens the dialog that names the curve as a preset of your own.
+    callback save();
+    callback delete(string);
     /// Band, gain in dB, and spot on the axis; 99 dB or spot -1 keeps that one as saved.
     callback drag(int, float, float);
     callback release();
@@ -128,6 +133,10 @@ export component EqPanel inherits VerticalLayout {
                 clicked => { root.choose(name); }
             }
             Chip { text: "Custom"; passive: true; active: !root.bypassed && root.preset == "Custom"; }
+            if root.preset == "Custom" && !root.bypassed: Chip {
+                icon: Icons.plus;
+                clicked => { root.save(); }
+            }
             phones := Chip {
                 icon: Icons.headphones;
                 locked: root.bypassed;
@@ -136,6 +145,26 @@ export component EqPanel inherits VerticalLayout {
                     root.headphones-open();
                     root.headphones-search(root.headphone-query);
                     search.show();
+                }
+            }
+        }
+        if root.saved.length > 0: Flickable {
+            height: 28px;
+            content-width: max(self.width, mine.preferred-width);
+            mine := HorizontalLayout {
+                spacing: 4px;
+                alignment: start;
+                for name in root.saved: Chip {
+                    text: name;
+                    locked: root.bypassed;
+                    active: !root.bypassed && root.preset == name;
+                    clicked => { root.choose(name); }
+                }
+                for name in root.saved: Chip {
+                    visible: !root.bypassed && root.preset == name;
+                    width: self.visible ? 28px : 0px;
+                    icon: Icons.trash;
+                    clicked => { root.delete(name); }
                 }
             }
         }

@@ -69,9 +69,14 @@ impl Controller {
                     s.visualizer = v;
                 }
             }
-            "eq_sounds" => {
+            "sounds" => {
                 if let Ok(v) = value.parse() {
-                    s.eq_sounds = v;
+                    s.sounds = v;
+                }
+            }
+            "eq_per_output" => {
+                if let Ok(v) = value.parse() {
+                    s.eq_per_output = v;
                 }
             }
             "album_colors" => {
@@ -126,6 +131,77 @@ impl Controller {
             });
         }
     }
+    /// Looks for a newer Tonal; `quiet` only speaks up when there is one.
+    pub(super) fn update_check(&self, quiet: bool) {
+        use crate::integrations::update::{self, State};
+        if matches!(update::state(), State::Checking | State::Installing) {
+            return;
+        }
+        update::set_state(State::Checking);
+        self.refresh_settings();
+        let this = self.clone();
+        tokio::spawn(async move {
+            let state = match update::check().await {
+                Ok(state) => state,
+                Err(e) => {
+                    log::warn!("Update check: {e:#}");
+                    if !quiet {
+                        this.status("Couldn't reach GitHub to check for updates");
+                    }
+                    State::Failed
+                }
+            };
+            match &state {
+                State::Available { version, .. } => this.status(format!(
+                    "Tonal {version} is out · Settings, Updates to install it"
+                )),
+                State::Current if !quiet => this.status("Tonal is up to date"),
+                _ => {}
+            }
+            update::set_state(state);
+            this.refresh_settings();
+        });
+    }
+
+    /// Settings, Updates: checks, then installs what it found.
+    pub(super) fn update_tonal(&self) {
+        use crate::integrations::update::{self, State};
+        let (version, url) = match update::state() {
+            State::Available { version, url } => (version, url),
+            State::Checking | State::Installing => return,
+            _ => return self.update_check(false),
+        };
+        let Some(url) = url else {
+            let _ = open::that(update::PAGE);
+            return;
+        };
+        update::set_state(State::Installing);
+        self.refresh_settings();
+        self.status(format!("Installing Tonal {version}…"));
+        let this = self.clone();
+        tokio::spawn(async move {
+            match update::install(&url).await {
+                Ok(()) => this.ui(|_| {
+                    let _ = slint::quit_event_loop();
+                }),
+                Err(e) => {
+                    log::warn!("Update: {e:#}");
+                    this.status(format!("Couldn't install Tonal {version}: {e}"));
+                    update::set_state(State::Available {
+                        version,
+                        url: Some(url),
+                    });
+                    this.refresh_settings();
+                }
+            }
+        });
+    }
+
+    fn refresh_settings(&self) {
+        let settings = self.state.lock().settings.clone();
+        self.ui(move |w| models::update(w.get_settings(), models::settings(&settings)));
+    }
+
     pub(super) fn update_ytdlp(&self) {
         self.status("Updating yt-dlp…");
         let this = self.clone();

@@ -213,6 +213,7 @@ impl Controller {
             c if c.starts_with("stats:") => self.load_stats(c[6..].parse().unwrap_or(0)),
             "save-settings" => self.save_settings(),
             "update-ytdlp" => self.update_ytdlp(),
+            "update" => self.update_tonal(),
             "rescan" => self.rescan(),
             "spotify-login" => self.spotify_login(),
             "lastfm-login" => self.lastfm_login(),

@@ -1,7 +1,7 @@
 use crate::{
+    LyricRow, PlaylistRow, SettingRow, TrackRow,
     library::Library,
     model::{Settings, Track},
-    LyricRow, PlaylistRow, SettingRow, TrackRow,
 };
 use slint::{Model, ModelRc, VecModel};
 
@@ -201,15 +201,43 @@ fn options_model(options: &[String]) -> ModelRc<slint::SharedString> {
     })
 }
 
+/// Settings, Updates: what the button says and does depends on the last check.
+fn update_row() -> (String, String, String) {
+    use crate::integrations::update::{State, VERSION, state};
+    let (button, hint) = match state() {
+        State::Unknown | State::Current | State::Failed => {
+            ("Check for updates".into(), String::new())
+        }
+        State::Checking => ("Checking…".into(), String::new()),
+        State::Available {
+            version,
+            url: Some(_),
+        } => (
+            format!("Install {version}"),
+            "Downloads it, then Tonal restarts on the new version.".into(),
+        ),
+        State::Available { version, url: None } => {
+            (format!("Get {version}"), "Opens the download page.".into())
+        }
+        State::Installing => ("Installing…".into(), String::new()),
+    };
+    let label = match state() {
+        State::Current => format!("Tonal {VERSION}, up to date"),
+        _ => format!("Tonal {VERSION}"),
+    };
+    (label, button, hint)
+}
+
 pub fn settings(s: &Settings) -> Vec<SettingRow> {
     let (outputs, output) = outputs(&s.audio_device);
+    let (update_label, update_button, update_hint) = update_row();
     let dirs = s
         .music_dirs
         .iter()
         .map(|p| p.to_string_lossy())
         .collect::<Vec<_>>()
         .join(";");
-    let sections: [(&str, Vec<Field>); 6] = [
+    let sections: [(&str, Vec<Field>); 7] = [
         (
             "Playback",
             vec![
@@ -264,10 +292,18 @@ pub fn settings(s: &Settings) -> Vec<SettingRow> {
                 ),
                 ("eq", "Equalizer", s.eq_preset.clone(), "", "action", false),
                 (
-                    "eq_sounds",
-                    "Equalizer sounds",
-                    s.eq_sounds.to_string(),
-                    "A bubbly pop as each band lands on a new preset.",
+                    "eq_per_output",
+                    "Equalizer per output",
+                    s.eq_per_output.to_string(),
+                    "Headphones and speakers each keep their own equalizer.",
+                    "toggle",
+                    false,
+                ),
+                (
+                    "sounds",
+                    "Interface sounds",
+                    s.sounds.to_string(),
+                    "Soft sounds for presets, likes and adding songs.",
                     "toggle",
                     false,
                 ),
@@ -449,6 +485,17 @@ pub fn settings(s: &Settings) -> Vec<SettingRow> {
                 ),
             ],
         ),
+        (
+            "Updates",
+            vec![(
+                "update",
+                &update_label,
+                update_button,
+                &update_hint,
+                "action",
+                false,
+            )],
+        ),
     ];
     let mut rows = Vec::new();
     for (header, fields) in sections {
@@ -499,9 +546,11 @@ mod tests {
         assert_eq!(update.value, "Update");
         assert_eq!(update.hint, "Keeps YouTube and SoundCloud working");
         assert_eq!(update.kind, "action");
-        assert!(fields
-            .iter()
-            .any(|f| f.key == "lastfm_api_secret" && f.secret));
+        assert!(
+            fields
+                .iter()
+                .any(|f| f.key == "lastfm_api_secret" && f.secret)
+        );
     }
     #[test]
     fn missing_output_is_listed_as_not_connected() {

@@ -2,6 +2,7 @@ pub mod autoeq;
 pub mod lyrics;
 pub mod scrobble;
 pub mod spotify;
+pub mod update;
 
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};

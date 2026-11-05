@@ -6,7 +6,7 @@ use super::{controller::Controller, models};
 use crate::{
     AppWindow,
     integrations::autoeq::{self, Entry},
-    model::{EqFilter, FilterKind, Settings},
+    model::{EqFilter, EqPreset, FilterKind, Settings},
     player::{EQ_BANDS, Equalizer},
     sfx,
     visualizer::{area, ribbon},
@@ -100,6 +100,8 @@ struct Headphones {
 thread_local! {
     static CURVE: RefCell<Curve> = RefCell::new(Curve::default());
     static HEADPHONES: RefCell<Headphones> = RefCell::new(Headphones::default());
+    /// The output playing now, once it is known.
+    static OUTPUT: RefCell<Option<String>> = const { RefCell::new(None) };
 }
 
 /// Room for boosts so the sound doesn't clip: half the largest boost, taken off the top.
@@ -109,10 +111,52 @@ pub(super) fn headroom(gains: &[f64; 6]) -> f64 {
 
 /// A named preset plays its current curve, so a saved one picks up retuned presets.
 pub(super) fn follow_preset(settings: &mut Settings) {
-    if let Some((_, gains)) = PRESETS.iter().find(|(n, _)| *n == settings.eq_preset) {
-        settings.eq_gains = *gains;
-        settings.eq_freqs = EQ_BANDS;
+    if let Some(p) = preset(settings, &settings.eq_preset) {
+        settings.eq_gains = p.gains;
+        settings.eq_freqs = p.freqs;
     }
+}
+
+/// A built-in preset or one of yours, by name.
+fn preset(settings: &Settings, name: &str) -> Option<EqPreset> {
+    PRESETS
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map(|(n, gains)| EqPreset {
+            name: (*n).into(),
+            gains: *gains,
+            freqs: EQ_BANDS,
+        })
+        .or_else(|| settings.eq_saved.iter().find(|p| p.name == name).cloned())
+}
+
+/// How loud interface sounds play: quiet, following the volume, silent when turned
+/// off or in bit-perfect mode.
+pub(super) fn sound_level(settings: &Settings) -> f32 {
+    if settings.sounds && !settings.bit_perfect {
+        (settings.volume / 100.0).clamp(0.0, 1.0) as f32 * 0.22
+    } else {
+        0.0
+    }
+}
+
+/// The equalizer as it is now, under its preset's name.
+fn current(settings: &Settings) -> EqPreset {
+    EqPreset {
+        name: settings.eq_preset.clone(),
+        gains: settings.eq_gains,
+        freqs: settings.eq_freqs,
+    }
+}
+
+/// Name of the output playing now: the chosen device, or the system's default.
+fn output_name(settings: &Settings) -> Option<String> {
+    use cpal::traits::{DeviceTrait, HostTrait};
+    if !settings.audio_device.is_empty() {
+        return Some(settings.audio_device.clone());
+    }
+    let device = cpal::default_host().default_output_device()?;
+    Some(device.description().ok()?.name().to_owned())
 }
 
 /// What mpv should play with. Comparing silences the bands but keeps the headphone
@@ -261,22 +305,144 @@ impl Controller {
         window.set_eq_labels(labels(&freqs));
         window.set_eq_headphone(headphone.map(|h| h.name).unwrap_or_default().into());
         window.set_eq_preset(preset.into());
+        let saved = self
+            .state
+            .lock()
+            .settings
+            .eq_saved
+            .iter()
+            .map(|p| SharedString::from(p.name.as_str()))
+            .collect::<Vec<_>>();
+        window.set_eq_saved(ModelRc::new(VecModel::from(saved)));
     }
 
     /// A preset is a curve at the standard bands, so it puts moved bands back.
     pub(crate) fn eq_choose(&self, name: &str) {
-        let Some((_, gains)) = PRESETS.iter().find(|(n, _)| *n == name) else {
-            return;
-        };
         {
             let mut s = self.state.lock();
-            s.settings.eq_gains = *gains;
-            s.settings.eq_freqs = EQ_BANDS;
-            s.settings.eq_preamp = headroom(gains);
-            s.settings.eq_preset = name.into();
+            let Some(p) = preset(&s.settings, name) else {
+                return;
+            };
+            s.settings.eq_gains = p.gains;
+            s.settings.eq_freqs = p.freqs;
+            s.settings.eq_preamp = headroom(&p.gains);
+            s.settings.eq_preset = p.name;
         }
         sfx::warm();
         self.eq_changed(Ease::Bounce);
+    }
+
+    /// Number keys: 1 to 6 are the built-in presets, 7 to 9 your first three.
+    pub(super) fn eq_key(&self, key: usize) {
+        let name = match key {
+            1..=6 => PRESETS[key - 1].0.to_owned(),
+            7..=9 => match self.state.lock().settings.eq_saved.get(key - 7) {
+                Some(p) => p.name.clone(),
+                None => return,
+            },
+            _ => return,
+        };
+        if self.state.lock().settings.bit_perfect {
+            return;
+        }
+        self.eq_choose(&name);
+        let open = self.window.upgrade().is_some_and(|w| w.get_panel() == "eq");
+        if !open {
+            self.status(format!("Equalizer: {name}"));
+        }
+    }
+
+    /// Keeps the curve as it is now under `name`, replacing one you saved with that name.
+    pub(super) fn eq_save_preset(&self, name: &str) {
+        let name: String = name.trim().chars().take(20).collect();
+        let name = name.as_str();
+        if PRESETS.iter().any(|(n, _)| n.eq_ignore_ascii_case(name))
+            || name.eq_ignore_ascii_case("Custom")
+        {
+            self.status(format!("{name} is a built-in preset, pick another name"));
+            return;
+        }
+        let level = {
+            let mut s = self.state.lock();
+            let mut p = current(&s.settings);
+            p.name = name.into();
+            match s.settings.eq_saved.iter_mut().find(|q| q.name == name) {
+                Some(q) => *q = p,
+                None => s.settings.eq_saved.push(p),
+            }
+            s.settings.eq_preset = name.into();
+            sound_level(&s.settings)
+        };
+        sfx::play(sfx::Sound::Saved, level);
+        self.eq_changed(Ease::Glide);
+    }
+
+    /// Forgets one of your presets; the curve stays and becomes Custom.
+    pub(super) fn eq_delete_preset(&self, name: &str) {
+        {
+            let mut s = self.state.lock();
+            s.settings.eq_saved.retain(|p| p.name != name);
+            if s.settings.eq_preset == name {
+                s.settings.eq_preset = "Custom".into();
+            }
+        }
+        self.eq_changed(Ease::Glide);
+    }
+
+    /// Plays one of the soft interface sounds.
+    pub(super) fn sound(&self, sound: sfx::Sound) {
+        sfx::play(sound, sound_level(&self.state.lock().settings));
+    }
+
+    /// Watches which output is playing and brings back the equalizer it had last time.
+    pub(super) fn eq_watch_output(&self) {
+        let this = self.clone();
+        tokio::spawn(async move {
+            let mut last: Option<String> = None;
+            loop {
+                let settings = this.state.lock().settings.clone();
+                let name = tokio::task::spawn_blocking(move || output_name(&settings))
+                    .await
+                    .ok()
+                    .flatten();
+                if let Some(name) = name.filter(|n| last.as_ref() != Some(n)) {
+                    let first = last.is_none();
+                    last = Some(name.clone());
+                    let ui = this.clone();
+                    this.ui(move |_| ui.eq_output_changed(name, first));
+                }
+                tokio::time::sleep(Duration::from_secs(2)).await;
+            }
+        });
+    }
+
+    fn eq_output_changed(&self, name: String, first: bool) {
+        OUTPUT.with(|o| *o.borrow_mut() = Some(name.clone()));
+        let restored = {
+            let mut s = self.state.lock();
+            if !s.settings.eq_per_output || s.settings.bit_perfect {
+                return;
+            }
+            let now = current(&s.settings);
+            match s.settings.eq_outputs.get(&name).cloned() {
+                Some(p) if p != now => {
+                    s.settings.eq_gains = p.gains;
+                    s.settings.eq_freqs = p.freqs;
+                    s.settings.eq_preamp = headroom(&p.gains);
+                    s.settings.eq_preset = p.name.clone();
+                    Some(p.name)
+                }
+                Some(_) => return,
+                None => {
+                    s.settings.eq_outputs.insert(name.clone(), now);
+                    None
+                }
+            }
+        };
+        self.eq_changed(Ease::Glide);
+        if let Some(preset) = restored.filter(|_| !first) {
+            self.status(format!("Equalizer: {preset} for {name}"));
+        }
     }
 
     /// A dot moved: up and down is its gain, sideways its frequency (`spot` on the axis).
@@ -416,16 +582,13 @@ impl Controller {
         });
     }
 
-    /// Sends the settings to mpv, eases the curve towards them and saves a moment later.
-    /// Bit-perfect keeps the settings (mpv skips the filter) and draws the curve flat.
     /// Sends the settings to mpv, moves the curve towards them and saves a moment later.
     /// Bit-perfect keeps the settings (mpv skips the filter) and draws the curve flat.
     fn eq_changed(&self, ease: Ease) {
         let comparing = CURVE.with(|c| c.borrow().comparing);
         let (heard, preset, bit_perfect, headphone, sound) = {
             let s = self.state.lock();
-            let sound = (s.settings.eq_sounds && !s.settings.bit_perfect)
-                .then(|| (s.settings.volume / 100.0).clamp(0.0, 1.0) as f32 * 0.22);
+            let sound = Some(sound_level(&s.settings)).filter(|l| *l > 0.0);
             (
                 heard(&s.settings, comparing),
                 s.settings.eq_preset.clone(),
@@ -495,7 +658,21 @@ impl Controller {
     }
 
     fn eq_save(&self) {
-        let settings = self.state.lock().settings.clone();
+        let output = OUTPUT.with(|o| o.borrow().clone());
+        let settings = {
+            let mut s = self.state.lock();
+            if let Some(output) = output.filter(|_| s.settings.eq_per_output) {
+                let now = current(&s.settings);
+                s.settings.eq_outputs.insert(output, now);
+            }
+            s.settings.clone()
+        };
+        let saved = settings
+            .eq_saved
+            .iter()
+            .map(|p| SharedString::from(p.name.as_str()))
+            .collect::<Vec<_>>();
+        self.ui(move |w| w.set_eq_saved(ModelRc::new(VecModel::from(saved))));
         if self.result(self.library.save_settings(&settings)).is_some() {
             self.ui(move |w| models::update(w.get_settings(), models::settings(&settings)));
         }
@@ -591,7 +768,8 @@ fn spring(
             done = false;
             continue;
         }
-        let moves = (goal[i] - b.from[i]).abs() > 0.05 || (goal_spots[i] - b.from_spots[i]).abs() > 0.001;
+        let moves =
+            (goal[i] - b.from[i]).abs() > 0.05 || (goal_spots[i] - b.from_spots[i]).abs() > 0.001;
         if !b.started[i] {
             b.started[i] = true;
             if !moves {
@@ -604,10 +782,12 @@ fn spring(
         for _ in 0..steps as usize {
             b.speed[i] += (STIFFNESS * (goal[i] - shown[i]) - DAMPING * b.speed[i]) * h;
             shown[i] += b.speed[i] * h;
-            b.spot_speed[i] += (STIFFNESS * (goal_spots[i] - spots[i]) - DAMPING * b.spot_speed[i]) * h;
+            b.spot_speed[i] +=
+                (STIFFNESS * (goal_spots[i] - spots[i]) - DAMPING * b.spot_speed[i]) * h;
             spots[i] += b.spot_speed[i] * h;
         }
-        let crossed = |from: f64, goal: f64, at: f64, eps: f64| (goal - at) * (goal - from).signum() <= eps;
+        let crossed =
+            |from: f64, goal: f64, at: f64, eps: f64| (goal - at) * (goal - from).signum() <= eps;
         if !b.landed[i]
             && crossed(b.from[i], goal[i], shown[i], 0.05)
             && crossed(b.from_spots[i], goal_spots[i], spots[i], 0.001)
@@ -615,8 +795,13 @@ fn spring(
             b.landed[i] = true;
             pops[i] = Some(now);
             if let Some(level) = b.sound {
-                let lift = (goal[i] - b.from[i]).abs().max((goal_spots[i] - b.from_spots[i]).abs() * 30.0);
-                bubbles.push((note(i, goal[i]), level * (0.75 + 0.25 * (lift / 6.0).min(1.0) as f32)));
+                let lift = (goal[i] - b.from[i])
+                    .abs()
+                    .max((goal_spots[i] - b.from_spots[i]).abs() * 30.0);
+                bubbles.push((
+                    note(i, goal[i]),
+                    level * (0.75 + 0.25 * (lift / 6.0).min(1.0) as f32),
+                ));
             }
         }
         let resting = (goal[i] - shown[i]).abs() < 0.02
@@ -650,7 +835,9 @@ pub(super) fn render(window: &AppWindow) {
     let (shown, spots, correction, pops) = CURVE.with(|c| {
         let c = c.borrow();
         let pops = c.pops.map(|p| {
-            p.map_or(0.0, |t| (1.0 - now.duration_since(t).as_secs_f64() / POP).max(0.0))
+            p.map_or(0.0, |t| {
+                (1.0 - now.duration_since(t).as_secs_f64() / POP).max(0.0)
+            })
         });
         (c.shown, c.spots, c.correction.clone(), pops)
     });

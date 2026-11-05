@@ -172,6 +172,14 @@ pub struct Headphone {
     pub filters: Vec<EqFilter>,
 }
 
+/// An equalizer setup: a preset's name and the curve it stands for.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct EqPreset {
+    pub name: String,
+    pub gains: [f64; 6],
+    pub freqs: [f64; 6],
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -203,8 +211,15 @@ pub struct Settings {
     /// Headphone correction underneath the equalizer, if one was chosen.
     pub headphone: Option<Headphone>,
     pub eq_preset: String,
-    /// Bubble pops as the dots land on a new preset.
-    pub eq_sounds: bool,
+    /// Your own equalizer presets, in the order they were saved.
+    pub eq_saved: Vec<EqPreset>,
+    /// The equalizer last used on each output, by output name.
+    pub eq_outputs: std::collections::BTreeMap<String, EqPreset>,
+    /// Each output keeps its own equalizer and it comes back when that output does.
+    pub eq_per_output: bool,
+    /// Soft sounds: equalizer bubbles, likes and adding songs.
+    #[serde(alias = "eq_sounds")]
+    pub sounds: bool,
     pub album_colors: bool,
     /// mpv audio device name; empty is the system default.
     pub audio_device: String,
@@ -250,7 +265,10 @@ impl Default for Settings {
             eq_preamp: 0.0,
             headphone: None,
             eq_preset: "Flat".into(),
-            eq_sounds: true,
+            eq_saved: Vec::new(),
+            eq_outputs: Default::default(),
+            eq_per_output: true,
+            sounds: true,
             album_colors: true,
             audio_device: String::new(),
             replaygain: true,

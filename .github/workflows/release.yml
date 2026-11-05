@@ -74,6 +74,8 @@ jobs:
       - name: Pack (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           New-Item -ItemType Directory dist/tonal -Force | Out-Null
           Copy-Item target/release/tonal.exe, README.md, LICENSE, THIRD-PARTY-NOTICES.md dist/tonal/
