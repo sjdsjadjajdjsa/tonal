@@ -15,6 +15,10 @@ impl Controller {
         if key == "bit_perfect" {
             self.eq_refresh();
         }
+        if key == "motion" {
+            let on = self.state.lock().settings.motion;
+            self.ui(move |w| w.global::<crate::Motion>().set_on(on));
+        }
         if key == "discord" {
             self.discord_update();
         }
@@ -75,6 +79,11 @@ impl Controller {
             "sounds" => {
                 if let Ok(v) = value.parse() {
                     s.sounds = v;
+                }
+            }
+            "motion" => {
+                if let Ok(v) = value.parse() {
+                    s.motion = v;
                 }
             }
             "discord" => {

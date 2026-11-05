@@ -1,5 +1,5 @@
 import { ScrollView } from "scroll.slint";
-import { Theme, Icons, Label, Icon, IconButton, Button } from "theme.slint";
+import { Theme, Icons, Label, Icon, IconButton, Button, Motion, Ease } from "theme.slint";
 import { TrackList, TrackRow, LinkText, ArtistChooser } from "track-list.slint";
 import { PlaylistRow } from "sidebar.slint";
 
@@ -121,6 +121,8 @@ component Header inherits HorizontalLayout {
             height: 100%;
             source: root.art;
             image-fit: cover;
+            opacity: root.art.width > 0 ? 1 : 0;
+            animate opacity { duration: Motion.on ? 320ms : 0ms; easing: Ease.arrive; }
         }
     }
     VerticalLayout {

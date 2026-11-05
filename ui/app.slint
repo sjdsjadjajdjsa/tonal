@@ -1,4 +1,4 @@
-import { Theme, Icons, Label, Icon, IconButton, Button, Segmented, TextField } from "theme.slint";
+import { Theme, Icons, Label, Icon, IconButton, Button, Segmented, TextField, Motion, Ease, Reveal } from "theme.slint";
 import { Sidebar, PlaylistRow } from "sidebar.slint";
 import { TrackList, TrackRow } from "track-list.slint";
 import { PlayerBar } from "player-bar.slint";
@@ -10,7 +10,7 @@ import { NowPlayingView } from "now-playing.slint";
 import { ThemesView, ThemeStudio, ThemeCard, PaletteRow } from "themes.slint";
 
 import { WaveLook } from "visualizer.slint";
-export { TrackRow, PlaylistRow, SettingRow, LyricRow, CardRow, Theme, ThemeStudio, ThemeCard, PaletteRow, WaveLook }
+export { TrackRow, PlaylistRow, SettingRow, LyricRow, CardRow, Theme, ThemeStudio, ThemeCard, PaletteRow, WaveLook, Motion }
 
 export component AppWindow inherits Window {
     in property <string> window-title: "Tonal";
@@ -24,6 +24,13 @@ export component AppWindow inherits Window {
     min-height: (root.mini ? 150px : 520px) + root.titlebar-inset;
     background: Theme.background;
     default-font-family: "Inter";
+    /// Set a moment after the window shows, so the first frame can fade everything in.
+    private property <bool> opened;
+    Timer {
+        interval: 60ms;
+        running: !root.opened;
+        triggered => { root.opened = true; }
+    }
 
     in property <[TrackRow]> tracks;
     in property <[TrackRow]> queue;
@@ -309,6 +316,8 @@ export component AppWindow inherits Window {
             if !root.mini: HorizontalLayout {
                 spacing: 0px;
                 Sidebar {
+                    opacity: root.opened || !Motion.on ? 1 : 0;
+                    animate opacity { duration: Motion.on ? 380ms : 0ms; easing: Ease.arrive; }
                     top-inset: root.titlebar-inset;
                     compact: root.slim;
                     page: root.page;
@@ -334,6 +343,10 @@ export component AppWindow inherits Window {
                 Rectangle {
                     horizontal-stretch: 1;
                     visible: !root.now-open;
+                    clip: true;
+                    Reveal {
+                    key: root.page + "/" + root.home-tab + "/" + root.local-view + "/" + root.heading;
+                    delay: root.opened ? 0ms : 120ms;
                     VerticalLayout {
                         padding-left: root.slim ? 22px : 32px;
                         padding-right: root.slim ? 18px : 28px;
@@ -536,6 +549,7 @@ export component AppWindow inherits Window {
                             wide: root.wide-list;
                             playlist-view: root.playlist-view;
                             download-view: root.page == "Downloads";
+                            loading: root.loading;
                             empty-text: root.empty-text;
                             play(i) => { root.play(i); }
                             like(i) => { root.track-action(i, "Like / Unlike"); }
@@ -567,12 +581,18 @@ export component AppWindow inherits Window {
                             command(c) => { root.command(c); }
                         }
                     }
+                    }
                 }
                 if root.panel != "": Rectangle {
                     width: 320px;
                     visible: !root.now-open;
                     background: Theme.panel;
+                    clip: true;
                     Rectangle { x: 0; width: 1px; background: Theme.border; }
+                    Reveal {
+                    key: root.panel;
+                    shift-x: 18px;
+                    shift-y: 0px;
                     VerticalLayout {
                         padding-top: 24px;
                         padding-left: 14px;
@@ -684,9 +704,12 @@ export component AppWindow inherits Window {
                             seek(t) => { root.seek(t); }
                         }
                     }
+                    }
                 }
             }
             bar := PlayerBar {
+                opacity: root.opened || !Motion.on ? 1 : 0;
+                animate opacity { duration: Motion.on ? 420ms : 0ms; delay: Motion.on ? 200ms : 0ms; easing: Ease.arrive; }
                 vertical-stretch: root.mini ? 1 : 0;
                 title: root.now-title;
                 artist: root.now-artist;

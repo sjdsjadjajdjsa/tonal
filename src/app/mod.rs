@@ -113,6 +113,7 @@ pub fn run() -> anyhow::Result<()> {
     window.set_top_artists(ModelRc::new(VecModel::<crate::CardRow>::default()));
     window.set_top_albums(ModelRc::new(VecModel::<crate::CardRow>::default()));
     window.set_album_colors(settings.album_colors);
+    window.global::<crate::Motion>().set_on(settings.motion);
     window
         .global::<crate::WaveLook>()
         .set_flash(models::flash(&settings.beat_flash));

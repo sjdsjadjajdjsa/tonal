@@ -1,4 +1,4 @@
-import { Theme, Icons, Label, Icon, IconButton, Scrubber } from "theme.slint";
+import { Theme, Icons, Label, Icon, IconButton, Scrubber, Motion, Ease } from "theme.slint";
 import { Artwork, LinkText, ArtistChooser } from "track-list.slint";
 import { Waves } from "visualizer.slint";
 
@@ -16,8 +16,9 @@ component PlayButton inherits Rectangle {
     Icon {
         data: root.paused ? Icons.play : Icons.pause;
         filled: true;
-        width: root.size * 0.42;
-        height: root.size * 0.42;
+        width: root.size * (touch.pressed && Motion.on ? 0.34 : 0.42);
+        height: self.width;
+        animate width { duration: Motion.on ? 240ms : 0ms; easing: Ease.spring; }
         tint: Theme.on-accent;
     }
     touch := TouchArea {
@@ -145,6 +146,7 @@ export component PlayerBar inherits Rectangle {
                 IconButton {
                     icon: Icons.heart;
                     filled: root.liked;
+                    pop: true;
                     tint: root.liked ? Theme.accent : Theme.muted;
                     size: 32px;
                     icon-size: 17px;
@@ -253,7 +255,7 @@ export component PlayerBar inherits Rectangle {
         HorizontalLayout {
             alignment: center;
             spacing: 12px;
-            VerticalLayout { alignment: center; IconButton { icon: Icons.heart; filled: root.liked; tint: root.liked ? Theme.accent : Theme.muted; size: 30px; icon-size: 15px; clicked => { root.command("like"); } } }
+            VerticalLayout { alignment: center; IconButton { icon: Icons.heart; filled: root.liked; pop: true; tint: root.liked ? Theme.accent : Theme.muted; size: 30px; icon-size: 15px; clicked => { root.command("like"); } } }
             VerticalLayout { alignment: center; IconButton { icon: Icons.previous; filled: true; tint: Theme.text; size: 30px; icon-size: 15px; clicked => { root.command("previous"); } } }
             PlayButton { size: 36px; paused: root.paused; clicked => { root.command("toggle"); } }
             VerticalLayout { alignment: center; IconButton { icon: Icons.next; filled: true; tint: Theme.text; size: 30px; icon-size: 15px; clicked => { root.command("next"); } } }

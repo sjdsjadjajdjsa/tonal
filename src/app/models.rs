@@ -402,6 +402,14 @@ pub fn settings(s: &Settings) -> Vec<SettingRow> {
                     false,
                 ),
                 (
+                    "motion",
+                    "Animations",
+                    s.motion.to_string(),
+                    "Pages, panels and buttons move into place.",
+                    "toggle",
+                    false,
+                ),
+                (
                     "beat_flash",
                     "Beat flash",
                     s.beat_flash.clone(),

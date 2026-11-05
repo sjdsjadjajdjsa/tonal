@@ -800,7 +800,6 @@ async fn real_mpv_equalizer_changes_live_and_survives_filter_rebuilds() {
     assert!(af.to_string().contains("dynaudnorm"), "{af}");
 }
 
-
 #[tokio::test]
 async fn real_mpv_survives_presets_switched_quickly() {
     let tone = Tone::new();

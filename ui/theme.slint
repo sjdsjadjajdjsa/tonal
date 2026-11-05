@@ -23,6 +23,56 @@ export global Theme {
     in-out property <length> radius-l: 14px;
 }
 
+/// How the interface moves. Off keeps every change instant.
+export global Motion {
+    in-out property <bool> on: true;
+}
+
+/// The curves things move along.
+export global Ease {
+    /// Things arriving: quick, then settling softly.
+    out property <easing> arrive: cubic-bezier(0.22, 1, 0.36, 1);
+    /// A little past the end and back, for pops.
+    out property <easing> spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/// Fades its content in and slides it a little into place when it appears, and
+/// again each time `key` changes.
+export component Reveal inherits Rectangle {
+    in property <string> key;
+    in property <length> shift-x;
+    in property <length> shift-y: 10px;
+    in property <duration> delay;
+    in property <duration> duration: 260ms;
+    private property <bool> shown;
+    init => { kick.running = true; }
+    changed key => {
+        root.shown = false;
+        kick.running = true;
+    }
+    kick := Timer {
+        interval: 16ms;
+        running: false;
+        triggered => {
+            self.running = false;
+            root.shown = true;
+        }
+    }
+    Rectangle {
+        x: root.shown || !Motion.on ? 0px : root.shift-x;
+        y: root.shown || !Motion.on ? 0px : root.shift-y;
+        width: root.width;
+        height: root.height;
+        opacity: root.shown || !Motion.on ? 1 : 0;
+        animate x, y, opacity {
+            duration: root.shown && Motion.on ? root.duration : 0ms;
+            delay: root.shown && Motion.on ? root.delay : 0ms;
+            easing: Ease.arrive;
+        }
+        @children
+    }
+}
+
 export global Icons {
     out property <string> home: "M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z";
     out property <string> search: "M18 11a7 7 0 1 1-14 0a7 7 0 1 1 14 0z M21 21l-4.35-4.35";
@@ -102,7 +152,24 @@ export component IconButton inherits Rectangle {
     in property <length> icon-size: 18px;
     in property <color> tint: Theme.muted;
     in property <bool> enabled: true;
+    /// Swell for a moment when `filled` turns on, like a heart being liked.
+    in property <bool> pop;
     callback clicked;
+    private property <bool> popping;
+    changed filled => {
+        if root.filled && root.pop && Motion.on {
+            root.popping = true;
+            settle.running = true;
+        }
+    }
+    settle := Timer {
+        interval: 130ms;
+        running: false;
+        triggered => {
+            self.running = false;
+            root.popping = false;
+        }
+    }
     width: root.size;
     height: root.size;
     border-radius: root.size / 2;
@@ -110,11 +177,15 @@ export component IconButton inherits Rectangle {
     background: touch.pressed ? Theme.raised : touch.has-hover ? Theme.hover : transparent;
     animate background { duration: 120ms; }
     Icon {
+        width: root.icon-size * (root.popping ? 1.35 : touch.pressed && Motion.on ? 0.84 : 1);
+        height: self.width;
         data: root.icon;
-        width: root.icon-size;
-        height: root.icon-size;
         filled: root.filled;
         tint: root.active ? Theme.accent : touch.has-hover ? Theme.text : root.tint;
+        animate width {
+            duration: Motion.on ? (root.popping ? 130ms : 220ms) : 0ms;
+            easing: root.popping ? ease-out : Ease.spring;
+        }
     }
     if root.active: Rectangle {
         y: root.height - 5px;

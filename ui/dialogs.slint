@@ -1,4 +1,4 @@
-import { Theme, Icons, Label, Button, TextField, IconButton } from "theme.slint";
+import { Theme, Icons, Label, Button, TextField, IconButton, Motion, Ease } from "theme.slint";
 
 export component Dialog inherits Rectangle {
     in property <string> kind;
@@ -7,13 +7,17 @@ export component Dialog inherits Rectangle {
     private property <bool> copied;
     callback submit(string);
     callback dismiss;
-    background: #000000a8;
+    private property <float> shown: Motion.on ? 0 : 1;
+    init => { root.shown = 1; }
+    animate shown { duration: Motion.on ? 240ms : 0ms; easing: Ease.arrive; }
+    background: #000000a8.with-alpha(0.66 * root.shown);
     TouchArea { clicked => { root.dismiss(); } }
     card := Rectangle {
         width: min(440px, root.width - 48px);
         height: body.preferred-height;
         x: (root.width - self.width) / 2;
-        y: (root.height - self.height) / 2;
+        y: (root.height - self.height) / 2 + 14px * (1 - root.shown);
+        opacity: root.shown;
         background: Theme.popup;
         border-radius: Theme.radius-l;
         drop-shadow-blur: 40px;
