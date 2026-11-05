@@ -2,6 +2,11 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
+## 0.7.1 - 2026-11-05
+
+### Added
+- Show on Discord: your Discord profile says what you're listening to, with the cover and time left, and clears while paused. Turn it off in Settings, Show on Discord.
+
 ## 0.7.0 - 2026-11-05
 
 ### Added
