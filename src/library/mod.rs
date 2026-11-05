@@ -26,6 +26,9 @@ struct Meta {
     album_id: Option<String>,
 }
 
+/// A day in milliseconds, the unit of the play and like times.
+const DAY: i64 = 24 * 60 * 60 * 1000;
+
 fn now() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -354,6 +357,45 @@ impl Library {
         )
     }
 
+    /// Songs played at least three times in the last 30 days, most played first.
+    pub fn on_repeat(&self, limit: usize) -> anyhow::Result<Vec<Track>> {
+        tracks_query(
+            &self.conn.lock(),
+            "JOIN (SELECT track_id,COUNT(*) AS n,MAX(rowid) AS seq FROM plays WHERE played_at>=?1
+            GROUP BY track_id HAVING n>=3) p ON p.track_id=t.id ORDER BY p.n DESC,p.seq DESC LIMIT ?2",
+            params![now() - 30 * DAY, limit as i64],
+        )
+    }
+
+    /// Songs you liked or played a lot that haven't played in two months, the
+    /// most loved first.
+    pub fn rediscover(&self, limit: usize) -> anyhow::Result<Vec<Track>> {
+        tracks_query(
+            &self.conn.lock(),
+            "JOIN (SELECT t2.id AS track_id,COALESCE(p.n,0) AS n,COALESCE(p.last,l.added_at) AS last,
+                (l.track_id IS NOT NULL) AS liked
+                FROM tracks t2
+                LEFT JOIN (SELECT track_id,COUNT(*) AS n,MAX(played_at) AS last FROM plays GROUP BY track_id) p
+                    ON p.track_id=t2.id
+                LEFT JOIN liked l ON l.track_id=t2.id
+                WHERE l.track_id IS NOT NULL OR p.n>=5) r
+            ON r.track_id=t.id WHERE r.last<?1 ORDER BY r.liked DESC,r.n DESC,r.last DESC LIMIT ?2",
+            params![now() - 60 * DAY, limit as i64],
+        )
+    }
+
+    /// Songs that came into your library last: liked, downloaded, put in a playlist
+    /// or found in your music folders, newest first.
+    pub fn recently_added(&self, limit: usize) -> anyhow::Result<Vec<Track>> {
+        tracks_query(
+            &self.conn.lock(),
+            "WHERE t.id IN (SELECT track_id FROM liked UNION SELECT track_id FROM downloads
+                UNION SELECT track_id FROM playlist_tracks UNION SELECT track_id FROM local_tracks)
+            ORDER BY t.rowid DESC LIMIT ?1",
+            [limit as i64],
+        )
+    }
+
     pub fn set_download(&self, track: &Track, path: &Path) -> anyhow::Result<()> {
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
@@ -662,6 +704,44 @@ mod tests {
         l.replace_local_tracks(&[a.clone(), b.clone()])?;
         l.replace_local_tracks(std::slice::from_ref(&b))?;
         assert_eq!(l.local_tracks()?, vec![b]);
+        Ok(())
+    }
+
+    #[test]
+    fn mixes_follow_plays_likes_and_age() -> anyhow::Result<()> {
+        let db = Db::new();
+        let l = &db.library;
+        let (fav, once, old, liked, added) = (
+            track("fav"),
+            track("once"),
+            track("old"),
+            track("liked"),
+            track("added"),
+        );
+        for _ in 0..3 {
+            l.record_play(&fav)?;
+        }
+        l.record_play(&once)?;
+        l.set_liked(&liked, true)?;
+        for _ in 0..5 {
+            l.record_play(&old)?;
+        }
+        l.replace_local_tracks(std::slice::from_ref(&added))?;
+        let long_ago = now() - 90 * DAY;
+        {
+            let conn = l.conn.lock();
+            conn.execute(
+                "UPDATE plays SET played_at=?1 WHERE track_id=?2",
+                params![long_ago, old.id],
+            )?;
+            conn.execute("UPDATE liked SET added_at=?1", [long_ago])?;
+        }
+        assert_eq!(l.on_repeat(10)?, vec![fav.clone()]);
+        assert_eq!(l.rediscover(10)?, vec![liked.clone(), old]);
+        assert_eq!(l.recently_added(10)?, vec![added, liked]);
+        let liked = track("liked");
+        l.record_play(&liked)?;
+        assert!(l.rediscover(10)?.iter().all(|t| t.id != liked.id));
         Ok(())
     }
 

@@ -124,6 +124,9 @@ impl Controller {
             "Liked songs" => self.library.liked(),
             "Local files" => self.library.local_tracks(),
             "Downloads" => self.library.downloads(),
+            "On repeat" => self.library.on_repeat(50),
+            "Rediscover" => self.library.rediscover(50),
+            "Recently added" => self.library.recently_added(100),
             "Themes" => return self.theme_action("thumbs", ""),
             "Search" | "Settings" => return,
             _ => return,
@@ -211,6 +214,7 @@ impl Controller {
             }
             c if c.starts_with("sort:") => self.local_sort(c[5..].parse().unwrap_or(0)),
             c if c.starts_with("stats:") => self.load_stats(c[6..].parse().unwrap_or(0)),
+            c if c.starts_with("sleep:") => self.sleep(&c[6..]),
             "save-settings" => self.save_settings(),
             "update-ytdlp" => self.update_ytdlp(),
             "update" => self.update_tonal(),

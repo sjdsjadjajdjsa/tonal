@@ -1,4 +1,5 @@
 pub mod autoeq;
+pub mod discord;
 pub mod lyrics;
 pub mod scrobble;
 pub mod spotify;

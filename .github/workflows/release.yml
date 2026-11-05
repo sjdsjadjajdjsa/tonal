@@ -36,6 +36,7 @@ jobs:
     container: ${{ matrix.container }}
     env:
       TAG: ${{ github.ref_name }}
+      TONAL_DISCORD_APP: ${{ vars.DISCORD_APP_ID }}
     steps:
       - name: System libraries
         if: runner.os == 'Linux'

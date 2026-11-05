@@ -191,6 +191,7 @@ enum Cmd {
     Seek(f64, bool),
     Volume(f64),
     Shuffle(bool),
+    Recent(Vec<String>),
     Repeat(RepeatMode),
     Crossfade(f64),
     Normalize(bool),
@@ -277,6 +278,10 @@ impl PlayerHandle {
     }
     pub fn set_shuffle(&self, on: bool) {
         let _ = self.tx.send(Cmd::Shuffle(on));
+    }
+    /// Songs heard lately, oldest first; shuffle leaves them for last.
+    pub fn set_recent(&self, ids: Vec<String>) {
+        let _ = self.tx.send(Cmd::Recent(ids));
     }
     pub fn set_repeat(&self, mode: RepeatMode) {
         let _ = self.tx.send(Cmd::Repeat(mode));
@@ -579,6 +584,9 @@ impl Engine {
             .track()
             .and_then(|track| track.duration_secs)
             .unwrap_or(0.0);
+        if let Some(track) = self.queue.track() {
+            self.queue.heard(&track.id);
+        }
         self.queue_changed();
         self.emit(PlayerEvent::NowPlaying(self.queue.track()));
         self.near_end();
@@ -874,6 +882,7 @@ impl Engine {
                 }
                 self.emit(PlayerEvent::Volume(self.config.volume));
             }
+            Cmd::Recent(ids) => self.queue.set_recent(ids),
             Cmd::Shuffle(on) => {
                 self.cancel_fade().await?;
                 self.queue.set_shuffle(on);

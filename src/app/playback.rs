@@ -58,6 +58,38 @@ impl Controller {
             }
         });
     }
+    /// Tells Discord what plays now, or clears it while paused, stopped or turned off.
+    pub(super) fn discord_update(&self) {
+        use crate::integrations::discord::{Presence, show};
+        let presence = {
+            let s = self.state.lock();
+            s.current
+                .as_ref()
+                .filter(|_| s.settings.discord && !s.paused)
+                .map(|t| {
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis() as i64;
+                    let start = now - (s.position * 1000.0) as i64;
+                    let duration = if s.duration > 0.0 {
+                        s.duration
+                    } else {
+                        t.duration_secs.unwrap_or(0.0)
+                    };
+                    Presence {
+                        title: t.title.clone(),
+                        artist: t.artist.clone(),
+                        album: t.album.clone(),
+                        artwork_url: t.artwork_url.clone(),
+                        start,
+                        end: (duration > 0.0).then(|| start + (duration * 1000.0) as i64),
+                    }
+                })
+        };
+        show(presence);
+    }
+
     pub fn seek(&self, position: f64) {
         self.player.seek(position);
         let paused = self.state.lock().paused;
@@ -105,6 +137,8 @@ impl Controller {
                     s.position
                 };
                 let initial_duration = track.as_ref().and_then(|t| t.duration_secs).unwrap_or(0.0);
+                self.state.lock().duration = initial_duration;
+                self.discord_update();
                 self.media.set_track(track.as_ref());
                 self.media
                     .set_playback(!self.state.lock().paused, initial_position);
@@ -223,6 +257,9 @@ impl Controller {
                 if jumped || paused {
                     self.media.set_playback(!paused, pos);
                 }
+                if jumped && !paused {
+                    self.discord_update();
+                }
                 if let Some(session) = session {
                     self.result(self.library.save_session(&session));
                 }
@@ -262,6 +299,7 @@ impl Controller {
                     s.position
                 };
                 self.media.set_playback(!paused, pos);
+                self.discord_update();
                 self.ui(move |w| {
                     if w.get_paused() != paused {
                         w.set_paused(paused);

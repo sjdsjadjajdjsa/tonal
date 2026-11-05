@@ -47,6 +47,8 @@ export component AppWindow inherits Window {
     in property <bool> now-liked;
     in property <bool> paused: true;
     in property <bool> shuffle;
+    /// When the sleep timer stops the music, like "in 23 min"; empty when it is off.
+    in property <string> sleep-left;
     in property <string> repeat: "Off";
     in property <float> position;
     in property <float> duration: 1;
@@ -107,6 +109,8 @@ export component AppWindow inherits Window {
     in property <[float]> eq-pops;
     /// Names of your own equalizer presets.
     in property <[string]> eq-saved;
+    /// The output the equalizer is kept for.
+    in property <string> eq-output;
     in property <[string]> eq-labels;
     in property <string> eq-correction;
     in property <string> eq-headphone;
@@ -202,6 +206,9 @@ export component AppWindow inherits Window {
         : root.page == "Liked songs" ? "No liked songs yet"
         : root.page == "Local files" ? "Add a music folder in Settings"
         : root.page == "Downloads" ? "No downloads yet"
+        : root.page == "On repeat" ? "Songs you play three times in a month show up here"
+        : root.page == "Rediscover" ? "Liked songs you haven't played in two months show up here"
+        : root.page == "Recently added" ? "Songs you like, download or save show up here"
         : root.page == "Playlist" ? "Empty playlist"
         : "";
 
@@ -645,6 +652,7 @@ export component AppWindow inherits Window {
                             spots: root.eq-spots;
             pops: root.eq-pops;
             saved: root.eq-saved;
+            output: root.eq-output;
             save => {
                 root.dialog-heading = "Save equalizer preset";
                 root.dialog-value = "";
@@ -708,6 +716,7 @@ export component AppWindow inherits Window {
                 has-album: root.now-album;
                 quality: root.now-quality;
                 fixed-volume: root.bit-perfect;
+                sleep-left: root.sleep-left;
                 open-artist(i) => { root.open-artist("now", 0, i); }
                 open-album => { root.open-album("now", 0); }
                 command(c) => { root.command(c); }

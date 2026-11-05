@@ -15,6 +15,9 @@ impl Controller {
         if key == "bit_perfect" {
             self.eq_refresh();
         }
+        if key == "discord" {
+            self.discord_update();
+        }
         if key == "visualizer" {
             let (on, paused) = {
                 let s = self.state.lock();
@@ -72,6 +75,11 @@ impl Controller {
             "sounds" => {
                 if let Ok(v) = value.parse() {
                     s.sounds = v;
+                }
+            }
+            "discord" => {
+                if let Ok(v) = value.parse() {
+                    s.discord = v;
                 }
             }
             "eq_per_output" => {

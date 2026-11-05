@@ -58,6 +58,8 @@ export component PlayerBar inherits Rectangle {
     in property <string> quality;
     /// Bit-perfect: mpv plays at full level and the device sets the volume.
     in property <bool> fixed-volume;
+    /// Time left on the sleep timer; empty when it is off.
+    in property <string> sleep-left;
     private property <bool> show-quality: root.has-track && root.quality != "";
     private property <length> quality-width: quality-measure.preferred-width + 16px;
     callback command(string);
@@ -207,6 +209,18 @@ export component PlayerBar inherits Rectangle {
             VerticalLayout {
                 alignment: center;
                 IconButton {
+                    icon: Icons.moon;
+                    active: root.sleep-left != "";
+                    icon-size: 17px;
+                    clicked => {
+                        root.sleep-right = self.absolute-position.x - root.absolute-position.x + self.width;
+                        sleep-menu.show();
+                    }
+                }
+            }
+            VerticalLayout {
+                alignment: center;
+                IconButton {
                     icon: root.fixed-volume ? Icons.volume : root.volume <= 0 ? Icons.volume-off : root.volume < 50 ? Icons.volume-low : Icons.volume;
                     icon-size: 17px;
                     enabled: !root.fixed-volume;
@@ -246,6 +260,87 @@ export component PlayerBar inherits Rectangle {
             VerticalLayout { alignment: center; IconButton { icon: root.repeat == "One" ? Icons.repeat-one : Icons.repeat; active: root.repeat != "Off"; size: 30px; icon-size: 15px; clicked => { root.command("repeat"); } } }
         }
         Scrubber { value: root.position; maximum: root.duration; bar: 3px; changed(v) => { root.seek(v); } }
+    }
+
+    private property <length> sleep-right;
+    private property <[{label: string, value: string}]> sleep-choices: [
+            { label: "15 minutes", value: "15" },
+            { label: "30 minutes", value: "30" },
+            { label: "45 minutes", value: "45" },
+            { label: "1 hour", value: "60" },
+            { label: "90 minutes", value: "90" },
+            { label: "End of this song", value: "end" },
+        ];
+    sleep-menu := PopupWindow {
+        width: 196px;
+        x: root.sleep-right - self.width;
+        y: -self.height - 8px;
+        close-policy: close-on-click-outside;
+        Rectangle {
+            background: Theme.popup;
+            border-radius: Theme.radius-m;
+            drop-shadow-blur: 24px;
+            drop-shadow-offset-y: 8px;
+            drop-shadow-color: #00000090;
+            VerticalLayout {
+                padding: 4px;
+                HorizontalLayout {
+                    height: 30px;
+                    padding-left: 10px;
+                    Label {
+                        text: root.sleep-left == "" ? "Sleep timer" : "Stops " + root.sleep-left;
+                        font-size: 11.5px;
+                        font-weight: 600;
+                        color: Theme.faint;
+                        vertical-alignment: center;
+                    }
+                }
+                for choice in root.sleep-choices: Rectangle {
+                    height: 32px;
+                    border-radius: Theme.radius-s;
+                    background: tap.has-hover ? Theme.hover : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        Label {
+                            text: choice.label;
+                            font-size: 13px;
+                            font-weight: 500;
+                            color: tap.has-hover ? Theme.text : Theme.muted;
+                            vertical-alignment: center;
+                        }
+                    }
+                    tap := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            root.command("sleep:" + choice.value);
+                            sleep-menu.close();
+                        }
+                    }
+                }
+                if root.sleep-left != "": Rectangle {
+                    height: 32px;
+                    border-radius: Theme.radius-s;
+                    background: off.has-hover ? Theme.hover : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        Label {
+                            text: "Turn off";
+                            font-size: 13px;
+                            font-weight: 600;
+                            color: Theme.text;
+                            vertical-alignment: center;
+                        }
+                    }
+                    off := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            root.command("sleep:off");
+                            sleep-menu.close();
+                        }
+                    }
+                }
+            }
+        }
     }
 
     chooser := ArtistChooser {

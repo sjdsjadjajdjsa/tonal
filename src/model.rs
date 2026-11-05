@@ -178,6 +178,9 @@ pub struct EqPreset {
     pub name: String,
     pub gains: [f64; 6],
     pub freqs: [f64; 6],
+    /// The headphone correction on with it; only an output's equalizer keeps one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub headphone: Option<Headphone>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -217,6 +220,8 @@ pub struct Settings {
     pub eq_outputs: std::collections::BTreeMap<String, EqPreset>,
     /// Each output keeps its own equalizer and it comes back when that output does.
     pub eq_per_output: bool,
+    /// What you play shows on your Discord profile while Discord runs.
+    pub discord: bool,
     /// Soft sounds: equalizer bubbles, likes and adding songs.
     #[serde(alias = "eq_sounds")]
     pub sounds: bool,
@@ -268,6 +273,7 @@ impl Default for Settings {
             eq_saved: Vec::new(),
             eq_outputs: Default::default(),
             eq_per_output: true,
+            discord: true,
             sounds: true,
             album_colors: true,
             audio_device: String::new(),

@@ -126,6 +126,7 @@ fn preset(settings: &Settings, name: &str) -> Option<EqPreset> {
             name: (*n).into(),
             gains: *gains,
             freqs: EQ_BANDS,
+            headphone: None,
         })
         .or_else(|| settings.eq_saved.iter().find(|p| p.name == name).cloned())
 }
@@ -146,7 +147,14 @@ fn current(settings: &Settings) -> EqPreset {
         name: settings.eq_preset.clone(),
         gains: settings.eq_gains,
         freqs: settings.eq_freqs,
+        headphone: settings.headphone.clone(),
     }
+}
+
+/// The same bands and preset, whatever the headphone. An output saved before
+/// outputs kept their headphone has none, and must not take yours away.
+fn same_curve(a: &EqPreset, b: &EqPreset) -> bool {
+    a.name == b.name && a.gains == b.gains && a.freqs == b.freqs
 }
 
 /// Name of the output playing now: the chosen device, or the system's default.
@@ -366,6 +374,7 @@ impl Controller {
             let mut s = self.state.lock();
             let mut p = current(&s.settings);
             p.name = name.into();
+            p.headphone = None;
             match s.settings.eq_saved.iter_mut().find(|q| q.name == name) {
                 Some(q) => *q = p,
                 None => s.settings.eq_saved.push(p),
@@ -418,6 +427,8 @@ impl Controller {
 
     fn eq_output_changed(&self, name: String, first: bool) {
         OUTPUT.with(|o| *o.borrow_mut() = Some(name.clone()));
+        let shown = name.clone();
+        self.ui(move |w| w.set_eq_output(shown.into()));
         let restored = {
             let mut s = self.state.lock();
             if !s.settings.eq_per_output || s.settings.bit_perfect {
@@ -425,11 +436,20 @@ impl Controller {
             }
             let now = current(&s.settings);
             match s.settings.eq_outputs.get(&name).cloned() {
+                Some(p)
+                    if p.headphone.is_none()
+                        && p.headphone != now.headphone
+                        && same_curve(&p, &now) =>
+                {
+                    s.settings.eq_outputs.insert(name.clone(), now);
+                    None
+                }
                 Some(p) if p != now => {
                     s.settings.eq_gains = p.gains;
                     s.settings.eq_freqs = p.freqs;
                     s.settings.eq_preamp = headroom(&p.gains);
                     s.settings.eq_preset = p.name.clone();
+                    s.settings.headphone = p.headphone;
                     Some(p.name)
                 }
                 Some(_) => return,

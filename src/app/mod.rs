@@ -11,6 +11,7 @@ mod now_playing;
 mod playback;
 mod search;
 mod settings;
+mod sleep;
 mod state;
 mod themes;
 mod waves;
@@ -368,6 +369,9 @@ pub fn run() -> anyhow::Result<()> {
             _ => {}
         }
     });
+    if let Ok(recent) = library.recent(50) {
+        player.set_recent(recent.into_iter().rev().map(|t| t.id).collect());
+    }
     log::info!("Loading library");
     app.refresh_playlists();
     app.go(browse::Nav::Page("Home".into()));

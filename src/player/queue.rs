@@ -1,5 +1,11 @@
 use crate::model::{RepeatMode, Track};
 use rand::seq::SliceRandom;
+use std::collections::VecDeque;
+
+/// Songs remembered as just heard, so shuffle leaves them for last.
+const RECENT: usize = 50;
+/// Shuffle keeps this many songs between two by the same artist when it can.
+const ARTIST_GAP: usize = 2;
 
 #[derive(Clone)]
 struct Entry {
@@ -14,6 +20,8 @@ pub(super) struct Queue {
     serial: u64,
     pub current: Option<usize>,
     pub shuffle: bool,
+    /// Ids of the songs heard last, newest at the back.
+    recent: VecDeque<String>,
 }
 
 impl Queue {
@@ -151,9 +159,39 @@ impl Queue {
         }
     }
 
+    /// Remembers that `id` just played.
+    pub fn heard(&mut self, id: &str) {
+        self.recent.retain(|r| r != id);
+        self.recent.push_back(id.to_owned());
+        while self.recent.len() > RECENT {
+            self.recent.pop_front();
+        }
+    }
+
+    /// Replaces what counts as just heard, oldest first.
+    pub fn set_recent(&mut self, ids: Vec<String>) {
+        self.recent = ids.into_iter().rev().take(RECENT).rev().collect();
+    }
+
     fn shuffle_rest(&mut self) {
         let upcoming = self.current.map_or(0, |index| index + 1);
-        self.entries[upcoming..].shuffle(&mut rand::rng());
+        let mut rest: Vec<Entry> = self.entries.drain(upcoming..).collect();
+        rest.shuffle(&mut rand::rng());
+        let (fresh, heard): (Vec<_>, Vec<_>) = rest
+            .into_iter()
+            .partition(|e| !self.recent.contains(&e.track.id));
+        let mut last: Vec<String> = self
+            .entries
+            .iter()
+            .rev()
+            .take(ARTIST_GAP)
+            .map(|e| artist_of(&e.track))
+            .collect();
+        last.reverse();
+        let fresh = spread(fresh, &mut last);
+        let heard = spread(heard, &mut last);
+        self.entries.extend(fresh);
+        self.entries.extend(heard);
     }
 
     pub fn next(&self, repeat: RepeatMode, natural: bool) -> Option<usize> {
@@ -184,4 +222,38 @@ impl Queue {
             Some(0)
         }
     }
+}
+
+/// Who a song is by, for keeping the same artist apart.
+fn artist_of(track: &Track) -> String {
+    track
+        .artists()
+        .into_iter()
+        .next()
+        .map(|a| a.name)
+        .unwrap_or_default()
+        .trim()
+        .to_lowercase()
+}
+
+/// Keeps the shuffled order but moves songs along so the same artist doesn't come
+/// back within `ARTIST_GAP` songs, unless only that artist is left. `last` holds the
+/// artists just before, and is left holding the last ones placed.
+fn spread(pool: Vec<Entry>, last: &mut Vec<String>) -> Vec<Entry> {
+    let mut pool: Vec<(String, Entry)> =
+        pool.into_iter().map(|e| (artist_of(&e.track), e)).collect();
+    let mut out = Vec::with_capacity(pool.len());
+    while !pool.is_empty() {
+        let pick = pool
+            .iter()
+            .position(|(artist, _)| !last.contains(artist))
+            .unwrap_or(0);
+        let (artist, entry) = pool.remove(pick);
+        last.push(artist);
+        if last.len() > ARTIST_GAP {
+            last.remove(0);
+        }
+        out.push(entry);
+    }
+    out
 }

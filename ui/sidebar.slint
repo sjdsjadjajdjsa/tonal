@@ -116,6 +116,15 @@ export component Sidebar inherits Rectangle {
         NavItem { compact: root.compact; icon: Icons.folder; text: "Local files"; active: root.page == "Local files"; clicked => { root.navigate("Local files"); } }
         NavItem { compact: root.compact; icon: Icons.download; text: "Downloads"; active: root.page == "Downloads"; clicked => { root.navigate("Downloads"); } }
         Rectangle { height: 10px; }
+        if !root.compact: HorizontalLayout {
+            padding-left: 12px;
+            height: 26px;
+            Label { text: "Mixes"; font-size: 11.5px; font-weight: 600; color: Theme.faint; }
+        }
+        NavItem { compact: root.compact; icon: Icons.repeat; text: "On repeat"; active: root.page == "On repeat"; clicked => { root.navigate("On repeat"); } }
+        NavItem { compact: root.compact; icon: Icons.sparkle; text: "Rediscover"; active: root.page == "Rediscover"; clicked => { root.navigate("Rediscover"); } }
+        NavItem { compact: root.compact; icon: Icons.list-plus; text: "Recently added"; active: root.page == "Recently added"; clicked => { root.navigate("Recently added"); } }
+        Rectangle { height: 10px; }
         if root.compact: Rectangle { height: 10px; }
         if !root.compact: HorizontalLayout {
             height: 30px;

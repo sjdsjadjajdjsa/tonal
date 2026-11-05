@@ -37,6 +37,37 @@ fn queue_shuffle_keeps_played_prefix_for_prev() {
 }
 
 #[test]
+fn queue_shuffle_spreads_artists_and_leaves_heard_songs_for_last() {
+    let by = |name: &str, artist: &str| {
+        let mut t = track(name, "unused");
+        t.artist = artist.into();
+        t
+    };
+    for _ in 0..64 {
+        let mut queue = Queue::default();
+        queue.set_recent(vec!["local:H1".into(), "local:H2".into()]);
+        let mut tracks = vec![by("start", "Z")];
+        for i in 0..4 {
+            tracks.push(by(&format!("A{i}"), "A"));
+            tracks.push(by(&format!("B{i}"), "B"));
+            tracks.push(by(&format!("C{i}"), "C"));
+        }
+        tracks.push(by("H1", "D"));
+        tracks.push(by("H2", "E"));
+        queue.replace(tracks, 0);
+        queue.set_shuffle(true);
+        let order = queue.tracks();
+        assert_eq!(order[0].title, "start");
+        let fresh = &order[1..13];
+        for pair in fresh[..7].windows(2) {
+            assert_ne!(pair[0].artist, pair[1].artist, "{order:?}");
+        }
+        let tail: Vec<_> = order[13..].iter().map(|t| t.title.as_str()).collect();
+        assert!(tail.contains(&"H1") && tail.contains(&"H2"), "{tail:?}");
+    }
+}
+
+#[test]
 fn queue_set_replaces_in_place_and_keeps_order() {
     let mut queue = Queue::default();
     queue.replace(

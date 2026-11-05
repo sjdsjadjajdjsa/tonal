@@ -434,56 +434,69 @@ pub fn settings(s: &Settings) -> Vec<SettingRow> {
         ),
         (
             "Scrobbling",
-            vec![
-                (
-                    "scrobble_enabled",
-                    "Scrobble what you play",
-                    s.scrobble_enabled.to_string(),
-                    "",
-                    "toggle",
-                    false,
-                ),
-                (
-                    "lastfm_api_key",
-                    "Last.fm API key",
-                    s.lastfm_api_key.clone(),
-                    "From last.fm/api/account/create",
-                    "text",
-                    false,
-                ),
-                (
-                    "lastfm_api_secret",
-                    "Last.fm API secret",
-                    s.lastfm_api_secret.clone(),
-                    "",
-                    "text",
-                    true,
-                ),
-                (
-                    "lastfm-login",
-                    "Last.fm account",
-                    if s.lastfm_session.is_some() {
-                        "Reconnect".into()
-                    } else {
-                        "Connect".into()
-                    },
-                    if s.lastfm_session.is_some() {
-                        "Connected"
-                    } else {
-                        "Not connected"
-                    },
-                    "action",
-                    false,
-                ),
-                (
-                    "listenbrainz_token",
-                    "ListenBrainz token",
-                    s.listenbrainz_token.clone(),
-                    "From listenbrainz.org/settings",
-                    "text",
-                    true,
-                ),
-            ],
+            crate::integrations::discord::available()
+                .then(|| {
+                    (
+                        "discord",
+                        "Show on Discord",
+                        s.discord.to_string(),
+                        "Your Discord profile says what you're listening to.",
+                        "toggle",
+                        false,
+                    )
+                })
+                .into_iter()
+                .chain([
+                    (
+                        "scrobble_enabled",
+                        "Scrobble what you play",
+                        s.scrobble_enabled.to_string(),
+                        "",
+                        "toggle",
+                        false,
+                    ),
+                    (
+                        "lastfm_api_key",
+                        "Last.fm API key",
+                        s.lastfm_api_key.clone(),
+                        "From last.fm/api/account/create",
+                        "text",
+                        false,
+                    ),
+                    (
+                        "lastfm_api_secret",
+                        "Last.fm API secret",
+                        s.lastfm_api_secret.clone(),
+                        "",
+                        "text",
+                        true,
+                    ),
+                    (
+                        "lastfm-login",
+                        "Last.fm account",
+                        if s.lastfm_session.is_some() {
+                            "Reconnect".into()
+                        } else {
+                            "Connect".into()
+                        },
+                        if s.lastfm_session.is_some() {
+                            "Connected"
+                        } else {
+                            "Not connected"
+                        },
+                        "action",
+                        false,
+                    ),
+                    (
+                        "listenbrainz_token",
+                        "ListenBrainz token",
+                        s.listenbrainz_token.clone(),
+                        "From listenbrainz.org/settings",
+                        "text",
+                        true,
+                    ),
+                ])
+                .collect(),
         ),
         (
             "Updates",

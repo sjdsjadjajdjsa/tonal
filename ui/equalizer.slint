@@ -45,6 +45,8 @@ export component EqPanel inherits VerticalLayout {
     in property <[float]> pops;
     /// Names of your own presets.
     in property <[string]> saved;
+    /// The output this equalizer is kept for, shown under the graph.
+    in property <string> output;
     /// Each band's frequency, like "60" or "1.2k".
     in property <[string]> labels;
     /// The headphone correction's response, drawn faintly.
@@ -108,6 +110,7 @@ export component EqPanel inherits VerticalLayout {
     }
 
     spacing: 14px;
+    alignment: start;
     opacity: root.bypassed ? 0.35 : 1;
     animate opacity { duration: 160ms; }
 
@@ -422,5 +425,13 @@ export component EqPanel inherits VerticalLayout {
             animate color { duration: 120ms; }
             text: label;
         }
+    }
+
+    if root.output != "": Label {
+        text: "On " + root.output;
+        font-size: 11px;
+        color: Theme.faint;
+        horizontal-alignment: center;
+        overflow: elide;
     }
 }
