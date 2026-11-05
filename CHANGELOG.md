@@ -2,7 +2,14 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
-## 0.5.1 - 2026-11-05
+## 0.6.0 - 2026-11-05
+
+### Added
+- Updates from inside Tonal: Settings, Updates checks GitHub and installs the new version, then Tonal restarts on it. Works for the Mac app, the Windows installer and the AppImage; other installs get the download page. Tonal also checks once at startup and says when a new version is out.
+- Your own equalizer presets: shape a curve, press + next to Custom and name it. Your presets sit under the built-in ones; the bin button next to the active one deletes it.
+- Equalizer per output: headphones and speakers each keep their own equalizer, and it comes back when you switch to that output. Turn it off with Settings, Equalizer per output.
+- Number keys switch presets: 1 to 6 are the built-in ones, 7 to 9 your first three.
+- Soft sounds for likes, unlikes, adding to the queue, adding to a playlist and saving a preset. Settings, Interface sounds turns them all off, equalizer bubbles included.
 
 ### Changed
 - Equalizer presets are much stronger, so Bass, Vocal, Bright, Warm and Late night each sound clearly different. A limiter after the equalizer keeps big boosts from clipping.
