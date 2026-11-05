@@ -41,7 +41,7 @@ jobs:
         if: runner.os == 'Linux'
         env:
           DEBIAN_FRONTEND: noninteractive
-        run: apt-get update && apt-get install -y --no-install-recommends ca-certificates curl file git build-essential pkg-config libdbus-1-dev libfontconfig-dev libxkbcommon-dev
+        run: apt-get update && apt-get install -y --no-install-recommends ca-certificates curl file git build-essential pkg-config libdbus-1-dev libasound2-dev libfontconfig-dev libxkbcommon-dev
       - uses: actions/checkout@v7
         with:
           persist-credentials: false

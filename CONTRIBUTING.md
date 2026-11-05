@@ -4,7 +4,7 @@ Thanks for helping. Issues and pull requests are welcome.
 
 ## Set up
 
-Install [Rust](https://rustup.rs), [mpv](https://mpv.io) and [yt-dlp](https://github.com/yt-dlp/yt-dlp). On Debian or Ubuntu also install `libsqlite3-dev libdbus-1-dev libfontconfig-dev libxkbcommon-dev`.
+Install [Rust](https://rustup.rs), [mpv](https://mpv.io) and [yt-dlp](https://github.com/yt-dlp/yt-dlp). On Debian or Ubuntu also install `libsqlite3-dev libdbus-1-dev libasound2-dev libfontconfig-dev libxkbcommon-dev`.
 
 ```
 cargo run --release

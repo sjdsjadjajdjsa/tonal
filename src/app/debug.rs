@@ -6,7 +6,7 @@ use slint::ComponentHandle;
 /// real pointer and keyboard focus stay untouched: `wait ms`, `click x y`, `dclick x y`,
 /// `rclick x y`, `move x y`, `scroll x y dy`,
 /// `type text`, `key name`, `shot path`, `cmd command`, `page name`,
-/// `theme action value`, `log text`.
+/// `theme action value`, `eq preset`, `log text`.
 fn run_script(
     app: Controller,
     weak: slint::Weak<AppWindow>,
@@ -109,6 +109,7 @@ fn run_script(
                 Err(e) => log::error!("Script shot: {e}"),
             },
             "cmd" => app.command(rest),
+            "eq" => app.eq_choose(rest),
             "page" => app.load_page(rest),
             "theme" => {
                 let (action, value) = rest.split_once(' ').unwrap_or((rest, ""));

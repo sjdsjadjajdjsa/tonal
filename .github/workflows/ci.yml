@@ -26,7 +26,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - name: System libraries
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev libdbus-1-dev libfontconfig-dev libxkbcommon-dev mpv
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev libdbus-1-dev libasound2-dev libfontconfig-dev libxkbcommon-dev mpv
       - name: System tools
         if: runner.os == 'macOS'
         run: brew install mpv
@@ -106,7 +106,7 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - name: System libraries
-        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev libdbus-1-dev libfontconfig-dev libxkbcommon-dev libxkbcommon-x11-0 libxcursor1 libxrandr2 libxi6 xvfb imagemagick mpv
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev libdbus-1-dev libasound2-dev libfontconfig-dev libxkbcommon-dev libxkbcommon-x11-0 libxcursor1 libxrandr2 libxi6 xvfb imagemagick mpv
       - name: Every view renders
         run: xvfb-run -a -s "-screen 0 1280x800x24" tools/ui-smoke.sh
       - uses: actions/upload-artifact@v7

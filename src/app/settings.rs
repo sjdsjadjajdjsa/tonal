@@ -69,6 +69,11 @@ impl Controller {
                     s.visualizer = v;
                 }
             }
+            "eq_sounds" => {
+                if let Ok(v) = value.parse() {
+                    s.eq_sounds = v;
+                }
+            }
             "album_colors" => {
                 if let Ok(v) = value.parse() {
                     s.album_colors = v;

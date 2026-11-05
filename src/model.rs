@@ -203,6 +203,8 @@ pub struct Settings {
     /// Headphone correction underneath the equalizer, if one was chosen.
     pub headphone: Option<Headphone>,
     pub eq_preset: String,
+    /// Bubble pops as the dots land on a new preset.
+    pub eq_sounds: bool,
     pub album_colors: bool,
     /// mpv audio device name; empty is the system default.
     pub audio_device: String,
@@ -248,6 +250,7 @@ impl Default for Settings {
             eq_preamp: 0.0,
             headphone: None,
             eq_preset: "Flat".into(),
+            eq_sounds: true,
             album_colors: true,
             audio_device: String::new(),
             replaygain: true,

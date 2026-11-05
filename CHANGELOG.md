@@ -2,6 +2,11 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
+## Unreleased
+
+### Added
+- Equalizer presets now spring into place one band at a time. Each dot pops as it lands and plays a bubble note that rises with the band and its boost. Turn the sound off with Settings, Equalizer sounds.
+
 ## 0.4.3 - 2026-11-02
 
 ### Fixed

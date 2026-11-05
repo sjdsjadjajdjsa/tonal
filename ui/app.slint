@@ -103,6 +103,8 @@ export component AppWindow inherits Window {
     in property <string> eq-glow;
     in property <string> eq-line;
     in property <[float]> eq-spots;
+    /// Each dot's pop after it lands, 1 fading to 0.
+    in property <[float]> eq-pops;
     in property <[string]> eq-labels;
     in property <string> eq-correction;
     in property <string> eq-headphone;
@@ -638,6 +640,7 @@ export component AppWindow inherits Window {
                             glow: root.eq-glow;
                             line: root.eq-line;
                             spots: root.eq-spots;
+            pops: root.eq-pops;
                             labels: root.eq-labels;
                             correction: root.eq-correction;
                             headphone: root.eq-headphone;

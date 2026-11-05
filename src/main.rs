@@ -10,6 +10,7 @@ mod media_controls;
 mod model;
 mod player;
 mod scenes;
+mod sfx;
 mod sources;
 mod visualizer;
 mod ytdl_wait;

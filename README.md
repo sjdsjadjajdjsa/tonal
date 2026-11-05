@@ -184,7 +184,7 @@ Right-click a song for play next, add to queue, start radio, download and add to
 
 ### Build it yourself
 
-Needs [Rust](https://rustup.rs) 1.90 or newer, plus mpv and yt-dlp on your `PATH`. On Debian or Ubuntu you also need `libsqlite3-dev libdbus-1-dev libfontconfig-dev libxkbcommon-dev`.
+Needs [Rust](https://rustup.rs) 1.90 or newer, plus mpv and yt-dlp on your `PATH`. On Debian or Ubuntu you also need `libsqlite3-dev libdbus-1-dev libasound2-dev libfontconfig-dev libxkbcommon-dev`.
 
 ```
 git clone https://github.com/sjdsjadjajdjsa/tonal

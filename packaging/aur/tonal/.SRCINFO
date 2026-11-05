@@ -11,6 +11,7 @@ pkgbase = tonal
 	depends = yt-dlp
 	depends = sqlite
 	depends = dbus
+	depends = alsa-lib
 	depends = fontconfig
 	depends = libxkbcommon
 	depends = gcc-libs

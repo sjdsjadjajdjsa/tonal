@@ -41,6 +41,8 @@ export component EqPanel inherits VerticalLayout {
     in property <[float]> gains;
     /// Where each band sits on the 20 Hz to 20 kHz log axis, 0 to 1.
     in property <[float]> spots;
+    /// Each dot's pop after it lands, 1 fading to 0.
+    in property <[float]> pops;
     /// Each band's frequency, like "60" or "1.2k".
     in property <[string]> labels;
     /// The headphone correction's response, drawn faintly.
@@ -297,16 +299,31 @@ export component EqPanel inherits VerticalLayout {
             stroke-width: 0px;
         }
 
-        for gain[i] in root.gains: Rectangle {
+        for gain[i] in root.gains: dot := Rectangle {
             private property <length> size: root.band == i ? 13px : touch.has-hover && root.nearest(touch.mouse-x) == i ? 12px : 10px;
+            /// 0 as the dot lands, 1 once its pop is over.
+            private property <float> pop: 1 - root.pops[i];
+            private property <length> bump: self.pop < 1 ? 5px * sin(min(self.pop * 3, 1) * 180deg) : 0px;
+            animate size { duration: 120ms; easing: ease-out; }
             x: root.x-of(i) - self.width / 2;
             y: graph.height / 2 - gain / 12 * (graph.height / 2 - 16px) - self.height / 2;
-            width: self.size;
-            height: self.size;
-            border-radius: self.size / 2;
+            width: self.size + self.bump;
+            height: self.size + self.bump;
+            border-radius: self.width / 2;
             background: Theme.text;
             opacity: root.comparing ? 0.3 : 1;
-            animate width, height, opacity { duration: 120ms; easing: ease-out; }
+            animate opacity { duration: 120ms; easing: ease-out; }
+            if dot.pop < 1: Rectangle {
+                private property <float> grow: 1 - pow(1 - dot.pop, 3);
+                width: 10px + 34px * self.grow;
+                height: self.width;
+                x: (dot.width - self.width) / 2;
+                y: (dot.height - self.height) / 2;
+                border-radius: self.width / 2;
+                border-width: 1.5px;
+                border-color: root.accent.with-alpha(0.8 * pow(1 - dot.pop, 2));
+                background: root.accent.with-alpha(0.18 * pow(1 - dot.pop, 2));
+            }
         }
 
         if root.band >= 0 && root.axis != 2: Label {

@@ -8,10 +8,15 @@ use crate::{
     integrations::autoeq::{self, Entry},
     model::{EqFilter, FilterKind, Settings},
     player::{EQ_BANDS, Equalizer},
+    sfx,
     visualizer::{area, ribbon},
 };
 use slint::{ComponentHandle, ModelRc, SharedString, Timer, TimerMode, VecModel};
-use std::{cell::RefCell, rc::Rc, time::Duration};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    time::{Duration, Instant},
+};
 
 pub const PRESETS: [(&str, [f64; 6]); 6] = [
     ("Flat", [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
@@ -37,6 +42,17 @@ const LIMITS: [(f64, f64); 6] = [
 const GAP: f64 = 1.6;
 /// Results in the headphone search.
 const RESULTS: usize = 6;
+/// Seconds between one dot leaving and the next.
+const STAGGER: f64 = 0.045;
+/// Spring stiffness and damping: a quick move that overshoots a little and settles.
+const STIFFNESS: f64 = 260.0;
+const DAMPING: f64 = 13.0;
+/// Seconds a pop shows after a dot lands.
+const POP: f64 = 0.45;
+/// Upward kick in dB per second for a dot the preset leaves where it is.
+const WIGGLE: f64 = 10.0;
+/// Semitones of a major pentatonic scale, for the bubbles.
+const SCALE: [i32; 11] = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
 
 #[derive(Default)]
 struct Curve {
@@ -47,6 +63,31 @@ struct Curve {
     comparing: bool,
     animation: Timer,
     save: Timer,
+    bounce: Option<Bounce>,
+    /// When each dot last landed, while its pop still shows.
+    pops: [Option<Instant>; 6],
+}
+
+/// A preset switch: the dots spring to it one after another, left to right.
+struct Bounce {
+    start: Instant,
+    last: Instant,
+    from: [f64; 6],
+    from_spots: [f64; 6],
+    speed: [f64; 6],
+    spot_speed: [f64; 6],
+    started: [bool; 6],
+    landed: [bool; 6],
+    /// Loudness of the bubbles, or None when sounds are off.
+    sound: Option<f32>,
+}
+
+/// How a change reaches the curve.
+#[derive(Clone, Copy, PartialEq)]
+enum Ease {
+    Now,
+    Glide,
+    Bounce,
 }
 
 #[derive(Default)]
@@ -226,7 +267,8 @@ impl Controller {
             s.settings.eq_preamp = headroom(gains);
             s.settings.eq_preset = name.into();
         }
-        self.eq_changed(true);
+        sfx::warm();
+        self.eq_changed(Ease::Bounce);
     }
 
     /// A dot moved: up and down is its gain, sideways its frequency (`spot` on the axis).
@@ -247,7 +289,7 @@ impl Controller {
             s.settings.eq_preamp = headroom(&s.settings.eq_gains);
             s.settings.eq_preset = "Custom".into();
         }
-        self.eq_changed(false);
+        self.eq_changed(Ease::Now);
     }
 
     /// Double-click: the band goes back to 0 dB at its own frequency.
@@ -263,17 +305,17 @@ impl Controller {
             let flat = s.settings.eq_gains == [0.0; 6] && s.settings.eq_freqs == EQ_BANDS;
             s.settings.eq_preset = if flat { "Flat" } else { "Custom" }.into();
         }
-        self.eq_changed(true);
+        self.eq_changed(Ease::Glide);
     }
 
     pub(super) fn eq_compare(&self, on: bool) {
         CURVE.with(|c| c.borrow_mut().comparing = on);
-        self.eq_changed(true);
+        self.eq_changed(Ease::Glide);
     }
 
     /// Bit-perfect went on or off: the curve eases to flat or back.
     pub(super) fn eq_refresh(&self) {
-        self.eq_changed(true);
+        self.eq_changed(Ease::Glide);
     }
 
     /// The headphone search opened: load the list of models once.
@@ -336,14 +378,14 @@ impl Controller {
             if let Some(headphone) = this.result(autoeq::correction(&entry).await) {
                 this.state.lock().settings.headphone = Some(headphone);
                 let ui = this.clone();
-                this.ui(move |_| ui.eq_changed(true));
+                this.ui(move |_| ui.eq_changed(Ease::Glide));
             }
         });
     }
 
     pub(super) fn eq_headphones_clear(&self) {
         self.state.lock().settings.headphone = None;
-        self.eq_changed(true);
+        self.eq_changed(Ease::Glide);
     }
 
     /// Debug hook: pick the best match for `query` once the list is in.
@@ -361,22 +403,27 @@ impl Controller {
             if let Some(headphone) = this.result(autoeq::correction(&entry).await) {
                 this.state.lock().settings.headphone = Some(headphone);
                 let ui = this.clone();
-                this.ui(move |_| ui.eq_changed(true));
+                this.ui(move |_| ui.eq_changed(Ease::Glide));
             }
         });
     }
 
     /// Sends the settings to mpv, eases the curve towards them and saves a moment later.
     /// Bit-perfect keeps the settings (mpv skips the filter) and draws the curve flat.
-    fn eq_changed(&self, ease: bool) {
+    /// Sends the settings to mpv, moves the curve towards them and saves a moment later.
+    /// Bit-perfect keeps the settings (mpv skips the filter) and draws the curve flat.
+    fn eq_changed(&self, ease: Ease) {
         let comparing = CURVE.with(|c| c.borrow().comparing);
-        let (heard, preset, bit_perfect, headphone) = {
+        let (heard, preset, bit_perfect, headphone, sound) = {
             let s = self.state.lock();
+            let sound = (s.settings.eq_sounds && !s.settings.bit_perfect)
+                .then(|| (s.settings.volume / 100.0).clamp(0.0, 1.0) as f32 * 0.22);
             (
                 heard(&s.settings, comparing),
                 s.settings.eq_preset.clone(),
                 s.settings.bit_perfect,
                 s.settings.headphone.as_ref().map(|h| h.name.clone()),
+                sound,
             )
         };
         let goal = if bit_perfect { [0.0; 6] } else { heard.gains };
@@ -400,17 +447,32 @@ impl Controller {
         CURVE.with(|c| {
             let mut c = c.borrow_mut();
             c.correction = correction;
-            if ease {
+            c.bounce = (ease == Ease::Bounce).then(|| {
+                let now = Instant::now();
+                Bounce {
+                    start: now,
+                    last: now,
+                    from: c.shown,
+                    from_spots: c.spots,
+                    speed: [0.0; 6],
+                    spot_speed: [0.0; 6],
+                    started: [false; 6],
+                    landed: [false; 6],
+                    sound,
+                }
+            });
+            if ease == Ease::Now {
+                c.shown = goal;
+                c.spots = spots;
+                c.pops = [None; 6];
+                c.animation.stop();
+            } else {
                 c.animation
                     .start(TimerMode::Repeated, Duration::from_millis(16), move || {
                         if let Some(w) = weak.upgrade() {
                             step(&w, goal, spots);
                         }
                     });
-            } else {
-                c.shown = goal;
-                c.spots = spots;
-                c.animation.stop();
             }
         });
         render(&window);
@@ -452,42 +514,141 @@ fn labels(freqs: &[f64; 6]) -> ModelRc<SharedString> {
 }
 
 fn step(window: &AppWindow, goal: [f64; 6], spots: [f64; 6]) {
-    CURVE.with(|c| {
+    let now = Instant::now();
+    let bubbles = CURVE.with(|c| {
         let mut c = c.borrow_mut();
-        let mut done = true;
-        for (shown, goal) in c.shown.iter_mut().zip(goal) {
-            *shown += (goal - *shown) * 0.2;
-            if (goal - *shown).abs() > 0.02 {
-                done = false;
-            } else {
-                *shown = goal;
+        let c = &mut *c;
+        let (done, bubbles) = match c.bounce.as_mut() {
+            Some(b) => spring(b, &mut c.shown, &mut c.spots, &mut c.pops, goal, spots, now),
+            None => (glide(&mut c.shown, &mut c.spots, goal, spots), Vec::new()),
+        };
+        for pop in &mut c.pops {
+            if pop.is_some_and(|t| now.duration_since(t).as_secs_f64() >= POP) {
+                *pop = None;
             }
         }
-        for (shown, goal) in c.spots.iter_mut().zip(spots) {
-            *shown += (goal - *shown) * 0.2;
-            if (goal - *shown).abs() > 0.0005 {
-                done = false;
-            } else {
-                *shown = goal;
-            }
-        }
-        if done {
+        if done && c.pops.iter().all(Option::is_none) {
+            c.bounce = None;
             c.animation.stop();
         }
+        bubbles
     });
+    for (freq, level) in bubbles {
+        sfx::bubble(freq, level);
+    }
     render(window);
+}
+
+/// Eases every dot a fifth of the way there each frame. True once all have arrived.
+fn glide(shown: &mut [f64; 6], spots: &mut [f64; 6], goal: [f64; 6], goal_spots: [f64; 6]) -> bool {
+    let mut done = true;
+    for (shown, goal) in shown.iter_mut().zip(goal) {
+        *shown += (goal - *shown) * 0.2;
+        if (goal - *shown).abs() > 0.02 {
+            done = false;
+        } else {
+            *shown = goal;
+        }
+    }
+    for (shown, goal) in spots.iter_mut().zip(goal_spots) {
+        *shown += (goal - *shown) * 0.2;
+        if (goal - *shown).abs() > 0.0005 {
+            done = false;
+        } else {
+            *shown = goal;
+        }
+    }
+    done
+}
+
+/// Springs each dot to its goal once its turn comes. A dot that crosses its goal for
+/// the first time has landed: it pops and gives a bubble at its own note. Returns
+/// whether all are at rest, and the bubbles to play.
+fn spring(
+    b: &mut Bounce,
+    shown: &mut [f64; 6],
+    spots: &mut [f64; 6],
+    pops: &mut [Option<Instant>; 6],
+    goal: [f64; 6],
+    goal_spots: [f64; 6],
+    now: Instant,
+) -> (bool, Vec<(f32, f32)>) {
+    let elapsed = now.duration_since(b.start).as_secs_f64();
+    let dt = now.duration_since(b.last).as_secs_f64().min(0.05);
+    b.last = now;
+    let mut bubbles = Vec::new();
+    let mut done = true;
+    for i in 0..6 {
+        if elapsed < i as f64 * STAGGER {
+            done = false;
+            continue;
+        }
+        let moves = (goal[i] - b.from[i]).abs() > 0.05 || (goal_spots[i] - b.from_spots[i]).abs() > 0.001;
+        if !b.started[i] {
+            b.started[i] = true;
+            if !moves {
+                b.landed[i] = true;
+                b.speed[i] = WIGGLE;
+            }
+        }
+        let steps = (dt / 0.004).ceil().max(1.0);
+        let h = dt / steps;
+        for _ in 0..steps as usize {
+            b.speed[i] += (STIFFNESS * (goal[i] - shown[i]) - DAMPING * b.speed[i]) * h;
+            shown[i] += b.speed[i] * h;
+            b.spot_speed[i] += (STIFFNESS * (goal_spots[i] - spots[i]) - DAMPING * b.spot_speed[i]) * h;
+            spots[i] += b.spot_speed[i] * h;
+        }
+        let crossed = |from: f64, goal: f64, at: f64, eps: f64| (goal - at) * (goal - from).signum() <= eps;
+        if !b.landed[i]
+            && crossed(b.from[i], goal[i], shown[i], 0.05)
+            && crossed(b.from_spots[i], goal_spots[i], spots[i], 0.001)
+        {
+            b.landed[i] = true;
+            pops[i] = Some(now);
+            if let Some(level) = b.sound {
+                let lift = (goal[i] - b.from[i]).abs().max((goal_spots[i] - b.from_spots[i]).abs() * 30.0);
+                bubbles.push((note(i, goal[i]), level * (0.75 + 0.25 * (lift / 6.0).min(1.0) as f32)));
+            }
+        }
+        let resting = (goal[i] - shown[i]).abs() < 0.02
+            && b.speed[i].abs() < 0.2
+            && (goal_spots[i] - spots[i]).abs() < 0.0005
+            && b.spot_speed[i].abs() < 0.005;
+        if resting {
+            shown[i] = goal[i];
+            spots[i] = goal_spots[i];
+            b.speed[i] = 0.0;
+            b.spot_speed[i] = 0.0;
+        } else {
+            done = false;
+        }
+    }
+    (done, bubbles)
+}
+
+/// A band's bubble note: higher to the right and higher the more it is boosted,
+/// always on the same pentatonic scale so any preset sounds like a little tune.
+fn note(band: usize, gain: f64) -> f32 {
+    let degree = (band as i32 + 2 + (gain / 3.0).round() as i32).clamp(0, SCALE.len() as i32 - 1);
+    392.0 * 2f32.powf(SCALE[degree as usize] as f32 / 12.0)
 }
 
 /// Draws the curve for the gains currently shown, at the graph's size, and the
 /// headphone correction as a faint line underneath.
 pub(super) fn render(window: &AppWindow) {
     let (w, h) = (window.get_eq_width(), window.get_eq_height());
-    let (shown, spots, correction) = CURVE.with(|c| {
+    let now = Instant::now();
+    let (shown, spots, correction, pops) = CURVE.with(|c| {
         let c = c.borrow();
-        (c.shown, c.spots, c.correction.clone())
+        let pops = c.pops.map(|p| {
+            p.map_or(0.0, |t| (1.0 - now.duration_since(t).as_secs_f64() / POP).max(0.0))
+        });
+        (c.shown, c.spots, c.correction.clone(), pops)
     });
     window.set_eq_gains(floats(shown));
     window.set_eq_spots(floats(spots));
+    window.set_eq_pops(floats(pops));
     if w <= 1.0 || h <= 1.0 {
         return;
     }

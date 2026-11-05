@@ -6,7 +6,7 @@ pkgdesc='A lightweight native music player. Rust, Slint, mpv.'
 arch=('x86_64' 'aarch64')
 url='https://github.com/sjdsjadjajdjsa/tonal'
 license=('MIT')
-depends=('mpv' 'yt-dlp' 'sqlite' 'dbus' 'fontconfig' 'libxkbcommon' 'gcc-libs' 'glibc')
+depends=('mpv' 'yt-dlp' 'sqlite' 'dbus' 'alsa-lib' 'fontconfig' 'libxkbcommon' 'gcc-libs' 'glibc')
 makedepends=('cargo')
 optdepends=('deno: YouTube challenge solving'
             'pipewire: visualizer')

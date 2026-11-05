@@ -1,7 +1,7 @@
 use crate::{
-    LyricRow, PlaylistRow, SettingRow, TrackRow,
     library::Library,
     model::{Settings, Track},
+    LyricRow, PlaylistRow, SettingRow, TrackRow,
 };
 use slint::{Model, ModelRc, VecModel};
 
@@ -263,6 +263,14 @@ pub fn settings(s: &Settings) -> Vec<SettingRow> {
                     false,
                 ),
                 ("eq", "Equalizer", s.eq_preset.clone(), "", "action", false),
+                (
+                    "eq_sounds",
+                    "Equalizer sounds",
+                    s.eq_sounds.to_string(),
+                    "A bubbly pop as each band lands on a new preset.",
+                    "toggle",
+                    false,
+                ),
                 if crate::visualizer::available() {
                     (
                         "visualizer",
@@ -491,11 +499,9 @@ mod tests {
         assert_eq!(update.value, "Update");
         assert_eq!(update.hint, "Keeps YouTube and SoundCloud working");
         assert_eq!(update.kind, "action");
-        assert!(
-            fields
-                .iter()
-                .any(|f| f.key == "lastfm_api_secret" && f.secret)
-        );
+        assert!(fields
+            .iter()
+            .any(|f| f.key == "lastfm_api_secret" && f.secret));
     }
     #[test]
     fn missing_output_is_listed_as_not_connected() {
