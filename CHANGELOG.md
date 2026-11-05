@@ -2,6 +2,16 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
+## 0.8.0 - 2026-11-05
+
+### Added
+- Animations: the window fades in when Tonal opens, pages and tabs slide softly into place, side panels glide in, dialogs rise in, covers fade in as they load, hearts pop when you like a song and buttons give a little when pressed.
+- Shimmering placeholder rows while search results load, instead of an empty page.
+- Settings, Animations turns all motion off.
+
+### Fixed
+- Switching equalizer presets quickly no longer shows "mpv: error running command", and the equalizer you picked stays on when the next song starts.
+
 ## 0.7.1 - 2026-11-05
 
 ### Added
