@@ -765,6 +765,7 @@ async fn real_mpv_equalizer_changes_live_and_survives_filter_rebuilds() {
         .to_string();
     assert!(graph.contains("lowshelf@b0=f=60:g=6.0"), "{graph}");
     assert!(graph.contains("volume@pre=volume=-3.0dB"), "{graph}");
+    assert!(graph.contains("alimiter@safe"), "{graph}");
     assert!(af.to_string().contains("dynaudnorm"), "{af}");
 }
 

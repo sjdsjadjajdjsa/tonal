@@ -50,6 +50,7 @@ pub fn run() -> anyhow::Result<()> {
     {
         log::warn!("Could not save settings after dropping orphan theme pins: {e:#}");
     }
+    equalizer::follow_preset(&mut settings);
     crate::sources::set_cookies_browser(&settings.youtube_cookies);
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let player = player::spawn(

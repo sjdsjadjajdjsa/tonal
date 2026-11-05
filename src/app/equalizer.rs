@@ -20,11 +20,11 @@ use std::{
 
 pub const PRESETS: [(&str, [f64; 6]); 6] = [
     ("Flat", [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
-    ("Bass", [6.0, 4.0, 1.0, 0.0, 0.0, 0.0]),
-    ("Vocal", [-2.0, -1.0, 2.0, 4.0, 3.0, 0.0]),
-    ("Bright", [0.0, 0.0, 0.0, 1.0, 4.0, 6.0]),
-    ("Warm", [3.0, 2.0, 1.0, 0.0, -1.0, -2.0]),
-    ("Late night", [2.0, 1.0, 0.0, -1.0, -2.0, -4.0]),
+    ("Bass", [10.0, 7.0, 2.0, -1.0, 0.0, 0.0]),
+    ("Vocal", [-5.0, -3.0, 2.0, 6.0, 5.0, -1.0]),
+    ("Bright", [-2.0, -1.0, 0.0, 2.0, 7.0, 10.0]),
+    ("Warm", [6.0, 4.0, 2.0, 0.0, -3.0, -6.0]),
+    ("Late night", [4.0, 2.0, 0.0, -2.0, -5.0, -8.0]),
 ];
 const MAX: f64 = 12.0;
 /// Space between the graph's edges and its 20 Hz and 20 kHz ends; the panel uses it too.
@@ -105,6 +105,14 @@ thread_local! {
 /// Room for boosts so the sound doesn't clip: half the largest boost, taken off the top.
 pub(super) fn headroom(gains: &[f64; 6]) -> f64 {
     -(gains.iter().cloned().fold(0.0, f64::max) / 2.0)
+}
+
+/// A named preset plays its current curve, so a saved one picks up retuned presets.
+pub(super) fn follow_preset(settings: &mut Settings) {
+    if let Some((_, gains)) = PRESETS.iter().find(|(n, _)| *n == settings.eq_preset) {
+        settings.eq_gains = *gains;
+        settings.eq_freqs = EQ_BANDS;
+    }
 }
 
 /// What mpv should play with. Comparing silences the bands but keeps the headphone

@@ -107,7 +107,7 @@ impl Equalizer {
             });
         let filters: Vec<String> = correction.chain(bands).collect();
         format!(
-            "@eq:lavfi=[{},volume@pre=volume={:.1}dB]",
+            "@eq:lavfi=[{},volume@pre=volume={:.1}dB,alimiter@safe=limit=0.97:level=disabled]",
             filters.join(","),
             self.preamp
         )
