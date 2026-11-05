@@ -73,9 +73,11 @@ fn run(app: &str, rx: Receiver<Option<Presence>>) {
                 continue;
             }
             let mut c = DiscordIpcClient::new(app);
-            if c.connect().is_err() {
+            if let Err(e) = c.connect() {
+                log::debug!("Discord isn't reachable: {e}");
                 continue;
             }
+            log::info!("Connected to Discord");
             client = Some(c);
             shown = false;
         }
@@ -88,7 +90,10 @@ fn run(app: &str, rx: Receiver<Option<Presence>>) {
             None => Ok(()),
         };
         match sent {
-            Ok(()) => shown = wanted.is_some(),
+            Ok(()) => {
+                shown = wanted.is_some();
+                log::debug!("Discord shows {:?}", wanted.as_ref().map(|p| &p.title));
+            }
             Err(e) => {
                 log::debug!("Discord: {e}");
                 let _ = c.close();
