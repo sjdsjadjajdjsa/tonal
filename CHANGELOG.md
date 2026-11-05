@@ -2,6 +2,15 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
+## 0.9.0 - 2026-11-05
+
+### Added
+- Home opens on your Mixes as coloured tiles and a "Jump back in" row of the albums you played last, above what you played recently.
+- Quick search: Ctrl K (Cmd K on a Mac) finds pages, playlists, songs in your library, equalizer presets and actions like the sleep timer. Arrows move, Enter runs it.
+- Keep liked songs offline: an option in Settings, Library downloads every liked song in the background, one at a time, so it plays without internet.
+- The song in the player bar fades in when the song changes.
+- Lyrics follow the song more closely: the current line grows, the lines around it fade with distance, and the full-screen view glows in the cover's colour.
+
 ## 0.8.0 - 2026-11-05
 
 ### Added
