@@ -1,6 +1,6 @@
 [package]
 name = "tonal"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2024"
 description = "A lightweight native music player. Rust, Slint, mpv."
 license = "MIT"
@@ -32,6 +32,7 @@ env_logger = { version = "0.11", default-features = false }
 parking_lot = "0.13"
 rustfft = { version = "6.4", default-features = false }
 cpal = "0.18"
+discord-rich-presence = "1.1"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2"

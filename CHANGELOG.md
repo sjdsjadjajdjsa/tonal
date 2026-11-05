@@ -2,6 +2,16 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
+## 0.7.0 - 2026-11-05
+
+### Added
+- Sleep timer: the moon button next to the queue stops the music after 15 minutes to 90 minutes or at the end of the song. It fades out first, then puts the volume back for next time.
+- Mixes in the sidebar that fill themselves: On repeat (songs played three times this month), Rediscover (liked or much played songs you haven't heard in two months) and Recently added.
+- Each output brings back its headphone correction along with its equalizer, and the equalizer says which output it's for.
+
+### Changed
+- Shuffle spreads songs by the same artist apart and plays the songs you heard last at the end.
+
 ## 0.6.0 - 2026-11-05
 
 ### Added
