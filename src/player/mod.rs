@@ -934,9 +934,11 @@ impl Engine {
                             .collect()
                     };
                     for command in commands {
-                        self.active_send(command.clone()).await?;
+                        if let Some(mpv) = &mut self.active {
+                            mpv.send_quiet(command.clone()).await?;
+                        }
                         if let Some(mpv) = &mut self.standby {
-                            mpv.send(command).await?;
+                            mpv.send_quiet(command).await?;
                         }
                     }
                 }
@@ -1277,10 +1279,19 @@ impl Engine {
                 self.failed_load(value["file_error"].as_str().unwrap_or("load failed"))
                     .await?;
             }
-
+            // A new audio chain is built from the af option, which holds the gains of
+            // when it was last set; the live changes since then go on again.
+            Some("playback-restart") if !self.config.bit_perfect => {
+                if let Some(mpv) = &mut self.active {
+                    for command in self.config.equalizer.commands() {
+                        mpv.send_quiet(command).await?;
+                    }
+                }
+            }
             _ => {
                 if let Some(error) = value["error"].as_str()
                     && error != "success"
+                    && value["request_id"].as_u64() != Some(mpv::QUIET)
                 {
                     self.emit(PlayerEvent::Error(format!("mpv: {error}")));
                 }

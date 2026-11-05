@@ -56,6 +56,10 @@ tokio::task_local! {
     pub(super) static SPAWN_FAILURES: std::cell::Cell<usize>;
 }
 
+/// Request id of commands whose replies nobody waits for and whose errors are dropped.
+/// The largest integer JSON readers keep exact, far above any real request id.
+pub(super) const QUIET: u64 = (1 << 53) - 1;
+
 #[derive(Debug)]
 pub(super) struct Disconnected {
     pub instance: u64,
@@ -362,6 +366,7 @@ impl Mpv {
                             Err(error) => error.to_string(),
                             _ => "mpv IPC disconnected".to_owned(),
                         };
+                        log::warn!("mpv {id} went away: {error}");
                         let _ = events.send(Message {
                             instance: id,
                             value: json!({"event":"ipc-error", "error":error}),
@@ -436,6 +441,20 @@ impl Mpv {
     fn disconnected(&self) -> anyhow::Error {
         self.alive.store(false, Ordering::Release);
         Disconnected { instance: self.id }.into()
+    }
+
+    /// Sends `command` without waiting, and marks its reply so a failure stays
+    /// quiet: equalizer changes fail harmlessly while no audio is playing.
+    pub async fn send_quiet(&mut self, command: Value) -> Result<()> {
+        if !self.alive.load(Ordering::Acquire) {
+            return Err(self.disconnected());
+        }
+        let mut line = serde_json::to_vec(&json!({"command":command, "request_id":QUIET}))?;
+        line.push(b'\n');
+        self.writer
+            .write_all(&line)
+            .await
+            .map_err(|_| self.disconnected())
     }
 
     pub async fn send(&mut self, command: Value) -> Result<()> {

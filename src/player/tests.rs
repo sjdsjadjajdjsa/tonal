@@ -800,6 +800,58 @@ async fn real_mpv_equalizer_changes_live_and_survives_filter_rebuilds() {
     assert!(af.to_string().contains("dynaudnorm"), "{af}");
 }
 
+
+#[tokio::test]
+async fn real_mpv_survives_presets_switched_quickly() {
+    let tone = Tone::new();
+    let (mut engine, mut rx) = tone_engine(&tone).await;
+    engine.command(Cmd::Normalize(true)).await.unwrap();
+    let presets: [[f64; 6]; 6] = [
+        [0.0; 6],
+        [10.0, 7.0, 2.0, -1.0, 0.0, 0.0],
+        [-5.0, -3.0, 2.0, 6.0, 5.0, -1.0],
+        [-2.0, -1.0, 0.0, 2.0, 7.0, 10.0],
+        [6.0, 4.0, 2.0, 0.0, -3.0, -6.0],
+        [4.0, 2.0, 0.0, -2.0, -5.0, -8.0],
+    ];
+    for round in 0..40 {
+        let gains = presets[round % 6];
+        let top = gains.iter().cloned().fold(0.0, f64::max);
+        engine
+            .command(Cmd::Equalizer(super::Equalizer {
+                gains,
+                preamp: -top / 2.0,
+                ..Default::default()
+            }))
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(40)).await;
+        while let Ok(message) = engine.ipc_rx.try_recv() {
+            engine.message(message).await.unwrap();
+        }
+    }
+    let pos = engine.pos;
+    pump_until(&mut engine, |e| e.pos > pos + 0.3).await;
+    engine.command(Cmd::Stop).await.unwrap();
+    for gains in presets {
+        engine
+            .command(Cmd::Equalizer(super::Equalizer {
+                gains,
+                ..Default::default()
+            }))
+            .await
+            .unwrap();
+    }
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    while let Ok(message) = engine.ipc_rx.try_recv() {
+        engine.message(message).await.unwrap();
+    }
+    assert!(
+        errors(&mut rx).is_empty(),
+        "equalizer changes with nothing playing stay quiet"
+    );
+}
+
 async fn eq_graph(engine: &mut Engine) -> String {
     property(engine, "af")
         .await
