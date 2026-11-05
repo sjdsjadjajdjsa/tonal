@@ -1,4 +1,123 @@
-import { Theme, Icons, Label, Button, TextField, IconButton, Motion, Ease } from "theme.slint";
+import { Theme, Icons, Label, Icon, Button, TextField, IconButton, Motion, Ease } from "theme.slint";
+
+export struct PaletteItem {
+    title: string,
+    detail: string,
+    /// page, playlist, song, action, eq or search: picks the icon.
+    kind: string,
+}
+
+/// Quick search: type, move with the arrows, Enter runs the highlighted item.
+export component Palette inherits Rectangle {
+    in property <[PaletteItem]> items;
+    in-out property <string> query;
+    out property <bool> typing: field.focused;
+    callback search(string);
+    callback pick(int);
+    callback dismiss;
+    private property <int> selected;
+    private property <float> shown: Motion.on ? 0 : 1;
+    init => {
+        root.shown = 1;
+        root.search(root.query);
+    }
+    animate shown { duration: Motion.on ? 200ms : 0ms; easing: Ease.arrive; }
+    changed items => { root.selected = 0; }
+    function run(index: int) {
+        if index >= 0 && index < root.items.length {
+            root.pick(index);
+            root.dismiss();
+        }
+    }
+    background: #000000.with-alpha(0.45 * root.shown);
+    TouchArea { clicked => { root.dismiss(); } }
+    FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.Escape {
+                root.dismiss();
+                return accept;
+            }
+            if event.text == Key.DownArrow {
+                root.selected = min(root.selected + 1, root.items.length - 1);
+                return accept;
+            }
+            if event.text == Key.UpArrow {
+                root.selected = max(root.selected - 1, 0);
+                return accept;
+            }
+            return reject;
+        }
+        card := Rectangle {
+            width: min(560px, root.width - 48px);
+            height: body.preferred-height;
+            x: (root.width - self.width) / 2;
+            y: root.height * 0.14 - 10px * (1 - root.shown);
+            opacity: root.shown;
+            background: Theme.popup;
+            border-radius: Theme.radius-l;
+            drop-shadow-blur: 40px;
+            drop-shadow-offset-y: 14px;
+            drop-shadow-color: #000000a0;
+            TouchArea { }
+            body := VerticalLayout {
+                padding: 8px;
+                spacing: 4px;
+                field := TextField {
+                    height: 44px;
+                    icon: Icons.search;
+                    placeholder: "Go to a page, playlist, song or action";
+                    text <=> root.query;
+                    init => { self.focus(); }
+                    edited(text) => { root.search(text); }
+                    accepted => { root.run(root.selected); }
+                }
+                for item[i] in root.items: Rectangle {
+                    height: 40px;
+                    border-radius: Theme.radius-s;
+                    background: i == root.selected ? Theme.hover : transparent;
+                    animate background { duration: Motion.on ? 90ms : 0ms; }
+                    HorizontalLayout {
+                        padding-left: 12px;
+                        padding-right: 12px;
+                        spacing: 12px;
+                        VerticalLayout {
+                            alignment: center;
+                            Icon {
+                                width: 16px;
+                                height: 16px;
+                                tint: i == root.selected ? Theme.text : Theme.muted;
+                                data: item.kind == "page" ? Icons.home
+                                    : item.kind == "playlist" ? Icons.queue
+                                    : item.kind == "song" ? Icons.music
+                                    : item.kind == "eq" ? Icons.equalizer
+                                    : item.kind == "search" ? Icons.search
+                                    : Icons.sparkle;
+                            }
+                        }
+                        Label {
+                            text: item.title;
+                            font-size: 13.5px;
+                            font-weight: i == root.selected ? 600 : 500;
+                            horizontal-stretch: 1;
+                            vertical-alignment: center;
+                        }
+                        Label {
+                            text: item.detail;
+                            font-size: 11.5px;
+                            color: Theme.faint;
+                            vertical-alignment: center;
+                        }
+                    }
+                    TouchArea {
+                        mouse-cursor: pointer;
+                        moved => { root.selected = i; }
+                        clicked => { root.run(i); }
+                    }
+                }
+            }
+        }
+    }
+}
 
 export component Dialog inherits Rectangle {
     in property <string> kind;

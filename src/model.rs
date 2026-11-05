@@ -220,6 +220,8 @@ pub struct Settings {
     pub eq_outputs: std::collections::BTreeMap<String, EqPreset>,
     /// Each output keeps its own equalizer and it comes back when that output does.
     pub eq_per_output: bool,
+    /// Liked songs download in the background so they play without internet.
+    pub offline_liked: bool,
     /// Pages, panels and buttons move; off makes every change instant.
     pub motion: bool,
     /// What you play shows on your Discord profile while Discord runs.
@@ -277,6 +279,7 @@ impl Default for Settings {
             eq_per_output: true,
             discord: true,
             motion: true,
+            offline_liked: false,
             sounds: true,
             album_colors: true,
             audio_device: String::new(),

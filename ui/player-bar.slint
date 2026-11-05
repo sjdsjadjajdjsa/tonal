@@ -65,6 +65,20 @@ export component PlayerBar inherits Rectangle {
     private property <length> quality-width: quality-measure.preferred-width + 16px;
     callback command(string);
     callback open-artist(int);
+    /// Off for a frame when the song changes, so the new one fades in.
+    private property <bool> song-in: true;
+    changed title => {
+        root.song-in = false;
+        song-kick.running = true;
+    }
+    song-kick := Timer {
+        interval: 16ms;
+        running: false;
+        triggered => {
+            self.running = false;
+            root.song-in = true;
+        }
+    }
     callback open-album();
     private property <length> chooser-x;
     private property <length> chooser-y;
@@ -127,6 +141,8 @@ export component PlayerBar inherits Rectangle {
                 Artwork {
                     source: root.art;
                     size: 56px;
+                    opacity: root.song-in || !Motion.on ? 1 : 0.2;
+                    animate opacity { duration: root.song-in && Motion.on ? 420ms : 0ms; easing: Ease.arrive; }
                     TouchArea {
                         enabled: root.has-track;
                         mouse-cursor: root.has-track ? pointer : default;
@@ -138,8 +154,24 @@ export component PlayerBar inherits Rectangle {
                 alignment: center;
                 horizontal-stretch: 0;
                 spacing: 4px;
-                LinkText { text: root.title; font-size: 14px; font-weight: 600; color: Theme.text; enabled: root.has-album; clicked => { root.open-album(); } }
-                LinkText { text: root.artist; font-size: 12px; enabled: root.has-track; clicked => { root.show-artists(self.absolute-position.x, self.absolute-position.y); } }
+                LinkText {
+                    text: root.title;
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: Theme.text;
+                    enabled: root.has-album;
+                    opacity: root.song-in || !Motion.on ? 1 : 0;
+                    animate opacity { duration: root.song-in && Motion.on ? 360ms : 0ms; easing: Ease.arrive; }
+                    clicked => { root.open-album(); }
+                }
+                LinkText {
+                    text: root.artist;
+                    font-size: 12px;
+                    enabled: root.has-track;
+                    opacity: root.song-in || !Motion.on ? 1 : 0;
+                    animate opacity { duration: root.song-in && Motion.on ? 360ms : 0ms; delay: root.song-in && Motion.on ? 70ms : 0ms; easing: Ease.arrive; }
+                    clicked => { root.show-artists(self.absolute-position.x, self.absolute-position.y); }
+                }
             }
             if root.has-track: VerticalLayout {
                 alignment: center;

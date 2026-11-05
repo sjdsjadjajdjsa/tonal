@@ -8,6 +8,7 @@ mod integrations;
 mod library_actions;
 mod models;
 mod now_playing;
+mod palette;
 mod playback;
 mod search;
 mod settings;
@@ -112,6 +113,7 @@ pub fn run() -> anyhow::Result<()> {
     window.set_local_albums(ModelRc::new(VecModel::<crate::CardRow>::default()));
     window.set_top_artists(ModelRc::new(VecModel::<crate::CardRow>::default()));
     window.set_top_albums(ModelRc::new(VecModel::<crate::CardRow>::default()));
+    window.set_recent_albums(ModelRc::new(VecModel::<crate::CardRow>::default()));
     window.set_album_colors(settings.album_colors);
     window.global::<crate::Motion>().set_on(settings.motion);
     window
@@ -173,6 +175,10 @@ pub fn run() -> anyhow::Result<()> {
     });
     let c = app.clone();
     window.on_navigate(move |page| c.go(browse::Nav::Page(page.to_string())));
+    let c = app.clone();
+    window.on_palette_search(move |query| c.palette_search(&query));
+    let c = app.clone();
+    window.on_palette_pick(move |index| c.palette_pick(index.max(0) as usize));
     let c = app.clone();
     window.on_playlist(move |id| c.go(browse::Nav::Playlist(id as i64)));
     let c = app.clone();
@@ -400,7 +406,8 @@ pub fn run() -> anyhow::Result<()> {
     }
     let c = app.clone();
     slint::Timer::single_shot(std::time::Duration::from_secs(6), move || {
-        c.update_check(true)
+        c.update_check(true);
+        c.sync_offline();
     });
     #[cfg(feature = "debug-hooks")]
     debug::debug_hooks(&app, &window);

@@ -134,6 +134,7 @@ impl Controller {
         if let Some(tracks) = self.result(tracks) {
             if page == "Home" {
                 self.ui(|w| w.set_home_tab(0));
+                self.load_recent_albums();
             }
             self.display(tracks, page.into());
             if page == "Local files" && self.state.lock().collection.local_albums {
@@ -188,6 +189,7 @@ impl Controller {
                 if let Some(t) = self.result(self.library.recent(100)) {
                     self.display(t, "Home".into());
                 }
+                self.load_recent_albums();
             }
             "most-played" => {
                 if let Some(t) = self.result(self.library.most_played(100)) {

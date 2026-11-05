@@ -15,6 +15,9 @@ impl Controller {
         if key == "bit_perfect" {
             self.eq_refresh();
         }
+        if key == "offline_liked" {
+            self.sync_offline();
+        }
         if key == "motion" {
             let on = self.state.lock().settings.motion;
             self.ui(move |w| w.global::<crate::Motion>().set_on(on));
@@ -79,6 +82,11 @@ impl Controller {
             "sounds" => {
                 if let Ok(v) = value.parse() {
                     s.sounds = v;
+                }
+            }
+            "offline_liked" => {
+                if let Ok(v) = value.parse() {
+                    s.offline_liked = v;
                 }
             }
             "motion" => {

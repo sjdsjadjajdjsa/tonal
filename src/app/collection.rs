@@ -19,6 +19,8 @@ pub struct Collection {
     pub sort: Sort,
     pub top_artists: Vec<Top>,
     pub top_albums: Vec<Top>,
+    /// Home's "Jump back in" albums.
+    pub recent_albums: Vec<Top>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -193,6 +195,8 @@ fn month_start(ms: i64) -> i64 {
 
 const CARD_ART: u32 = 240;
 const STATS_LIMIT: usize = 10;
+/// Albums in Home's "Jump back in" row.
+const HOME_ALBUMS: usize = 8;
 
 impl Controller {
     /// Empties the card models so their covers don't stay in memory off screen.
@@ -202,6 +206,7 @@ impl Controller {
                 w.get_local_albums(),
                 w.get_top_artists(),
                 w.get_top_albums(),
+                w.get_recent_albums(),
             ] {
                 models::update(model, Vec::new());
             }
@@ -312,6 +317,7 @@ impl Controller {
                             let model = match list {
                                 "local-albums" => w.get_local_albums(),
                                 "top-artists" => w.get_top_artists(),
+                                "recent-albums" => w.get_recent_albums(),
                                 _ => w.get_top_albums(),
                             };
                             if let Some(mut row) = model.row_data(index) {
@@ -322,6 +328,37 @@ impl Controller {
                     }
                 })
                 .await;
+        });
+    }
+
+    /// Home's "Jump back in" row: the albums played last.
+    pub fn load_recent_albums(&self) {
+        let Some(albums) = self.result(self.library.recent_albums(HOME_ALBUMS)) else {
+            return;
+        };
+        let generation = {
+            let mut s = self.state.lock();
+            s.collection.recent_albums = albums.clone();
+            s.generation
+        };
+        let this = self.clone();
+        let state = self.state.clone();
+        self.ui(move |w| {
+            if state.lock().generation != generation {
+                return;
+            }
+            let model = w.get_recent_albums();
+            let mut rows: Vec<CardRow> = albums
+                .iter()
+                .map(|a| card(a.title.clone(), a.artist.clone()))
+                .collect();
+            let missing = keep_art(&model, &mut rows);
+            models::update(model, rows);
+            let jobs = missing
+                .into_iter()
+                .filter_map(|i| Some((i, albums[i].track.artwork_url.clone()?)))
+                .collect();
+            this.load_cards(generation, "recent-albums", jobs, 0.06);
         });
     }
 
@@ -411,7 +448,11 @@ impl Controller {
                     id: None,
                 }))
             }),
-            "top-album" => c.top_albums.get(index).and_then(|t| {
+            "top-album" | "recent-album" => match kind {
+                "top-album" => c.top_albums.get(index),
+                _ => c.recent_albums.get(index),
+            }
+            .and_then(|t| {
                 t.track.album_ref().map(|a| {
                     Nav::Album(AlbumRef {
                         artwork_url: t.track.artwork_url.clone(),

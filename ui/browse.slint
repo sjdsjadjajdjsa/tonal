@@ -59,15 +59,62 @@ component Card inherits Rectangle {
     }
 }
 
+/// A self-filling mix on Home: a coloured tile with its icon, name and what it holds.
+export component MixTile inherits Rectangle {
+    in property <string> title;
+    in property <string> subtitle;
+    in property <string> icon;
+    in property <color> tint;
+    callback clicked;
+    height: 68px;
+    border-radius: Theme.radius-l;
+    background: @linear-gradient(120deg, root.tint.with-alpha(tap.has-hover ? 0.42 : 0.3) 0%, root.tint.with-alpha(tap.has-hover ? 0.14 : 0.07) 100%);
+    animate background { duration: Motion.on ? 160ms : 0ms; }
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        spacing: 12px;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 38px;
+                height: 38px;
+                border-radius: 19px;
+                background: root.tint.with-alpha(0.4);
+                Icon {
+                    data: root.icon;
+                    width: tap.pressed && Motion.on ? 16px : 19px;
+                    height: self.width;
+                    tint: Theme.text;
+                    animate width { duration: Motion.on ? 220ms : 0ms; easing: Ease.spring; }
+                }
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            Label { text: root.title; font-size: 14px; font-weight: 650; }
+            Label { text: root.subtitle; font-size: 11.5px; color: Theme.muted; }
+        }
+    }
+    tap := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
 /// Covers in rows that wrap to the available width.
-component CardGrid inherits VerticalLayout {
+export component CardGrid inherits VerticalLayout {
     in property <[CardRow]> cards;
     in property <bool> round;
     in property <string> heading;
+    /// Shows at most this many rows; 0 shows them all.
+    in property <int> max-rows;
+    in property <length> min-card: 172px;
     callback open(int);
-    private property <int> columns: max(2, floor((root.width + 4px) / 172px));
+    private property <int> columns: max(2, floor((root.width + 4px) / root.min-card));
     private property <length> card-width: (root.width - (root.columns - 1) * 4px) / root.columns;
-    private property <int> rows: ceil(root.cards.length / root.columns);
+    private property <int> rows: root.max-rows > 0 ? min(root.max-rows, ceil(root.cards.length / root.columns)) : ceil(root.cards.length / root.columns);
     spacing: 4px;
     if root.cards.length > 0 && root.heading != "": Label {
         text: root.heading;

@@ -352,6 +352,14 @@ pub fn settings(s: &Settings) -> Vec<SettingRow> {
                     false,
                 ),
                 (
+                    "offline_liked",
+                    "Keep liked songs offline",
+                    s.offline_liked.to_string(),
+                    "Downloads every liked song so it plays without internet.",
+                    "toggle",
+                    false,
+                ),
+                (
                     "rescan",
                     "Scan music folders",
                     "Rescan".into(),

@@ -1,5 +1,5 @@
 import { ScrollView } from "scroll.slint";
-import { Theme, Icons, Label, Icon, Button, Switch, TextField, Select } from "theme.slint";
+import { Theme, Icons, Label, Icon, Button, Switch, TextField, Select, Motion, Ease } from "theme.slint";
 
 export struct SettingRow {
     key: string,
@@ -125,8 +125,10 @@ export component SettingsView inherits Rectangle {
 export component LyricsView inherits Rectangle {
     in property <[LyricRow]> lines;
     in property <int> active: -1;
+    /// Full-screen size: bigger lines with more room between them.
+    in property <bool> big;
     callback seek(float);
-    private property <length> line-height: 52px;
+    private property <length> line-height: root.big ? 64px : 52px;
     private property <bool> synced: root.lines.length > 0 && root.lines[0].time >= 0;
     private property <bool> empty: root.lines.length == 0 || (root.lines.length == 1 && root.lines[0].text == "No lyrics found");
     private property <bool> following: true;
@@ -202,10 +204,12 @@ export component LyricsView inherits Rectangle {
                     text: line.text;
                     wrap: word-wrap;
                     overflow: root.synced ? elide : clip;
-                    font-size: root.synced ? 16px : 14px;
-                    font-weight: line.active ? 700 : 500;
+                    font-size: !root.synced ? 14px : line.active ? (root.big ? 27px : 19px) : (root.big ? 21px : 16px);
+                    font-weight: line.active ? 750 : 550;
                     color: !root.synced ? Theme.muted : line.active ? Theme.text : index < root.active ? Theme.faint : Theme.muted;
-                    animate color { duration: 220ms; }
+                    opacity: !root.synced || root.active < 0 || line.active ? 1 : max(0.28, 1 - abs(index - root.active) * 0.16);
+                    animate color, opacity { duration: Motion.on ? 320ms : 0ms; easing: Ease.arrive; }
+                    animate font-size { duration: Motion.on ? 380ms : 0ms; easing: Ease.spring; }
                 }
                 tap := TouchArea {
                     enabled: root.synced;

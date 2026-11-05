@@ -51,6 +51,9 @@ impl Controller {
         } else {
             crate::sfx::Sound::Unlike
         });
+        if liked {
+            self.sync_offline();
+        }
         let current = self
             .state
             .lock()
@@ -172,6 +175,54 @@ impl Controller {
             let _ = task.await;
         });
     }
+    /// Downloads liked songs that aren't saved yet, one at a time, while
+    /// "Keep liked songs offline" is on.
+    pub(super) fn sync_offline(&self) {
+        static BUSY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        use std::sync::atomic::Ordering;
+        if !self.state.lock().settings.offline_liked || BUSY.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        let this = self.clone();
+        tokio::spawn(async move {
+            let mut failed = std::collections::HashSet::new();
+            let mut saved = 0;
+            loop {
+                let (on, folder) = {
+                    let s = this.state.lock();
+                    (s.settings.offline_liked, s.settings.download_dir.clone())
+                };
+                let next = this
+                    .library
+                    .liked_to_download()
+                    .ok()
+                    .and_then(|list| list.into_iter().find(|t| !failed.contains(&t.id)));
+                let Some(track) = next.filter(|_| on) else {
+                    break;
+                };
+                let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+                match crate::sources::download::download(&track, &folder, tx).await {
+                    Ok(path) if this.library.set_download(&track, &path).is_ok() => saved += 1,
+                    Ok(_) => {
+                        failed.insert(track.id);
+                    }
+                    Err(e) => {
+                        log::warn!("Offline copy of {}: {e:#}", track.title);
+                        failed.insert(track.id);
+                    }
+                }
+            }
+            BUSY.store(false, Ordering::Release);
+            if saved > 0 {
+                this.refresh_page("Downloads");
+                this.status(match saved {
+                    1 => "Saved 1 liked song for offline".to_owned(),
+                    n => format!("Saved {n} liked songs for offline"),
+                });
+            }
+        });
+    }
+
     pub(super) fn rescan(&self) {
         let this = self.clone();
         let dirs = self.state.lock().settings.music_dirs.clone();

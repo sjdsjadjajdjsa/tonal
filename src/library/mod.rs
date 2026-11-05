@@ -384,6 +384,68 @@ impl Library {
         )
     }
 
+    /// Albums you played last, newest first, each with the song that brought it back.
+    pub fn recent_albums(&self, limit: usize) -> anyhow::Result<Vec<Top>> {
+        let mut albums: Vec<Top> = Vec::new();
+        for track in self.recent(300)? {
+            let Some(album) = track.album_ref() else {
+                continue;
+            };
+            let same = |t: &Top| {
+                t.title.trim().eq_ignore_ascii_case(album.title.trim())
+                    && t.artist.trim().eq_ignore_ascii_case(album.artist.trim())
+            };
+            if let Some(known) = albums.iter_mut().find(|t| same(t)) {
+                if known.track.artwork_url.is_none() {
+                    known.track.artwork_url = track.artwork_url;
+                }
+                continue;
+            }
+            if albums.len() == limit {
+                break;
+            }
+            albums.push(Top {
+                title: album.title,
+                artist: album.artist,
+                plays: 0,
+                track,
+            });
+        }
+        Ok(albums)
+    }
+
+    /// Songs from your library whose title, artist or album has `query` in it, the
+    /// most played first.
+    pub fn find(&self, query: &str, limit: usize) -> anyhow::Result<Vec<Track>> {
+        let pattern = format!(
+            "%{}%",
+            query
+                .trim()
+                .replace('\\', "\\\\")
+                .replace('%', "\\%")
+                .replace('_', "\\_")
+        );
+        tracks_query(
+            &self.conn.lock(),
+            "LEFT JOIN (SELECT track_id,COUNT(*) AS n FROM plays GROUP BY track_id) p ON p.track_id=t.id
+            WHERE (t.title LIKE ?1 ESCAPE '\\' OR t.artist LIKE ?1 ESCAPE '\\' OR t.album LIKE ?1 ESCAPE '\\')
+            AND (p.n>0 OR t.id IN (SELECT track_id FROM liked UNION SELECT track_id FROM downloads
+                UNION SELECT track_id FROM playlist_tracks UNION SELECT track_id FROM local_tracks))
+            ORDER BY COALESCE(p.n,0) DESC,t.title COLLATE NOCASE LIMIT ?2",
+            params![pattern, limit as i64],
+        )
+    }
+
+    /// Liked songs from online sources that aren't downloaded yet, oldest like first.
+    pub fn liked_to_download(&self) -> anyhow::Result<Vec<Track>> {
+        tracks_query(
+            &self.conn.lock(),
+            "JOIN liked l ON l.track_id=t.id WHERE t.id NOT LIKE 'local:%'
+            AND t.id NOT IN (SELECT track_id FROM downloads) ORDER BY l.added_at,l.rowid",
+            [],
+        )
+    }
+
     /// Songs that came into your library last: liked, downloaded, put in a playlist
     /// or found in your music folders, newest first.
     pub fn recently_added(&self, limit: usize) -> anyhow::Result<Vec<Track>> {
@@ -742,6 +804,35 @@ mod tests {
         let liked = track("liked");
         l.record_play(&liked)?;
         assert!(l.rediscover(10)?.iter().all(|t| t.id != liked.id));
+        Ok(())
+    }
+
+    #[test]
+    fn home_finder_and_offline_lists() -> anyhow::Result<()> {
+        let db = Db::new();
+        let l = &db.library;
+        let song = |id: &str, album: &str| Track {
+            album: Some(album.into()),
+            ..track(id)
+        };
+        let (a1, a2, b1) = (song("a1", "Alpha"), song("a2", "Alpha"), song("b1", "Beta"));
+        l.record_play(&a1)?;
+        l.record_play(&b1)?;
+        l.record_play(&a2)?;
+        let albums: Vec<_> = l.recent_albums(5)?.into_iter().map(|t| t.title).collect();
+        assert_eq!(albums, ["Alpha", "Beta"]);
+        assert_eq!(l.recent_albums(1)?.len(), 1);
+        let mut online = track("online");
+        online.id = "yt:online".into();
+        online.title = "Under 100% Pressure".into();
+        l.set_liked(&online, true)?;
+        l.upsert_tracks(&[track("never seen")])?;
+        assert_eq!(l.find("100%", 10)?, vec![online.clone()]);
+        assert!(l.find("never", 10)?.is_empty());
+        assert_eq!(l.find("alpha", 10)?.len(), 2);
+        assert_eq!(l.liked_to_download()?, vec![online.clone()]);
+        l.set_download(&online, Path::new("/music/o.opus"))?;
+        assert!(l.liked_to_download()?.is_empty());
         Ok(())
     }
 

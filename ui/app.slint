@@ -3,14 +3,14 @@ import { Sidebar, PlaylistRow } from "sidebar.slint";
 import { TrackList, TrackRow } from "track-list.slint";
 import { PlayerBar } from "player-bar.slint";
 import { SettingsView, SettingRow, LyricsView, LyricRow } from "views.slint";
-import { Dialog } from "dialogs.slint";
-import { ArtistView, AlbumView, AlbumGrid, StatsView, CardRow } from "browse.slint";
+import { Dialog, Palette, PaletteItem } from "dialogs.slint";
+import { ArtistView, AlbumView, AlbumGrid, StatsView, CardRow, CardGrid, MixTile } from "browse.slint";
 import { EqPanel } from "equalizer.slint";
 import { NowPlayingView } from "now-playing.slint";
 import { ThemesView, ThemeStudio, ThemeCard, PaletteRow } from "themes.slint";
 
 import { WaveLook } from "visualizer.slint";
-export { TrackRow, PlaylistRow, SettingRow, LyricRow, CardRow, Theme, ThemeStudio, ThemeCard, PaletteRow, WaveLook, Motion }
+export { PaletteItem, TrackRow, PlaylistRow, SettingRow, LyricRow, CardRow, Theme, ThemeStudio, ThemeCard, PaletteRow, WaveLook, Motion }
 
 export component AppWindow inherits Window {
     in property <string> window-title: "Tonal";
@@ -142,6 +142,11 @@ export component AppWindow inherits Window {
     in-out property <int> stats-period;
     in property <[CardRow]> top-artists;
     in property <[CardRow]> top-albums;
+    in property <[CardRow]> recent-albums;
+    in property <[PaletteItem]> palette-items;
+    in-out property <bool> palette-open;
+    callback palette-search(string);
+    callback palette-pick(int);
     /// Waves and equalizer tint: a soft color from the cover, or the theme's white.
     private property <color> wave-accent: root.album-colors && root.album-tint ? root.album-color : Theme.text;
     animate wave-accent { duration: 600ms; easing: ease-in-out; }
@@ -158,6 +163,14 @@ export component AppWindow inherits Window {
             self.running = false;
             root.now-changed();
         }
+    }
+
+    /// Opens a page the way the sidebar does.
+    function go-page(page: string) {
+        debounce.running = false;
+        root.now-open = false;
+        root.page = page;
+        root.navigate(page);
     }
 
     function update-wide() {
@@ -264,6 +277,10 @@ export component AppWindow inherits Window {
     keys := FocusScope {
         key-pressed(event) => {
             if (event.modifiers.control) {
+                if (event.text == "k") {
+                    root.palette-open = !root.palette-open;
+                    return accept;
+                }
                 if (event.text == "f") {
                     root.page = "Search";
                     root.navigate("Search");
@@ -525,6 +542,41 @@ export component AppWindow inherits Window {
                             menu-action(a) => { root.menu-action(a); }
                             add-playlist(id) => { root.add-playlist(id); }
                             artist(i, w) => { root.open-artist("tracks", i, w); }
+                        }
+                        if root.page == "Home" && root.home-tab == 0: VerticalLayout {
+                            spacing: 14px;
+                            HorizontalLayout {
+                                spacing: 10px;
+                                MixTile {
+                                    title: "On repeat";
+                                    subtitle: "What you can't stop playing";
+                                    icon: Icons.repeat;
+                                    tint: #ff6b6b;
+                                    clicked => { root.go-page("On repeat"); }
+                                }
+                                MixTile {
+                                    title: "Rediscover";
+                                    subtitle: "Favourites you haven't heard lately";
+                                    icon: Icons.sparkle;
+                                    tint: #8b7bff;
+                                    clicked => { root.go-page("Rediscover"); }
+                                }
+                                if !root.narrow: MixTile {
+                                    title: "Recently added";
+                                    subtitle: "New in your library";
+                                    icon: Icons.list-plus;
+                                    tint: #2ec4b6;
+                                    clicked => { root.go-page("Recently added"); }
+                                }
+                            }
+                            if root.recent-albums.length > 0: CardGrid {
+                                heading: "Jump back in";
+                                cards: root.recent-albums;
+                                max-rows: 1;
+                                min-card: 150px;
+                                open(i) => { root.open-card("recent-album", i); }
+                            }
+                            Label { text: "Recently played"; font-size: 16px; font-weight: 650; }
                         }
                         if root.page == "Home" && root.home-tab == 2: StatsView {
                             vertical-stretch: 1;
@@ -824,6 +876,20 @@ export component AppWindow inherits Window {
             font-size: 12.5px;
             font-weight: 500;
             horizontal-alignment: center;
+        }
+    }
+
+    if root.palette-open && !root.mini: Palette {
+        width: root.width;
+        height: root.height;
+        items: root.palette-items;
+        changed typing => { root.typing = self.typing; }
+        search(q) => { root.palette-search(q); }
+        pick(i) => { root.palette-pick(i); }
+        dismiss => {
+            root.palette-open = false;
+            root.typing = false;
+            keys.focus();
         }
     }
 

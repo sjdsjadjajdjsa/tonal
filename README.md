@@ -160,7 +160,7 @@ The last row is a joke. Nobody measured it, and nobody could find the download l
   <img alt="Space play or pause, Ctrl F search, Ctrl L like, Ctrl arrows previous and next, arrows seek 5 seconds, Ctrl up and down volume, Ctrl N now playing, Ctrl M mini player, Alt arrows back and forward" src="docs/images/keys-light.svg" width="100%">
 </picture>
 
-Number keys switch equalizer presets: 1 to 6 are the built-in ones, 7 to 9 your own.
+Number keys switch equalizer presets: 1 to 6 are the built-in ones, 7 to 9 your own. Ctrl K (Cmd K on a Mac) opens quick search for pages, playlists, songs and actions.
 
 Right-click a song for play next, add to queue, start radio, download and add to playlist.
 

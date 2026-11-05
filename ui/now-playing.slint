@@ -40,6 +40,13 @@ export component NowPlayingView inherits Rectangle {
     animate shown { duration: 180ms; easing: ease-out; }
     opacity: root.shown;
 
+    /// A soft glow in the cover's colour behind the art.
+    Rectangle {
+        width: root.width;
+        height: root.height;
+        background: @radial-gradient(circle, root.accent.with-alpha(0.26) 0%, root.accent.with-alpha(0.08) 45%, transparent 75%);
+    }
+
     if root.waves: Waves {
         x: 0;
         y: root.height - self.height;
@@ -139,6 +146,7 @@ export component NowPlayingView inherits Rectangle {
         height: root.height - root.top - 24px;
         lines: root.lyrics;
         active: root.lyric-index;
+        big: true;
         seek(t) => { root.seek(t); }
     }
 

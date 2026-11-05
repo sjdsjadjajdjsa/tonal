@@ -83,11 +83,13 @@ fn run_script(
                 "enter" => key(Key::Return.into()),
                 "escape" => key(Key::Escape.into()),
                 "tab" => key(Key::Tab.into()),
-                "ctrl+a" => {
+                "down" => key(Key::DownArrow.into()),
+                "up" => key(Key::UpArrow.into()),
+                combo if combo.starts_with("ctrl+") => {
                     win.dispatch_event(WindowEvent::KeyPressed {
                         text: Key::Control.into(),
                     });
-                    key("a".into());
+                    key(combo[5..].into());
                     win.dispatch_event(WindowEvent::KeyReleased {
                         text: Key::Control.into(),
                     });
