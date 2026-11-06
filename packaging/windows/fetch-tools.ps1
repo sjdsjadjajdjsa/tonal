@@ -2,7 +2,7 @@
 param([Parameter(Mandatory = $true)][string]$Dest)
 $ErrorActionPreference = "Stop"
 New-Item -ItemType Directory $Dest -Force | Out-Null
-$tmp = Join-Path $env:RUNNER_TEMP "tonal-tools"
+$tmp = Join-Path ([System.IO.Path]::GetTempPath()) "tonal-tools"
 New-Item -ItemType Directory $tmp -Force | Out-Null
 
 Invoke-WebRequest -Uri "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" -OutFile (Join-Path $Dest "yt-dlp.exe")
@@ -16,6 +16,7 @@ if (-not $asset) { throw "No mpv build found in $($release.tag_name)" }
 $archive = Join-Path $tmp $asset.name
 Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $archive
 7z x $archive "-o$tmp\mpv" -y | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "7z could not unpack $($asset.name)" }
 Copy-Item "$tmp\mpv\mpv.exe" $Dest
 Invoke-WebRequest -Uri "https://raw.githubusercontent.com/mpv-player/mpv/master/LICENSE.GPL" -OutFile (Join-Path $Dest "mpv-LICENSE.GPL.txt")
 Set-Content -Path (Join-Path $Dest "MPV-VERSION.txt") -Value "$($asset.name) from $($release.html_url)"

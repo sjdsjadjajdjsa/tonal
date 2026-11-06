@@ -23,6 +23,7 @@ workflow:
   cache:
     key: $CI_JOB_NAME
     paths: [.cargo/registry, .cargo/git, target]
+    when: always
   before_script:
     - apt-get update -qq
     - apt-get install -y -qq --no-install-recommends ca-certificates curl file git build-essential pkg-config libsqlite3-dev libdbus-1-dev libasound2-dev libfontconfig-dev libxkbcommon-dev $EXTRA_PACKAGES > /dev/null
@@ -82,12 +83,13 @@ windows:
   cache:
     key: $CI_JOB_NAME
     paths: [.cargo/registry, .cargo/git, target]
+    when: always
   script:
     - Invoke-WebRequest -Uri https://win.rustup.rs/x86_64 -OutFile rustup-init.exe
     - .\rustup-init.exe -y --profile minimal
     - $env:Path = "$env:CARGO_HOME\bin;$env:Path"
-    - choco install innosetup -y --no-progress
-    - $env:Path = "${env:ProgramFiles(x86)}\Inno Setup 6;$env:Path"
+    - choco install innosetup 7zip -y --no-progress
+    - $env:Path = "${env:ProgramFiles(x86)}\Inno Setup 6;$env:ProgramFiles\7-Zip;$env:Path"
     - cargo build --release --features bundled-sqlite
     - if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - New-Item -ItemType Directory dist/tonal -Force | Out-Null
