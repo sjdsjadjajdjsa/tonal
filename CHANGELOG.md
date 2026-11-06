@@ -2,6 +2,11 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
+## 0.10.2 - 2026-11-05
+
+### Changed
+- The first release built and published on GitLab, with every download on the GitLab release page.
+
 ## 0.10.1 - 2026-11-05
 
 ### Changed
