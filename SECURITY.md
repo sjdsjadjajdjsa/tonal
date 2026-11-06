@@ -1,6 +1,6 @@
 # Security
 
-Please report security problems privately through GitHub: open the repository's **Security** tab and choose **Report a vulnerability**. Don't open a public issue.
+Please report security problems privately on GitLab: open a [new issue](https://gitlab.com/sjdsjadjajdjsa/tonal/-/issues/new) and tick **This issue is confidential** before you submit it. Don't open a public issue.
 
 Include what you found, how to reproduce it and which version you used. You'll get an answer within a week.
 

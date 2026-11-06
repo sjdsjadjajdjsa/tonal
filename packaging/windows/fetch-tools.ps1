@@ -7,7 +7,7 @@ New-Item -ItemType Directory $tmp -Force | Out-Null
 
 Invoke-WebRequest -Uri "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" -OutFile (Join-Path $Dest "yt-dlp.exe")
 
-# Signed in when the workflow passes its token, so shared runners don't hit the rate limit.
+# A GITHUB_TOKEN variable, when set, signs the request so shared runners don't hit GitHub's rate limit.
 $headers = @{ "User-Agent" = "tonal-release" }
 if ($env:GITHUB_TOKEN) { $headers["Authorization"] = "Bearer $env:GITHUB_TOKEN" }
 $release = Invoke-RestMethod -Uri "https://api.github.com/repos/shinchiro/mpv-winbuild-cmake/releases/latest" -Headers $headers

@@ -39,5 +39,5 @@ if [ ! -x "$tool" ]; then
 fi
 
 rm -f "$out" "$out.zsync"
-update="gh-releases-zsync|sjdsjadjajdjsa|tonal|latest|$out.zsync"
+update="zsync|https://gitlab.com/sjdsjadjajdjsa/tonal/-/releases/permalink/latest/downloads/$out.zsync"
 ARCH=x86_64 VERSION="$version" APPIMAGE_EXTRACT_AND_RUN=1 "$tool" --no-appstream -u "$update" "$appdir" "$out"
