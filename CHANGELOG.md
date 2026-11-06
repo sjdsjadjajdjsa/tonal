@@ -2,7 +2,7 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
-## 0.10.0 - 2026-11-05
+## 0.10.1 - 2026-11-05
 
 ### Changed
 - Tonal now lives on GitLab: gitlab.com/sjdsjadjajdjsa/tonal. Updates, downloads, issues and merge requests are there; the GitHub repository stays as a read-only copy.
