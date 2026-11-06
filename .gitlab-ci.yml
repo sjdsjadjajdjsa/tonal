@@ -31,6 +31,7 @@ workflow:
 
 check:
   extends: .rust-linux
+  image: ubuntu:24.04
   stage: check
   rules:
     - if: $CI_COMMIT_TAG == null
@@ -105,10 +106,8 @@ macos:
   extends: .release-tag
   stage: build
   tags: [tonal-macos]
-  variables:
-    CARGO_HOME: $HOME/.cargo
   script:
-    - export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:$PATH"
+    - export CARGO_HOME="$HOME/.cargo" PATH="$HOME/.cargo/bin:/opt/homebrew/bin:$PATH"
     - TONAL_NO_INSTALL=1 sh packaging/macos/build-app.sh
     - rm -rf dist && mkdir -p dist/Tonal
     - cp -R target/release/Tonal.app dist/Tonal/
