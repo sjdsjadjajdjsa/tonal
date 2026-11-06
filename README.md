@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> **Tonal has moved to GitLab: [gitlab.com/sjdsjadjajdjsa/tonal](https://gitlab.com/sjdsjadjajdjsa/tonal).** New versions, downloads, issues and merge requests are there. This GitHub repository is a read-only copy and isn't updated anymore. Tonal 0.10.1 and newer update themselves from GitLab.
+
 <div align="center">
 
 <picture>
