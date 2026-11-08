@@ -2,6 +2,11 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
+## 0.10.3 - 2026-11-08
+
+### Fixed
+- Windows: most of the window could turn black, leaving only the player bar, because Windows can drop parts of a window that weren't just repainted. Tonal now repaints the whole window when that can happen, and once a second besides.
+
 ## 0.10.2 - 2026-11-05
 
 ### Changed
