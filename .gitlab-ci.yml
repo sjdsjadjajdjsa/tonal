@@ -129,7 +129,7 @@ pages:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes: [site/**/*, docs/images/**/*, ui/icon.png, ui/fonts/**/*]
   script:
-    - sh site/build.sh public
+    - sh site/build.sh public "$(echo "$CI_PAGES_URL/" | sed -E 's|https?://[^/]+||; s|/+$|/|')"
   artifacts:
     paths: [public]
 

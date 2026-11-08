@@ -14,6 +14,8 @@ const PRESETS = [
   ["Late night", [4, 2, 0, -2, -5, -8]],
 ];
 
+/// Where the site lives: "/" on its own domain, "/tonal/" on GitLab's address.
+const BASE = document.querySelector('meta[name="base"]')?.content || "/";
 const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 const store = {
@@ -49,7 +51,7 @@ if (pick) {
 /* Pages live at real addresses (/equalizer/ and so on) and swap like Tonal's do. */
 let current = "home";
 const viewOf = (path) => {
-  const name = path.replace(/^\/|\/$/g, "") || "home";
+  const name = (path.startsWith(BASE) ? path.slice(BASE.length) : path).replace(/^\/|\/$/g, "") || "home";
   return VIEWS.includes(name) ? name : "home";
 };
 function show(name, enter = true) {
@@ -66,18 +68,19 @@ function show(name, enter = true) {
 function go(name) {
   closeNow();
   if (name === current) return;
-  const path = name === "home" ? "/" : `/${name}/`;
-  history.pushState({}, "", path);
+  history.pushState({}, "", name === "home" ? BASE : `${BASE}${name}/`);
   show(name);
   music.sound("tap");
 }
 document.addEventListener("click", (e) => {
-  const a = e.target.closest("a[href^='/']");
+  const a = e.target.closest("a[href]");
   if (!a || e.metaKey || e.ctrlKey || e.shiftKey || a.target) return;
-  const path = new URL(a.href).pathname;
-  if (path !== "/" && !VIEWS.includes(path.replace(/\//g, ""))) return;
+  const url = new URL(a.href);
+  if (url.origin !== location.origin || !url.pathname.startsWith(BASE)) return;
+  const rest = url.pathname.slice(BASE.length).replace(/\//g, "");
+  if (rest && !VIEWS.includes(rest)) return;
   e.preventDefault();
-  go(viewOf(path));
+  go(viewOf(url.pathname));
 });
 addEventListener("popstate", () => show(viewOf(location.pathname)));
 const step = (by) => go(VIEWS[(VIEWS.indexOf(current) + by + VIEWS.length) % VIEWS.length]);

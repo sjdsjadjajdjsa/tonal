@@ -4,6 +4,8 @@
 set -eu
 cd "$(dirname "$0")/.."
 out=${1:-public}
+# Where the site is served from: "/" on its own domain, "/tonal/" on GitLab's address.
+base=${2:-/}
 rm -rf "$out"
 mkdir -p "$out/assets" "$out/fonts"
 cp site/index.html site/404.html site/style.css site/main.js site/music.js site/scenes.js "$out/"
@@ -30,10 +32,16 @@ for image in hero themes-reel search album queue equalizer home mini; do
 done
 cp site/fonts/Unbounded.woff2 site/fonts/Unbounded-OFL.txt "$out/fonts/"
 cp ui/fonts/Inter-Regular.ttf ui/fonts/Inter-Medium.ttf ui/fonts/Inter-SemiBold.ttf ui/fonts/Inter-Bold.ttf ui/fonts/Inter-LICENSE.txt "$out/fonts/"
+if [ "$base" != "/" ]; then
+    for html in $(find "$out" -name '*.html'); do
+        sed -i.bak -e "s|href=\"/|href=\"$base|g" -e "s|src=\"/|src=\"$base|g" \
+            -e "s|<meta name=\"base\" content=\"/\">|<meta name=\"base\" content=\"$base\">|" "$html" && rm "$html.bak"
+    done
+fi
 # Browsers keep old copies of scripts, so every build names its own: ?v=<hash of the code>.
 v=$(cat site/main.js site/music.js site/scenes.js site/style.css | shasum | cut -c1-10)
 for html in $(find "$out" -name '*.html'); do
-    sed -i.bak -e "s|/style.css\"|/style.css?v=$v\"|" -e "s|/main.js\"|/main.js?v=$v\"|" "$html" && rm "$html.bak"
+    sed -i.bak -e "s|style.css\"|style.css?v=$v\"|" -e "s|main.js\"|main.js?v=$v\"|" "$html" && rm "$html.bak"
 done
 sed -i.bak -e "s|\./scenes.js\"|./scenes.js?v=$v\"|" -e "s|\./music.js\"|./music.js?v=$v\"|" "$out/main.js" && rm "$out/main.js.bak"
 echo "Built $out"
