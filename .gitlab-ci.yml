@@ -1,5 +1,4 @@
-# Pushes to main and merge requests run the checks on Linux. A push that changes site/
-# publishes tonalplayer.com with GitLab Pages. A tag like v1.2.0 builds
+# Pushes to main and merge requests run the checks on Linux. A tag like v1.2.0 builds
 # Tonal for Linux, Windows and macOS and publishes them as the GitLab release for that
 # tag; the tag must match the version in Cargo.toml. Linux and Windows run on GitLab's
 # hosted runners, macOS on a runner tagged "tonal-macos" (see packaging/macos/RUNNER.md).
@@ -121,18 +120,6 @@ macos:
     - hdiutil verify tonal-macos-arm64.dmg
   artifacts:
     paths: [tonal-macos-arm64.dmg]
-
-pages:
-  stage: publish
-  needs: []
-  image: alpine:3.22
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      changes: [site/**/*, docs/images/**/*, ui/icon.png, ui/fonts/**/*]
-  script:
-    - sh site/build.sh public "$(echo "$CI_PAGES_URL/" | sed -E 's|https?://[^/]+||; s|/+$|/|')"
-  artifacts:
-    paths: [public]
 
 upload:
   stage: publish

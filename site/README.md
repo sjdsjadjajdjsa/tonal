@@ -2,9 +2,7 @@
 
 One page that feels like opening Tonal: plain HTML, CSS and a little JavaScript, no
 build tools. `build.sh` puts it together in one folder that any web server can serve. Point the
-server's 404 page at `404.html`. GitLab
-Pages also publishes it whenever a push to `main` changes `site/`, `docs/images/` or
-the icon and fonts.
+server's 404 page at `404.html`. tonalplayer.com runs on the owner's own server.
 
 ## Run it
 
@@ -74,6 +72,5 @@ the pops and the bubble notes (`main.js` ports `src/app/equalizer.rs` and
 
 ## The domain
 
-`tonalplayer.com` is a custom domain on the GitLab project (Deploy > Pages). Its DNS
-has an `A` record for `@` to `35.185.44.232` and the `TXT` verification record GitLab
-shows there.
+`tonalplayer.com` is served from the owner's own server. Update it by building again and
+copying the new folder there.

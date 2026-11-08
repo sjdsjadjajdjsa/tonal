@@ -12,7 +12,7 @@
 [![platforms](https://img.shields.io/badge/Linux%20·%20Windows%20·%20macOS-1ed760?style=flat-square&label=runs%20on&labelColor=0e0f12)](#install)
 [![license](https://img.shields.io/badge/MIT-1ed760?style=flat-square&label=license&labelColor=0e0f12)](LICENSE)
 
-**[Download](https://gitlab.com/sjdsjadjajdjsa/tonal/-/releases/permalink/latest)** &nbsp;·&nbsp; [Features](#features) &nbsp;·&nbsp; [Screenshots](#screenshots) &nbsp;·&nbsp; [Install](#install) &nbsp;·&nbsp; [Benchmarks](#benchmarks) &nbsp;·&nbsp; [How it works](#how-it-works)
+**[tonalplayer.com](https://tonalplayer.com)** &nbsp;·&nbsp; **[Download](https://gitlab.com/sjdsjadjajdjsa/tonal/-/releases/permalink/latest)** &nbsp;·&nbsp; [Features](#features) &nbsp;·&nbsp; [Screenshots](#screenshots) &nbsp;·&nbsp; [Install](#install) &nbsp;·&nbsp; [Benchmarks](#benchmarks) &nbsp;·&nbsp; [How it works](#how-it-works)
 
 <br>
 
