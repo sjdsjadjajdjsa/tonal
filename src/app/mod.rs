@@ -38,6 +38,43 @@ fn win32_hwnd(window: &slint::Window) -> Option<*mut std::ffi::c_void> {
     }
 }
 
+/// Windows can hand back parts of the window that weren't just painted as black, and
+/// Slint only repaints what changed, so still parts would stay black while the player
+/// bar keeps moving. A whole-window repaint whenever Windows may have dropped pixels,
+/// and once a second besides, puts everything back.
+#[cfg(windows)]
+fn full_repaints(window: &AppWindow) -> slint::Timer {
+    use slint::winit_030::{EventResult, WinitWindowAccessor, winit::event::WindowEvent};
+    let weak = window.as_weak();
+    let repaint = move || {
+        if let Some(w) = weak.upgrade() {
+            w.set_repaint(!w.get_repaint());
+        }
+    };
+    let on_event = repaint.clone();
+    window.window().on_winit_window_event(move |_, event| {
+        if matches!(
+            event,
+            WindowEvent::Focused(_)
+                | WindowEvent::Resized(_)
+                | WindowEvent::Moved(_)
+                | WindowEvent::Occluded(false)
+                | WindowEvent::ScaleFactorChanged { .. }
+                | WindowEvent::ThemeChanged(_)
+        ) {
+            on_event();
+        }
+        EventResult::Propagate
+    });
+    let timer = slint::Timer::default();
+    timer.start(
+        slint::TimerMode::Repeated,
+        std::time::Duration::from_secs(1),
+        repaint,
+    );
+    timer
+}
+
 pub fn run() -> anyhow::Result<()> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
@@ -92,6 +129,8 @@ pub fn run() -> anyhow::Result<()> {
     log::info!("Creating Tonal window");
     let window = AppWindow::new()?;
     log::info!("Window created");
+    #[cfg(windows)]
+    let _repaint = full_repaints(&window);
     #[cfg(target_os = "macos")]
     {
         use slint::winit_030::WinitWindowAccessor;

@@ -22,7 +22,9 @@ export component AppWindow inherits Window {
     preferred-height: 780px;
     min-width: root.mini ? 340px : 940px;
     min-height: (root.mini ? 150px : 520px) + root.titlebar-inset;
-    background: Theme.background;
+    /// Flipped to make Windows repaint the whole window (src/app/mod.rs).
+    in property <bool> repaint;
+    background: root.repaint ? Theme.background.transparentize(0.01) : Theme.background;
     default-font-family: "Inter";
     /// Set a moment after the window shows, so the first frame can fade everything in.
     private property <bool> opened;
