@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Tonal, a music player that moves with your music</title>
 <meta name="description" content="A light, native music player for Mac, Windows and Linux. YouTube Music, SoundCloud, Audius and your own files, with living themes, a bubbly equalizer and synced lyrics. Free and open source.">
 <meta name="theme-color" content="#0b0c0f">
@@ -14,145 +14,163 @@
 <meta property="og:description" content="Light, native and free. YouTube Music, SoundCloud, Audius and your own files.">
 <meta property="og:image" content="https://tonalplayer.com/assets/social-preview.png">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="preload" href="fonts/Inter-SemiBold.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="preload" href="fonts/Unbounded.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
 <script src="main.js" defer></script>
 </head>
 <body>
 <div class="glow" aria-hidden="true"></div>
 
-<header class="bar">
-  <a class="brand" href="#top"><img src="assets/icon.png" alt="" width="28" height="28"><span>tonal</span></a>
-  <nav>
-    <a href="#eq">Equalizer</a>
-    <a href="#features">Features</a>
-    <a href="#light">Light</a>
-    <a class="pill" href="#download">Download</a>
-  </nav>
-</header>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-eq" viewBox="0 0 24 24"><path d="M4 21v-7 M4 10V3 M12 21v-9 M12 8V3 M20 21v-5 M20 12V3 M2 14h4 M10 8h4 M18 16h4"/></symbol>
+  <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 22a10 10 0 1 1 10-10c0 2.8-2.2 4-4 4h-2.2a1.8 1.8 0 0 0-1.3 3l.3.3A1.8 1.8 0 0 1 12 22z M13.5 6.5a1 1 0 1 1-2 0a1 1 0 1 1 2 0z M18 10.5a1 1 0 1 1-2 0a1 1 0 1 1 2 0z M8.5 7.5a1 1 0 1 1-2 0a1 1 0 1 1 2 0z M7 12.5a1 1 0 1 1-2 0a1 1 0 1 1 2 0z"/></symbol>
+  <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7z"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.2v14H7z M13.8 5H17v14h-3.2z"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><path d="M18.5 5.1v13.8a1 1 0 0 1-1.6.8L8 13a1.2 1.2 0 0 1 0-2l8.9-6.7a1 1 0 0 1 1.6.8z M5 5h2v14H5z"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M5.5 5.1v13.8a1 1 0 0 0 1.6.8L16 13a1.2 1.2 0 0 0 0-2L7.1 4.3a1 1 0 0 0-1.6.8z M17 5h2v14h-2z"/></symbol>
+  <symbol id="i-volume" viewBox="0 0 24 24"><path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z M16 9a5 5 0 0 1 0 6 M19.4 18.4a9 9 0 0 0 0-12.8"/></symbol>
+  <symbol id="i-volume-off" viewBox="0 0 24 24"><path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z M22 9l-6 6 M16 9l6 6"/></symbol>
+</svg>
 
-<main id="top">
-  <section class="hero">
-    <div class="hero-text reveal">
-      <h1>A music player that <span class="moves">moves</span> with your music.</h1>
-      <p class="lead">Stream YouTube Music, SoundCloud and Audius, play your own files and bring your Spotify playlists along. Light, native and free.</p>
-      <div class="cta">
-        <a class="button primary" data-download href="https://gitlab.com/sjdsjadjajdjsa/tonal/-/releases/permalink/latest">
-          <span data-download-label>Download Tonal</span>
-        </a>
-        <a class="button" href="https://gitlab.com/sjdsjadjajdjsa/tonal">Source on GitLab</a>
+<div class="window" role="application" aria-label="Tonal">
+  <div class="titlebar" aria-hidden="true"><i></i><i></i><i></i><span>Tonal</span></div>
+
+  <nav class="sidebar" aria-label="Pages">
+    <a class="brand" href="#/"><i class="dot"></i>tonal</a>
+    <p class="group">Library</p>
+    <a class="nav" href="#/" data-view="home"><svg><use href="#i-home"/></svg><span>Home</span></a>
+    <a class="nav" href="#/equalizer" data-view="equalizer"><svg><use href="#i-eq"/></svg><span>Equalizer</span></a>
+    <a class="nav" href="#/themes" data-view="themes"><svg><use href="#i-palette"/></svg><span>Themes</span></a>
+    <a class="nav" href="#/light" data-view="light"><svg><use href="#i-sparkle"/></svg><span>Light</span></a>
+    <a class="nav" href="#/download" data-view="download"><svg><use href="#i-download"/></svg><span>Download</span></a>
+    <p class="group">Elsewhere</p>
+    <a class="nav out" href="https://gitlab.com/sjdsjadjajdjsa/tonal"><span>Source on GitLab</span></a>
+    <a class="nav out" href="https://gitlab.com/sjdsjadjajdjsa/tonal/-/blob/main/CHANGELOG.md"><span>Changelog</span></a>
+    <a class="nav out" href="https://gitlab.com/sjdsjadjajdjsa/tonal/-/issues"><span>Report a problem</span></a>
+  </nav>
+
+  <main class="panel" tabindex="-1">
+    <section class="view" data-view="home" aria-label="Home">
+      <div class="hero">
+        <div class="hero-text">
+          <h1>A music player that moves with your music.</h1>
+          <p class="lead">Stream YouTube Music, SoundCloud and Audius, play your own files and bring your Spotify playlists along. Light, native, free and open source, for Mac, Windows and Linux.</p>
+          <div class="cta">
+            <a class="button primary" data-download href="#/download"><svg><use href="#i-download"/></svg><span data-download-label>Download Tonal</span></a>
+            <a class="button" href="#/equalizer">Play with the equalizer</a>
+          </div>
+        </div>
+        <figure class="shot">
+          <img data-preview src="assets/hero.webp" width="1240" height="780" alt="Tonal playing a playlist over the Northern lights theme">
+        </figure>
       </div>
-      <p class="meta"><span data-version>Free and open source</span> · Mac, Windows and Linux</p>
-    </div>
-    <figure class="hero-shot reveal">
-      <img src="assets/hero.webp" width="1240" height="780" alt="Tonal playing a playlist over the Northern lights theme, with the wave visualizer along the bottom">
-    </figure>
-    <canvas class="wave" aria-hidden="true"></canvas>
-  </section>
+      <h2 class="list-head">What it does</h2>
+      <ol class="tracks">
+        <li data-shot="assets/search.webp"><span class="n">1</span><img src="assets/search.webp" alt=""><div><b>One search, four sources</b><small>YouTube Music, SoundCloud, Audius and your own files. No account, no Premium.</small></div></li>
+        <li data-shot="assets/album.webp"><span class="n">2</span><img src="assets/album.webp" alt=""><div><b>Artists and albums</b><small>Click any name for photos, popular songs, albums and similar artists.</small></div></li>
+        <li data-shot="assets/home.webp"><span class="n">3</span><img src="assets/home.webp" alt=""><div><b>Mixes, radio and smart shuffle</b><small>On repeat, Rediscover, and endless radio when the queue runs out.</small></div></li>
+        <li data-shot="assets/queue.webp"><span class="n">4</span><img src="assets/queue.webp" alt=""><div><b>Synced lyrics and a sleep timer</b><small>Lyrics line by line, and a timer that fades the music out.</small></div></li>
+        <li data-shot="assets/equalizer.webp"><span class="n">5</span><img src="assets/equalizer.webp" alt=""><div><b>Equalizer and headphones</b><small>Six bands, your own presets, and corrections for thousands of headphones.</small></div></li>
+        <li data-shot="assets/mini.webp"><span class="n">6</span><img src="assets/mini.webp" alt=""><div><b>Mini player, media keys, Discord</b><small>A small window, every media key, and your Discord status.</small></div></li>
+      </ol>
+    </section>
 
-  <section id="eq" class="eq-section">
-    <div class="section-head reveal">
-      <h2>Go on, press a preset.</h2>
-      <p>This is Tonal's equalizer. Each band springs into place and pops with its own note. Turn your sound on.</p>
-    </div>
-    <div class="eq-card reveal">
-      <div class="chips" role="group" aria-label="Equalizer presets"></div>
-      <svg class="eq-graph" viewBox="0 0 600 240" role="img" aria-label="Equalizer curve with six bands">
-        <defs>
-          <linearGradient id="eqfill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#1ed760" stop-opacity="0.28"/>
-            <stop offset="1" stop-color="#1ed760" stop-opacity="0"/>
-          </linearGradient>
-        </defs>
-        <line class="zero" x1="0" x2="600" y1="120" y2="120"/>
-        <path class="eq-fill" fill="url(#eqfill)"/>
-        <path class="eq-line"/>
-        <g class="eq-rings"></g>
-        <g class="eq-dots"></g>
-      </svg>
-      <div class="eq-labels"><span>60</span><span>150</span><span>400</span><span>1k</span><span>3k</span><span>8k</span></div>
-    </div>
-  </section>
+    <section class="view" data-view="equalizer" aria-label="Equalizer" hidden>
+      <h1>Press a preset.</h1>
+      <p class="lead">This is Tonal's equalizer. Each band springs into place and pops with its own note, so turn your sound on.</p>
+      <div class="eq">
+        <div class="chips" role="group" aria-label="Equalizer presets"></div>
+        <svg class="eq-graph" viewBox="0 0 600 240" role="img" aria-label="Equalizer curve with six bands">
+          <defs>
+            <linearGradient id="eqfill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#1ed760" stop-opacity="0.28"/>
+              <stop offset="1" stop-color="#1ed760" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <line class="zero" x1="0" x2="600" y1="120" y2="120"/>
+          <path class="eq-fill" fill="url(#eqfill)"/>
+          <path class="eq-line"/>
+          <g class="eq-rings"></g>
+          <g class="eq-dots"></g>
+        </svg>
+        <div class="eq-labels"><span>60</span><span>150</span><span>400</span><span>1k</span><span>3k</span><span>8k</span></div>
+      </div>
+      <p class="aside">In the app you can also drag each band, hold a button to hear the song without the equalizer, and keep a different setup for every pair of headphones.</p>
+    </section>
 
-  <section class="showcase">
-    <figure class="reel reveal">
-      <img src="assets/themes-reel.webp" width="640" height="403" loading="lazy" alt="Living themes moving while a song plays: Northern lights, Misty pines, Outrun, Sakura drift and City rain">
-    </figure>
-    <div class="showcase-text reveal">
-      <h2>Fifteen living themes.</h2>
-      <p>Aurora, dunes, ocean tide, synthwave, sakura petals, city rain and more, each with its own palettes. They can follow the playing album's colours, and react to the beat.</p>
-    </div>
-  </section>
+    <section class="view" data-view="themes" aria-label="Themes" hidden>
+      <h1>Fifteen living themes.</h1>
+      <p class="lead">Each theme is a moving scene with its own palettes. A theme can follow the colours of the album that's playing, react to the beat, or belong to one playlist.</p>
+      <figure class="shot wide"><img src="assets/themes-reel.webp" width="640" height="403" loading="lazy" alt="Living themes moving while a song plays: Northern lights, Misty pines, Outrun, Sakura drift and City rain"></figure>
+      <ul class="scenes">
+        <li>Aurora</li><li>Golden dunes</li><li>Ocean tide</li><li>Misty pines</li><li>Liquid glass</li><li>Outrun</li><li>Sakura drift</li><li>City rain</li><li>Lavender haze</li><li>and six more</li>
+      </ul>
+    </section>
 
-  <section id="features" class="features">
-    <div class="section-head reveal">
-      <h2>Everything a player should do.</h2>
-    </div>
-    <div class="grid">
-      <article class="card reveal"><img src="assets/search.webp" loading="lazy" alt="Search results from YouTube Music"><h3>One search, four sources</h3><p>YouTube Music, SoundCloud, Audius and your own files. No account, no Premium.</p></article>
-      <article class="card reveal"><img src="assets/album.webp" loading="lazy" alt="An album page"><h3>Artists and albums</h3><p>Click any name for photos, popular songs, albums and similar artists.</p></article>
-      <article class="card reveal"><img src="assets/queue.webp" loading="lazy" alt="The queue panel"><h3>Mixes and radio</h3><p>On repeat, Rediscover and endless radio when the queue runs out. Smart shuffle keeps artists apart.</p></article>
-      <article class="card reveal"><img src="assets/equalizer.webp" loading="lazy" alt="The equalizer panel"><h3>Equalizer and headphones</h3><p>Six bands, your own presets and corrections for thousands of headphones, kept per output.</p></article>
-      <article class="card reveal"><img src="assets/home.webp" loading="lazy" alt="Home with recently played songs"><h3>Lyrics, sleep timer, Discord</h3><p>Synced lyrics, a sleep timer that fades out, and your Discord status shows what plays.</p></article>
-      <article class="card reveal"><img src="assets/mini.webp" loading="lazy" alt="The mini player"><h3>Mini player and media keys</h3><p>A small window that stays out of the way, and every media key on your keyboard.</p></article>
-    </div>
-  </section>
+    <section class="view" data-view="light" aria-label="Light" hidden>
+      <h1>Light on your computer.</h1>
+      <p class="lead">Memory used while playing a song. Shorter is better.</p>
+      <div class="bars" role="img" aria-label="Memory while playing: Tonal 128 MB, Strawberry 133 MB, Amberol 182 MB, Tauon 228 MB, Riff 495 MB, YouTube Music 805 MB, Spotify 1282 MB">
+        <div class="row me"><span>Tonal</span><i style="--v:128"></i><b>128 MB</b></div>
+        <div class="row"><span>Strawberry</span><i style="--v:133"></i><b>133 MB</b></div>
+        <div class="row"><span>Amberol</span><i style="--v:182"></i><b>182 MB</b></div>
+        <div class="row"><span>Tauon</span><i style="--v:228"></i><b>228 MB</b></div>
+        <div class="row"><span>Riff</span><i style="--v:495"></i><b>495 MB</b></div>
+        <div class="row"><span>YouTube Music</span><i style="--v:805"></i><b>805 MB</b></div>
+        <div class="row"><span>Spotify</span><i style="--v:1282"></i><b>1,282 MB</b></div>
+      </div>
+      <p class="aside">Measured with <a href="https://gitlab.com/sjdsjadjajdjsa/tonal/-/blob/main/bench/bench.py">bench.py</a> on Arch Linux with a Ryzen 5 7600, October 2026, with Tonal's waves on. Strawberry, Amberol and Tauon play a local file; the others stream, which costs more. With its waves off, Tonal uses 118 MB.</p>
+    </section>
 
-  <section id="light" class="light">
-    <div class="section-head reveal">
-      <h2>Light on your computer.</h2>
-      <p>Memory used while playing a song. Shorter is better.</p>
-    </div>
-    <div class="bars reveal" role="img" aria-label="Memory while playing: Tonal 128 MB, Strawberry 133 MB, Amberol 182 MB, Tauon 228 MB, Riff 495 MB, YouTube Music 805 MB, Spotify 1282 MB">
-      <div class="row me"><span>Tonal</span><i style="--v:128"></i><b>128 MB</b></div>
-      <div class="row"><span>Strawberry</span><i style="--v:133"></i><b>133 MB</b></div>
-      <div class="row"><span>Amberol</span><i style="--v:182"></i><b>182 MB</b></div>
-      <div class="row"><span>Tauon</span><i style="--v:228"></i><b>228 MB</b></div>
-      <div class="row"><span>Riff</span><i style="--v:495"></i><b>495 MB</b></div>
-      <div class="row"><span>YouTube Music</span><i style="--v:805"></i><b>805 MB</b></div>
-      <div class="row"><span>Spotify</span><i style="--v:1282"></i><b>1,282 MB</b></div>
-    </div>
-    <p class="source reveal">Measured with <a href="https://gitlab.com/sjdsjadjajdjsa/tonal/-/blob/main/bench/bench.py">bench.py</a> on Arch Linux, Ryzen 5 7600, October 2026. Strawberry, Amberol and Tauon play a local file; the others stream. Tonal with its waves on.</p>
-  </section>
+    <section class="view" data-view="download" aria-label="Download" hidden>
+      <h1>Get Tonal.</h1>
+      <p class="lead" data-version-line>Free and open source.</p>
+      <div class="groups">
+        <div class="group-card" data-os="mac">
+          <h2>Mac</h2>
+          <div class="setting"><div><b>Tonal for Mac</b><small>Apple Silicon, macOS 14.4 or newer</small></div><a class="button primary" href="https://gitlab.com/sjdsjadjajdjsa/tonal/-/releases/permalink/latest/downloads/tonal-macos-arm64.dmg">Download .dmg</a></div>
+          <div class="setting stack"><div><b>Then run this once in Terminal</b><small>Tonal isn't signed by Apple, so macOS calls it damaged until you do.</small></div><button class="copy" type="button" data-copy="xattr -dr com.apple.quarantine /Applications/Tonal.app"><code>xattr -dr com.apple.quarantine /Applications/Tonal.app</code><span>Copy</span></button></div>
+        </div>
+        <div class="group-card" data-os="windows">
+          <h2>Windows</h2>
+          <div class="setting"><div><b>Installer</b><small>Windows 10 or 11. mpv and yt-dlp are inside.</small></div><a class="button primary" href="https://gitlab.com/sjdsjadjajdjsa/tonal/-/releases/permalink/latest/downloads/tonal-setup-x86_64.exe">Download</a></div>
+          <div class="setting"><div><b>Portable</b><small>Unzip anywhere, even a USB stick.</small></div><a class="button" href="https://gitlab.com/sjdsjadjajdjsa/tonal/-/releases/permalink/latest/downloads/tonal-windows-x86_64.zip">.zip</a></div>
+        </div>
+        <div class="group-card" data-os="linux">
+          <h2>Linux</h2>
+          <div class="setting"><div><b>AppImage</b><small>glibc 2.35 or newer. Needs mpv.</small></div><a class="button primary" href="https://gitlab.com/sjdsjadjajdjsa/tonal/-/releases/permalink/latest/downloads/tonal-x86_64.AppImage">Download</a></div>
+          <div class="setting"><div><b>Plain folder</b><small>The same build as a .tar.gz.</small></div><a class="button" href="https://gitlab.com/sjdsjadjajdjsa/tonal/-/releases/permalink/latest/downloads/tonal-linux-x86_64.tar.gz">.tar.gz</a></div>
+        </div>
+      </div>
+      <p class="aside">Tonal updates itself from Settings, Updates. Arch users can build it with the PKGBUILD in <code>packaging/aur/tonal</code>.</p>
+    </section>
+  </main>
 
-  <section id="download" class="download">
-    <div class="section-head reveal">
-      <h2>Get Tonal.</h2>
-      <p data-version-line>Free, open source and under 30 MB.</p>
+  <footer class="player" aria-label="Player">
+    <canvas class="waves" aria-hidden="true"></canvas>
+    <div class="now">
+      <img src="assets/icon.png" width="48" height="48" alt="">
+      <div><b data-now>Home</b><small data-version>Tonal</small></div>
+      <button class="icon heart" type="button" aria-label="Like" aria-pressed="false"><svg><use href="#i-heart"/></svg></button>
     </div>
-    <div class="platforms">
-      <article class="platform reveal" data-os="mac">
-        <h3>Mac</h3>
-        <p>Apple Silicon, macOS 14.4 or newer.</p>
-        <a class="button primary" href="https://gitlab.com/sjdsjadjajdjsa/tonal/-/releases/permalink/latest/downloads/tonal-macos-arm64.dmg">Download .dmg</a>
-        <p class="note">Tonal isn't signed by Apple, so macOS calls it damaged. Run this once in Terminal after dragging it to Applications:</p>
-        <button class="copy" type="button" data-copy="xattr -dr com.apple.quarantine /Applications/Tonal.app"><code>xattr -dr com.apple.quarantine /Applications/Tonal.app</code><span>Copy</span></button>
-      </article>
-      <article class="platform reveal" data-os="windows">
-        <h3>Windows</h3>
-        <p>Windows 10 or 11. mpv and yt-dlp are inside.</p>
-        <a class="button primary" href="https://gitlab.com/sjdsjadjajdjsa/tonal/-/releases/permalink/latest/downloads/tonal-setup-x86_64.exe">Download installer</a>
-        <a class="link" href="https://gitlab.com/sjdsjadjajdjsa/tonal/-/releases/permalink/latest/downloads/tonal-windows-x86_64.zip">Portable .zip</a>
-        <p class="note">Windows says the publisher is unknown: click More info, then Run anyway.</p>
-      </article>
-      <article class="platform reveal" data-os="linux">
-        <h3>Linux</h3>
-        <p>Any distribution with glibc 2.35 or newer. Needs mpv.</p>
-        <a class="button primary" href="https://gitlab.com/sjdsjadjajdjsa/tonal/-/releases/permalink/latest/downloads/tonal-x86_64.AppImage">Download AppImage</a>
-        <a class="link" href="https://gitlab.com/sjdsjadjajdjsa/tonal/-/releases/permalink/latest/downloads/tonal-linux-x86_64.tar.gz">Plain .tar.gz</a>
-        <p class="note">Arch: build it with the PKGBUILD in <code>packaging/aur/tonal</code>.</p>
-      </article>
+    <div class="transport">
+      <div class="buttons">
+        <button class="icon" type="button" data-step="-1" aria-label="Previous page"><svg class="fill"><use href="#i-prev"/></svg></button>
+        <button class="play" type="button" aria-label="Pause motion"><svg class="fill"><use href="#i-pause"/></svg></button>
+        <button class="icon" type="button" data-step="1" aria-label="Next page"><svg class="fill"><use href="#i-next"/></svg></button>
+      </div>
+      <div class="progress"><span data-elapsed>0:00</span><div class="scrub" role="slider" tabindex="0" aria-label="Scroll the page" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div><span data-total>3:30</span></div>
     </div>
-  </section>
-</main>
-
-<footer class="foot">
-  <span><img src="assets/icon.png" alt="" width="20" height="20"> Tonal · MIT license</span>
-  <nav>
-    <a href="https://gitlab.com/sjdsjadjajdjsa/tonal">GitLab</a>
-    <a href="https://gitlab.com/sjdsjadjajdjsa/tonal/-/blob/main/CHANGELOG.md">Changelog</a>
-    <a href="https://gitlab.com/sjdsjadjajdjsa/tonal/-/issues">Report a problem</a>
-  </nav>
-</footer>
+    <div class="right">
+      <a class="icon" href="#/equalizer" aria-label="Equalizer"><svg><use href="#i-eq"/></svg></a>
+      <button class="icon" type="button" data-mute aria-label="Mute the equalizer sounds"><svg><use href="#i-volume"/></svg></button>
+      <input class="volume" type="range" min="0" max="100" value="70" aria-label="Equalizer sound volume">
+    </div>
+  </footer>
+</div>
 </body>
 </html>
