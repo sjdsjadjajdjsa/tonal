@@ -6,8 +6,25 @@ cd "$(dirname "$0")/.."
 out=${1:-public}
 rm -rf "$out"
 mkdir -p "$out/assets" "$out/fonts"
-cp site/index.html site/style.css site/main.js "$out/"
+cp site/index.html site/404.html site/style.css site/main.js site/music.js site/scenes.js "$out/"
+cp -R site/og "$out/og"
+# Each page also lives at its own address, with its own title and share picture.
+page() {
+    mkdir -p "$out/$1"
+    sed -e "s|<title>[^<]*</title>|<title>$2</title>|" \
+        -e "s|og:url\" content=\"https://tonalplayer.com/\"|og:url\" content=\"https://tonalplayer.com/$1/\"|" \
+        -e "s|rel=\"canonical\" href=\"https://tonalplayer.com/\"|rel=\"canonical\" href=\"https://tonalplayer.com/$1/\"|" \
+        -e "s|og:title\" content=\"[^\"]*\"|og:title\" content=\"$2\"|" \
+        -e "s|og:description\" content=\"[^\"]*\"|og:description\" content=\"$3\"|" \
+        -e "s|/og/home.png|/og/$1.png|" \
+        site/index.html > "$out/$1/index.html"
+}
+page equalizer "Equalizer, Tonal" "Press a preset and hear it: Tonal's equalizer, live in your browser."
+page themes "Living themes, Tonal" "Pick a scene and watch the window turn into it."
+page light "Light on your computer, Tonal" "Tonal uses 128 MB while playing. Spotify uses 1,282 MB."
+page download "Download Tonal" "Free for Mac, Windows and Linux."
 cp ui/icon.png docs/images/social-preview.png "$out/assets/"
+cp ui/icon.png "$out/favicon.ico"
 for image in hero themes-reel search album queue equalizer home mini; do
     cp "docs/images/$image.webp" "$out/assets/"
 done

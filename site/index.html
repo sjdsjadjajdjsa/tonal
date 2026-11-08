@@ -6,23 +6,27 @@
 <title>Tonal, a music player that moves with your music</title>
 <meta name="description" content="A light, native music player for Mac, Windows and Linux. YouTube Music, SoundCloud, Audius and your own files, with living themes, a bubbly equalizer and synced lyrics. Free and open source.">
 <meta name="theme-color" content="#0b0c0f">
-<link rel="icon" href="assets/icon.png">
+<link rel="icon" href="/assets/icon.png">
 <link rel="canonical" href="https://tonalplayer.com/">
 <meta property="og:type" content="website">
+<meta property="og:site_name" content="Tonal">
 <meta property="og:url" content="https://tonalplayer.com/">
 <meta property="og:title" content="Tonal, a music player that moves with your music">
 <meta property="og:description" content="Light, native and free. YouTube Music, SoundCloud, Audius and your own files.">
-<meta property="og:image" content="https://tonalplayer.com/assets/social-preview.png">
+<meta property="og:image" content="https://tonalplayer.com/og/home.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="preload" href="fonts/Unbounded.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="style.css">
-<script src="main.js" defer></script>
+<link rel="preload" href="/fonts/Unbounded.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<script type="module" src="/main.js"></script>
 </head>
 <body>
 <div class="glow" aria-hidden="true"></div>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><path d="M18 11a7 7 0 1 1-14 0a7 7 0 1 1 14 0z M21 21l-4.35-4.35"/></symbol>
   <symbol id="i-eq" viewBox="0 0 24 24"><path d="M4 21v-7 M4 10V3 M12 21v-9 M12 8V3 M20 21v-5 M20 12V3 M2 14h4 M10 8h4 M18 16h4"/></symbol>
   <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 22a10 10 0 1 1 10-10c0 2.8-2.2 4-4 4h-2.2a1.8 1.8 0 0 0-1.3 3l.3.3A1.8 1.8 0 0 1 12 22z M13.5 6.5a1 1 0 1 1-2 0a1 1 0 1 1 2 0z M18 10.5a1 1 0 1 1-2 0a1 1 0 1 1 2 0z M8.5 7.5a1 1 0 1 1-2 0a1 1 0 1 1 2 0z M7 12.5a1 1 0 1 1-2 0a1 1 0 1 1 2 0z"/></symbol>
   <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></symbol>
@@ -34,19 +38,29 @@
   <symbol id="i-next" viewBox="0 0 24 24"><path d="M5.5 5.1v13.8a1 1 0 0 0 1.6.8L16 13a1.2 1.2 0 0 0 0-2L7.1 4.3a1 1 0 0 0-1.6.8z M17 5h2v14h-2z"/></symbol>
   <symbol id="i-volume" viewBox="0 0 24 24"><path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z M16 9a5 5 0 0 1 0 6 M19.4 18.4a9 9 0 0 0 0-12.8"/></symbol>
   <symbol id="i-volume-off" viewBox="0 0 24 24"><path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z M22 9l-6 6 M16 9l6 6"/></symbol>
+  <symbol id="i-lyrics" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z M7 8h10 M7 12h6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
 </svg>
 
 <div class="window" role="application" aria-label="Tonal">
-  <div class="titlebar" aria-hidden="true"><i></i><i></i><i></i><span>Tonal</span></div>
+  <canvas class="scene" aria-hidden="true"></canvas>
+
+  <div class="titlebar" aria-hidden="true">
+    <span class="lights"><i></i><i></i><i></i></span>
+    <span class="title" data-title>Tonal</span>
+    <span class="controls"><svg viewBox="0 0 12 12"><path d="M2 6h8"/></svg><svg viewBox="0 0 12 12"><path d="M2.5 2.5h7v7h-7z"/></svg><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7 M9.5 2.5l-7 7"/></svg></span>
+  </div>
 
   <nav class="sidebar" aria-label="Pages">
-    <a class="brand" href="#/"><i class="dot"></i>tonal</a>
+    <a class="brand" href="/"><i class="dot"></i>tonal</a>
+    <button class="nav search" type="button" data-palette><svg><use href="#i-search"/></svg><span>Search</span><kbd data-mod>Ctrl K</kbd></button>
     <p class="group">Library</p>
-    <a class="nav" href="#/" data-view="home"><svg><use href="#i-home"/></svg><span>Home</span></a>
-    <a class="nav" href="#/equalizer" data-view="equalizer"><svg><use href="#i-eq"/></svg><span>Equalizer</span></a>
-    <a class="nav" href="#/themes" data-view="themes"><svg><use href="#i-palette"/></svg><span>Themes</span></a>
-    <a class="nav" href="#/light" data-view="light"><svg><use href="#i-sparkle"/></svg><span>Light</span></a>
-    <a class="nav" href="#/download" data-view="download"><svg><use href="#i-download"/></svg><span>Download</span></a>
+    <a class="nav" href="/" data-view="home"><svg><use href="#i-home"/></svg><span>Home</span></a>
+    <a class="nav" href="/equalizer/" data-view="equalizer"><svg><use href="#i-eq"/></svg><span>Equalizer</span></a>
+    <a class="nav" href="/themes/" data-view="themes"><svg><use href="#i-palette"/></svg><span>Themes</span></a>
+    <a class="nav" href="/light/" data-view="light"><svg><use href="#i-sparkle"/></svg><span>Light</span></a>
+    <a class="nav" href="/download/" data-view="download"><svg><use href="#i-download"/></svg><span>Download</span></a>
     <p class="group">Elsewhere</p>
     <a class="nav out" href="https://gitlab.com/sjdsjadjajdjsa/tonal"><span>Source on GitLab</span></a>
     <a class="nav out" href="https://gitlab.com/sjdsjadjajdjsa/tonal/-/blob/main/CHANGELOG.md"><span>Changelog</span></a>
@@ -60,35 +74,35 @@
           <h1>A music player that moves with your music.</h1>
           <p class="lead">Stream YouTube Music, SoundCloud and Audius, play your own files and bring your Spotify playlists along. Light, native, free and open source, for Mac, Windows and Linux.</p>
           <div class="cta">
-            <a class="button primary" data-download href="#/download"><svg><use href="#i-download"/></svg><span data-download-label>Download Tonal</span></a>
-            <a class="button" href="#/equalizer">Play with the equalizer</a>
+            <a class="button primary" data-download href="/download/"><svg><use href="#i-download"/></svg><span data-download-label>Download Tonal</span></a>
+            <button class="button" type="button" data-play-hint><svg class="fill"><use href="#i-play"/></svg><span>Press play</span></button>
           </div>
         </div>
         <figure class="shot">
-          <img data-preview src="assets/hero.webp" width="1240" height="780" alt="Tonal playing a playlist over the Northern lights theme">
+          <img data-preview src="/assets/hero.webp" width="1240" height="780" alt="Tonal playing a playlist over the Northern lights theme">
         </figure>
       </div>
       <h2 class="list-head">What it does</h2>
       <ol class="tracks">
-        <li data-shot="assets/search.webp"><span class="n">1</span><img src="assets/search.webp" alt=""><div><b>One search, four sources</b><small>YouTube Music, SoundCloud, Audius and your own files. No account, no Premium.</small></div></li>
-        <li data-shot="assets/album.webp"><span class="n">2</span><img src="assets/album.webp" alt=""><div><b>Artists and albums</b><small>Click any name for photos, popular songs, albums and similar artists.</small></div></li>
-        <li data-shot="assets/home.webp"><span class="n">3</span><img src="assets/home.webp" alt=""><div><b>Mixes, radio and smart shuffle</b><small>On repeat, Rediscover, and endless radio when the queue runs out.</small></div></li>
-        <li data-shot="assets/queue.webp"><span class="n">4</span><img src="assets/queue.webp" alt=""><div><b>Synced lyrics and a sleep timer</b><small>Lyrics line by line, and a timer that fades the music out.</small></div></li>
-        <li data-shot="assets/equalizer.webp"><span class="n">5</span><img src="assets/equalizer.webp" alt=""><div><b>Equalizer and headphones</b><small>Six bands, your own presets, and corrections for thousands of headphones.</small></div></li>
-        <li data-shot="assets/mini.webp"><span class="n">6</span><img src="assets/mini.webp" alt=""><div><b>Mini player, media keys, Discord</b><small>A small window, every media key, and your Discord status.</small></div></li>
+        <li data-shot="/assets/search.webp"><span class="n">1</span><img src="/assets/search.webp" alt=""><div><b>One search, four sources</b><small>YouTube Music, SoundCloud, Audius and your own files. No account, no Premium.</small></div></li>
+        <li data-shot="/assets/album.webp"><span class="n">2</span><img src="/assets/album.webp" alt=""><div><b>Artists and albums</b><small>Click any name for photos, popular songs, albums and similar artists.</small></div></li>
+        <li data-shot="/assets/home.webp"><span class="n">3</span><img src="/assets/home.webp" alt=""><div><b>Mixes, radio and smart shuffle</b><small>On repeat, Rediscover, and endless radio when the queue runs out.</small></div></li>
+        <li data-shot="/assets/queue.webp"><span class="n">4</span><img src="/assets/queue.webp" alt=""><div><b>Synced lyrics and a sleep timer</b><small>Lyrics line by line, and a timer that fades the music out.</small></div></li>
+        <li data-shot="/assets/equalizer.webp"><span class="n">5</span><img src="/assets/equalizer.webp" alt=""><div><b>Equalizer and headphones</b><small>Six bands, your own presets, and corrections for thousands of headphones.</small></div></li>
+        <li data-shot="/assets/mini.webp"><span class="n">6</span><img src="/assets/mini.webp" alt=""><div><b>Mini player, media keys, Discord</b><small>A small window, every media key, and your Discord status.</small></div></li>
       </ol>
     </section>
 
     <section class="view" data-view="equalizer" aria-label="Equalizer" hidden>
-      <h1>Press a preset.</h1>
-      <p class="lead">This is Tonal's equalizer. Each band springs into place and pops with its own note, so turn your sound on.</p>
+      <h1>Hear the difference.</h1>
+      <p class="lead">This is Tonal's equalizer, on the song in the player bar. Press play, then a preset: each band springs into place, pops with its own note and changes what you hear.</p>
       <div class="eq">
         <div class="chips" role="group" aria-label="Equalizer presets"></div>
         <svg class="eq-graph" viewBox="0 0 600 240" role="img" aria-label="Equalizer curve with six bands">
           <defs>
             <linearGradient id="eqfill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stop-color="#1ed760" stop-opacity="0.28"/>
-              <stop offset="1" stop-color="#1ed760" stop-opacity="0"/>
+              <stop offset="0" stop-color="var(--accent)" stop-opacity="0.3"/>
+              <stop offset="1" stop-color="var(--accent)" stop-opacity="0"/>
             </linearGradient>
           </defs>
           <line class="zero" x1="0" x2="600" y1="120" y2="120"/>
@@ -99,16 +113,15 @@
         </svg>
         <div class="eq-labels"><span>60</span><span>150</span><span>400</span><span>1k</span><span>3k</span><span>8k</span></div>
       </div>
-      <p class="aside">In the app you can also drag each band, hold a button to hear the song without the equalizer, and keep a different setup for every pair of headphones.</p>
+      <p class="aside">Keys 1 to 6 pick the presets, like in the app. There you can also drag each band, hold a button to hear the song without the equalizer, and keep a different setup for every pair of headphones.</p>
     </section>
 
     <section class="view" data-view="themes" aria-label="Themes" hidden>
-      <h1>Fifteen living themes.</h1>
-      <p class="lead">Each theme is a moving scene with its own palettes. A theme can follow the colours of the album that's playing, react to the beat, or belong to one playlist.</p>
-      <figure class="shot wide"><img src="assets/themes-reel.webp" width="640" height="403" loading="lazy" alt="Living themes moving while a song plays: Northern lights, Misty pines, Outrun, Sakura drift and City rain"></figure>
-      <ul class="scenes">
-        <li>Aurora</li><li>Golden dunes</li><li>Ocean tide</li><li>Misty pines</li><li>Liquid glass</li><li>Outrun</li><li>Sakura drift</li><li>City rain</li><li>Lavender haze</li><li>and six more</li>
-      </ul>
+      <h1>Living themes.</h1>
+      <p class="lead">Pick one and this window turns into it, the way Tonal does. In the app there are fifteen scenes and eighteen palettes, and a theme can follow the playing album's colours or react to the beat.</p>
+      <div class="themes" role="radiogroup" aria-label="Theme"></div>
+      <div class="setting-row"><div><b>Animations</b><small>Scenes, page changes and the waves move.</small></div><button class="switch" type="button" role="switch" aria-checked="true" data-motion><i></i></button></div>
+      <figure class="shot wide"><img src="/assets/themes-reel.webp" width="640" height="403" loading="lazy" alt="Living themes moving in the app: Northern lights, Misty pines, Outrun, Sakura drift and City rain"></figure>
     </section>
 
     <section class="view" data-view="light" aria-label="Light" hidden>
@@ -150,25 +163,44 @@
     </section>
   </main>
 
+  <section class="nowplaying" aria-label="Now playing" hidden>
+    <button class="icon close" type="button" aria-label="Close now playing" data-close-now><svg><use href="#i-down"/></svg></button>
+    <div class="np-main">
+      <div class="cover big" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M2 15c2.5 0 3-5 6-5s3.5 7 6.5 7 3.5-9 7.5-9"/></svg></div>
+      <h2>First Light</h2>
+      <p>Tonal, made in code for this page</p>
+    </div>
+    <ol class="lyrics" aria-label="Lyrics"></ol>
+  </section>
+
+  <dialog class="palette" aria-label="Quick search">
+    <form method="dialog">
+      <div class="field"><svg><use href="#i-search"/></svg><input type="text" placeholder="Go to a page, preset, theme or action" autocomplete="off" spellcheck="false" aria-label="Search"></div>
+      <ul role="listbox"></ul>
+      <p class="keys"><kbd>Space</kbd> play <kbd>1</kbd>–<kbd>6</kbd> presets <kbd>←</kbd><kbd>→</kbd> pages <kbd>L</kbd> lyrics</p>
+    </form>
+  </dialog>
+
   <footer class="player" aria-label="Player">
     <canvas class="waves" aria-hidden="true"></canvas>
     <div class="now">
-      <img src="assets/icon.png" width="48" height="48" alt="">
-      <div><b data-now>Home</b><small data-version>Tonal</small></div>
+      <button class="cover" type="button" aria-label="Open now playing" data-open-now><svg viewBox="0 0 24 24"><path d="M2 15c2.5 0 3-5 6-5s3.5 7 6.5 7 3.5-9 7.5-9"/></svg></button>
+      <div><b>First Light</b><small data-version>Tonal</small></div>
       <button class="icon heart" type="button" aria-label="Like" aria-pressed="false"><svg><use href="#i-heart"/></svg></button>
     </div>
     <div class="transport">
       <div class="buttons">
         <button class="icon" type="button" data-step="-1" aria-label="Previous page"><svg class="fill"><use href="#i-prev"/></svg></button>
-        <button class="play" type="button" aria-label="Pause motion"><svg class="fill"><use href="#i-pause"/></svg></button>
+        <button class="play" type="button" aria-label="Play"><svg class="fill"><use href="#i-play"/></svg></button>
         <button class="icon" type="button" data-step="1" aria-label="Next page"><svg class="fill"><use href="#i-next"/></svg></button>
       </div>
-      <div class="progress"><span data-elapsed>0:00</span><div class="scrub" role="slider" tabindex="0" aria-label="Scroll the page" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div><span data-total>3:30</span></div>
+      <div class="progress"><span data-elapsed>0:00</span><div class="scrub" role="slider" tabindex="0" aria-label="Song position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div><span data-total>0:23</span></div>
     </div>
     <div class="right">
-      <a class="icon" href="#/equalizer" aria-label="Equalizer"><svg><use href="#i-eq"/></svg></a>
-      <button class="icon" type="button" data-mute aria-label="Mute the equalizer sounds"><svg><use href="#i-volume"/></svg></button>
-      <input class="volume" type="range" min="0" max="100" value="70" aria-label="Equalizer sound volume">
+      <a class="icon" href="/equalizer/" data-link aria-label="Equalizer"><svg><use href="#i-eq"/></svg></a>
+      <button class="icon" type="button" data-open-now aria-label="Lyrics"><svg><use href="#i-lyrics"/></svg></button>
+      <button class="icon" type="button" data-mute aria-label="Mute"><svg><use href="#i-volume"/></svg></button>
+      <input class="volume" type="range" min="0" max="100" value="70" aria-label="Volume">
     </div>
   </footer>
 </div>

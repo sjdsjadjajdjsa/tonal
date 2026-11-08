@@ -1,7 +1,8 @@
 # tonalplayer.com
 
 One page that feels like opening Tonal: plain HTML, CSS and a little JavaScript, no
-build tools. `build.sh` puts it together in one folder that any web server can serve. GitLab
+build tools. `build.sh` puts it together in one folder that any web server can serve. Point the
+server's 404 page at `404.html`. GitLab
 Pages also publishes it whenever a push to `main` changes `site/`, `docs/images/` or
 the icon and fonts.
 
@@ -18,11 +19,28 @@ push.
 ## The idea
 
 The page is the app. The whole site is one Tonal window (after Poolsuite in
-web-refs): the sidebar is the navigation, each page swaps in with Tonal's own page
-transition, and the player bar works. Play and pause stop every moving thing, the
-progress bar is the page's scroll and can be dragged, the arrows step through the
-pages, the heart rings the app's like bell and the volume slider sets the sound of the
-equalizer. Home's feature list is a track list: hovering a row shows that screen.
+web-refs), and it behaves like Tonal:
+
+- **Pages** have real addresses (`/equalizer/` and so on, each with its own title and
+  share picture in `og/`) and swap in with Tonal's page transition.
+- **The player bar plays a song**, "First Light", made in code by `music.js` (chords,
+  bass, drums and bells on Web Audio, so there are no rights to clear). It goes through
+  Tonal's six equalizer bands and a limiter; the waves along the bar follow its levels
+  and settle when it pauses. The progress bar seeks, the heart rings the like bell, the
+  volume slider is the master volume. Nothing makes a sound before the first press of
+  play.
+- **Living themes** (`scenes.js`): seven of the app's gallery looks painted live behind
+  the window, with the app's palettes. Picking one on the Themes page restyles the
+  window and its accent and is remembered. The Animations switch there stops all motion.
+- **Now playing**: the cover in the bar (or L) opens a big cover and synced lyrics.
+- **Keys**: Ctrl or Cmd K opens quick search, Space plays, 1 to 6 pick presets, the
+  arrows step through pages.
+- **Interface sounds**: soft taps on page changes, bubbles on presets, bells on like.
+- **The title bar** matches the visitor's system: traffic lights on a Mac, buttons on
+  the right on Windows, a close button on Linux.
+- **404.html** is the window with nothing loaded and Tonal's error toast.
+
+Home's feature list is a track list: hovering a row shows that screen.
 
 The equalizer page is the app's own, with the same presets, the staggered springs,
 the pops and the bubble notes (`main.js` ports `src/app/equalizer.rs` and
@@ -49,6 +67,10 @@ the pops and the bubble notes (`main.js` ports `src/app/equalizer.rs` and
   same window larger. The download group for the visitor's system moves to the top.
 - Check every page at 390, 1440 and 3440 wide before pushing: no sideways scroll,
   nothing outside the panel, no console errors.
+- The share pictures in `og/` are screenshots of each page at 1200 by 630; take them
+  again when a page changes a lot.
+- The version line asks GitLab's API at most once an hour per visitor, so a busy day
+  doesn't hit its rate limit.
 
 ## The domain
 

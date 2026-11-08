@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Couldn't play this page, Tonal</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/assets/icon.png">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body class="lost">
+<script>document.body.dataset.os = /mac/i.test(navigator.userAgentData?.platform || navigator.platform) ? "mac" : /win/i.test(navigator.platform) ? "windows" : "linux";</script>
+<div class="glow" aria-hidden="true"></div>
+<div class="window">
+  <div class="titlebar" aria-hidden="true"><span class="lights"><i></i><i></i><i></i></span><span class="title">Tonal</span><span class="controls"><svg viewBox="0 0 12 12"><path d="M2 6h8"/></svg><svg viewBox="0 0 12 12"><path d="M2.5 2.5h7v7h-7z"/></svg><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7 M9.5 2.5l-7 7"/></svg></span></div>
+  <main class="missing">
+    <div class="toast" role="alert">Couldn't play this page: it isn't in the library.</div>
+    <h1>Nothing to play here.</h1>
+    <p class="lead">The link may be old, or the page moved. Tonal itself is one click away.</p>
+    <a class="button primary" href="/"><svg viewBox="0 0 24 24" class="fill"><path d="M5.5 5.1v13.8a1 1 0 0 0 1.6.8L16 13a1.2 1.2 0 0 0 0-2L7.1 4.3a1 1 0 0 0-1.6.8z M17 5h2v14h-2z"/></svg>Skip to Home</a>
+  </main>
+  <div class="player idle" aria-hidden="true">
+    <div class="progress"><span>0:00</span><div class="scrub"><i></i></div><span>0:00</span></div>
+  </div>
+</div>
+</body>
+</html>
