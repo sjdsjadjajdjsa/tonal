@@ -27,8 +27,8 @@ web-refs), and it behaves like Tonal:
   bass, drums and bells on Web Audio, so there are no rights to clear). It goes through
   Tonal's six equalizer bands and a limiter; the waves along the bar follow its levels
   and settle when it pauses. The progress bar seeks, the heart rings the like bell, the
-  volume slider is the master volume. Nothing makes a sound before the first press of
-  play.
+  volume slider is the master volume. Nothing makes a sound until the visitor clicks
+  something; from then on presets bubble whether or not the song plays.
 - **Living themes** (`scenes.js`): seven of the app's gallery looks painted live behind
   the window, with the app's palettes. Picking one on the Themes page restyles the
   window and its accent and is remembered. The Animations switch there stops all motion.

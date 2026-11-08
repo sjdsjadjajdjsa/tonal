@@ -1,6 +1,6 @@
 // "First Light": a short loop made in code (no recording, so no rights to clear),
 // played through Tonal's six equalizer bands, plus the app's interface sounds
-// from src/sfx.rs. Nothing makes a sound before the visitor presses play.
+// from src/sfx.rs. Nothing makes a sound until the visitor clicks something.
 
 const BPM = 84;
 const STEP = 60 / BPM / 4;
@@ -257,9 +257,12 @@ export function createMusic() {
       volume = v;
       if (ctx) out.gain.setTargetAtTime(v, ctx.currentTime, 0.02);
     },
-    /// The app's interface sounds; quiet until the visitor has pressed play once.
+    /// The app's interface sounds. Each one comes from a click, which lets the browser
+    /// start audio, so they play from the first click on.
     sound(kind, extra = 0) {
-      if (!unlocked || !ctx) return;
+      setup();
+      unlocked = true;
+      if (ctx.state === "suspended") ctx.resume();
       const t = ctx.currentTime + 0.005;
       if (kind === "bubble") {
         const g = ctx.createGain();
