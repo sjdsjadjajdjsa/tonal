@@ -124,6 +124,7 @@ macos:
 
 pages:
   stage: publish
+  needs: []
   image: alpine:3.22
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
