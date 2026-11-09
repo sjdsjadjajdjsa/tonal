@@ -90,9 +90,10 @@ windows:
   variables:
     DEBIAN_FRONTEND: noninteractive
     XWIN_CACHE_DIR: $CI_PROJECT_DIR/.xwin
+    RUSTUP_HOME: $CI_PROJECT_DIR/.rustup
   cache:
     key: $CI_JOB_NAME
-    paths: [.cargo/registry, .cargo/git, .cargo/bin, .xwin, target]
+    paths: [.cargo/registry, .cargo/git, .cargo/bin, .rustup, .xwin, target]
     when: always
   script:
     - apt-get update -qq
