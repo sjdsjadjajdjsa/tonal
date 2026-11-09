@@ -2,6 +2,12 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
+## 0.10.4 - 2026-11-08
+
+### Fixed
+- The player bar disappeared below the window when Tonal was made short. The sidebar's middle now scrolls instead, and the bar stays in view at any size.
+- At the narrowest width the mini player button no longer falls off the end of the bar.
+
 ## 0.10.3 - 2026-11-08
 
 ### Fixed
