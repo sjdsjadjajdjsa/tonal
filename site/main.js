@@ -50,6 +50,7 @@ if (pick) {
 
 /* Pages live at real addresses (/equalizer/ and so on) and swap like Tonal's do. */
 let current = "home";
+let previous = "home";
 const viewOf = (path) => {
   const name = (path.startsWith(BASE) ? path.slice(BASE.length) : path).replace(/^\/|\/$/g, "") || "home";
   return VIEWS.includes(name) ? name : "home";
@@ -63,6 +64,8 @@ function show(name, enter = true) {
   for (const link of $$(".nav[data-view]")) link.classList.toggle("active", link.dataset.view === name);
   document.title = name === "home" ? "Tonal, a music player that moves with your music" : `${TITLES[name]}, Tonal`;
   panel.scrollTop = 0;
+  $("[data-eq-toggle]").setAttribute("aria-pressed", String(name === "equalizer"));
+  if (name !== current) previous = current;
   current = name;
 }
 function go(name) {
@@ -85,6 +88,7 @@ document.addEventListener("click", (e) => {
 addEventListener("popstate", () => show(viewOf(location.pathname)));
 const step = (by) => go(VIEWS[(VIEWS.indexOf(current) + by + VIEWS.length) % VIEWS.length]);
 $$("[data-step]").forEach((b) => b.addEventListener("click", () => step(Number(b.dataset.step))));
+$("[data-eq-toggle]").addEventListener("click", () => go(current === "equalizer" && np.hidden ? previous : "equalizer"));
 
 /* Version and downloads from GitLab's latest release, asked at most once an hour. */
 const cached = JSON.parse(store.get("tonal-release", "null") || "null");
@@ -281,11 +285,13 @@ for (const line of LYRICS) {
 }
 function openNow() {
   np.hidden = false;
+  $$(".right [data-open-now]").forEach((b) => b.setAttribute("aria-pressed", "true"));
   np.classList.toggle("entering", motion);
   music.sound("tap");
 }
 function closeNow() {
   np.hidden = true;
+  $$(".right [data-open-now]").forEach((b) => b.setAttribute("aria-pressed", "false"));
 }
 $$("[data-open-now]").forEach((b) => b.addEventListener("click", () => (np.hidden ? openNow() : closeNow())));
 $("[data-close-now]").addEventListener("click", closeNow);

@@ -22,8 +22,9 @@ Poolsuite in web-refs), and it behaves like Tonal:
 
 - **Pages** have real addresses (`/equalizer/` and so on, each with its own title and
   share picture in `og/`) and swap in with Tonal's page transition.
-- **The player bar plays a song**, "First Light", made in code by `music.js` (chords,
-  bass, drums and bells on Web Audio, so there are no rights to clear). It goes through
+- **The player bar plays a song**, "First Light", made in code by `music.js` (a 16-bar
+  instrumental: electric piano, bass, swung drums and a lead, with a room reverb and an echo,
+  on Web Audio, so there are no rights to clear). It goes through
   Tonal's six equalizer bands and a limiter; the waves along the bar follow its levels
   and settle when it pauses. The progress bar seeks, the heart rings the like bell, the
   volume slider is the master volume. Nothing makes a sound until the visitor clicks
@@ -32,7 +33,9 @@ Poolsuite in web-refs), and it behaves like Tonal:
   by the app's own code, with the app's previews on the cards and a "Your colors" palette
   with five pickers. Picking one restyles the window and its accent and is remembered.
   The Animations switch there stops all motion.
-- **Now playing**: the cover in the bar (or L) opens a big cover and synced lyrics.
+- **Now playing**: the cover or the lyrics button in the bar (or L) opens a big cover and
+  synced lines. The song has no words, so the lines name what joins the mix. The equalizer
+  button in the bar opens the equalizer and a second press goes back.
 - **Keys**: Ctrl or Cmd K opens quick search, Space plays, 1 to 6 pick presets, the
   arrows step through pages.
 - **Interface sounds**: soft taps on page changes, bubbles on presets, bells on like.
