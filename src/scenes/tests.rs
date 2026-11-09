@@ -1,3 +1,4 @@
+use super::render::Renderer;
 use super::*;
 
 #[test]

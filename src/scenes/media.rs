@@ -1,6 +1,6 @@
 //! Pictures, GIFs and videos behind the "Your own" scene. mpv, which Tonal already ships for
 //! music, decodes them straight to raw frames at the size the window needs.
-use super::draw::Canvas;
+pub use super::{MOVING, Poster, STILLS, extension, is_still};
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::io::Read;
@@ -8,10 +8,6 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdout, Command, Stdio};
 use std::sync::Arc;
 
-pub const STILLS: &[&str] = &[
-    "jpg", "jpeg", "png", "webp", "bmp", "avif", "heic", "tif", "tiff",
-];
-pub const MOVING: &[&str] = &["gif", "mp4", "m4v", "mov", "webm", "mkv", "avi"];
 /// The biggest file Tonal copies in as a background.
 const MAX_BYTES: u64 = 1 << 30;
 const POSTER: (u32, u32) = (480, 300);
@@ -19,18 +15,6 @@ const POSTER: (u32, u32) = (480, 300);
 /// Where imported pictures and videos live.
 pub fn dir() -> PathBuf {
     crate::model::paths::data_dir().join("themes")
-}
-
-fn extension(name: &str) -> String {
-    Path::new(name)
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or_default()
-        .to_ascii_lowercase()
-}
-
-pub fn is_still(name: &str) -> bool {
-    STILLS.contains(&extension(name).as_str())
 }
 
 pub fn is_media(path: &Path) -> bool {
@@ -48,13 +32,6 @@ pub fn is_safe_name(name: &str) -> bool {
 
 pub fn path(name: &str) -> Option<PathBuf> {
     is_safe_name(name).then(|| dir().join(name))
-}
-
-/// A small still of a picture or video, for cards and for painting while a video starts.
-pub struct Poster {
-    pub w: usize,
-    pub h: usize,
-    pub px: Vec<u8>,
 }
 
 fn decoder() -> Command {
@@ -205,22 +182,6 @@ pub fn import(file: &Path) -> anyhow::Result<(String, [u8; 3])> {
         anyhow::bail!("Tonal couldn't open that file");
     };
     Ok((name, main_color(&poster)))
-}
-
-/// Paints a poster into a canvas, cropped to fill it.
-pub fn paint(canvas: &mut Canvas, poster: &Poster) {
-    let (cw, ch) = (canvas.w.max(1) as f32, canvas.h.max(1) as f32);
-    let (pw, ph) = (poster.w as f32, poster.h as f32);
-    let k = (pw / cw).min(ph / ch);
-    let (ox, oy) = ((pw - cw * k) / 2.0, (ph - ch * k) / 2.0);
-    canvas.fill(|x, y, _, _| {
-        let sx = ((ox + (x as f32 + 0.5) * k) as usize).min(poster.w - 1);
-        let sy = ((oy + (y as f32 + 0.5) * k) as usize).min(poster.h - 1);
-        let i = (sy * poster.w + sx) * 3;
-        let p = &poster.px[i..i + 3];
-        let lin = |v: u8| f32::from(v) / 255.0;
-        [lin(p[0]), lin(p[1]), lin(p[2])]
-    });
 }
 
 /// The frame size for a window: pictures at full size, moving files at most 1280 wide.

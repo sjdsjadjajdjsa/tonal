@@ -1,13 +1,16 @@
 mod depth;
 mod draw;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod media;
 mod painters;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod render;
 #[cfg(test)]
 mod tests;
 
-use draw::{C, Canvas, hex, rand, shift_hue};
+pub use draw::Canvas;
+use draw::{C, hex, rand, shift_hue};
 use serde::{Deserialize, Serialize};
-use slint::{Rgb8Pixel, Rgba8Pixel, SharedPixelBuffer};
 
 pub struct Palette {
     pub name: &'static str,
@@ -92,6 +95,56 @@ pub const PALETTES: &[Palette] = &[
         colors: [0x0d0d12, 0x262433, 0x5f5a7a, 0xa9a3c9, 0xeeeaf8],
     },
 ];
+
+pub const STILLS: &[&str] = &[
+    "jpg", "jpeg", "png", "webp", "bmp", "avif", "heic", "tif", "tiff",
+];
+pub const MOVING: &[&str] = &["gif", "mp4", "m4v", "mov", "webm", "mkv", "avi"];
+
+pub fn extension(name: &str) -> String {
+    std::path::Path::new(name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase()
+}
+
+pub fn is_still(name: &str) -> bool {
+    STILLS.contains(&extension(name).as_str())
+}
+
+/// A small still of a picture or video, for cards and for painting while a video starts.
+pub struct Poster {
+    pub w: usize,
+    pub h: usize,
+    pub px: Vec<u8>,
+}
+
+/// Paints a poster into a canvas, cropped to fill it.
+fn paint_poster(canvas: &mut Canvas, poster: &Poster) {
+    let (cw, ch) = (canvas.w.max(1) as f32, canvas.h.max(1) as f32);
+    let (pw, ph) = (poster.w as f32, poster.h as f32);
+    let k = (pw / cw).min(ph / ch);
+    let (ox, oy) = ((pw - cw * k) / 2.0, (ph - ch * k) / 2.0);
+    canvas.fill(|x, y, _, _| {
+        let sx = ((ox + (x as f32 + 0.5) * k) as usize).min(poster.w - 1);
+        let sy = ((oy + (y as f32 + 0.5) * k) as usize).min(poster.h - 1);
+        let i = (sy * poster.w + sx) * 3;
+        let p = &poster.px[i..i + 3];
+        let lin = |v: u8| f32::from(v) / 255.0;
+        [lin(p[0]), lin(p[1]), lin(p[2])]
+    });
+}
+
+/// The still behind a `Picture` look; the web build has none.
+fn picture_poster(look: &Preset) -> Option<std::sync::Arc<Poster>> {
+    #[cfg(not(target_arch = "wasm32"))]
+    if look.scene == Scene::Picture {
+        return media::poster(&look.media);
+    }
+    let _ = look;
+    None
+}
 
 /// The palette that takes its colours from the playing song's cover.
 pub const ALBUM: &str = "From the album";
@@ -428,7 +481,7 @@ impl Preset {
             return format!("See-through · {}", self.style.label());
         }
         if self.scene == Scene::Picture {
-            let kind = if media::is_still(&self.media) {
+            let kind = if is_still(&self.media) {
                 "Picture"
             } else {
                 "Moving"
@@ -522,7 +575,7 @@ pub struct Ctx {
     pub pulse: f32,
     pub sparkle: f32,
     /// The still of a `Picture` look.
-    pub poster: Option<std::sync::Arc<media::Poster>>,
+    pub poster: Option<std::sync::Arc<Poster>>,
 }
 
 impl Ctx {
@@ -554,23 +607,21 @@ fn paint(scene: Scene, canvas: &mut Canvas, ctx: &Ctx) {
         Scene::Rain => p::rain(canvas, ctx),
         Scene::Ribbons => p::ribbons(canvas, ctx),
         Scene::Picture => match ctx.poster.as_deref() {
-            Some(poster) => media::paint(canvas, poster),
+            Some(poster) => paint_poster(canvas, poster),
             None => canvas.fill(|_, _, u, v| {
                 draw::mix(ctx.colors[2], ctx.colors[0], (v * 0.8 + u * 0.2).min(1.0))
             }),
         },
     }
 }
-fn paint_look(canvas: &mut Canvas, look: &Preset, time: f32, audio: Audio) {
+pub(crate) fn paint_look(canvas: &mut Canvas, look: &Preset, time: f32, audio: Audio) {
     let ctx = Ctx {
         time,
         seed: look.seed,
         colors: look.colors(),
         pulse: audio.pulse,
         sparkle: audio.sparkle,
-        poster: (look.scene == Scene::Picture)
-            .then(|| media::poster(&look.media))
-            .flatten(),
+        poster: picture_poster(look),
     };
     paint(look.scene, canvas, &ctx);
     depth::apply(look.scene, canvas, &ctx);
@@ -594,7 +645,15 @@ fn paint_look(canvas: &mut Canvas, look: &Preset, time: f32, audio: Audio) {
 /// Bilinear scale of the canvas into `out` (3 or 4 bytes a pixel), with film grain and dither.
 /// Each source row is widened once in 8.8 fixed point, then output rows blend two widened rows,
 /// so the inner loops are straight runs. Grain comes from a shared table at a random offset per row.
-fn upscale(src: &Canvas, out: &mut [u8], w: usize, h: usize, bytes: usize, grain: f32, frame: u32) {
+pub(crate) fn upscale(
+    src: &Canvas,
+    out: &mut [u8],
+    w: usize,
+    h: usize,
+    bytes: usize,
+    grain: f32,
+    frame: u32,
+) {
     let (sw, sh) = (src.w, src.h);
     let taps = |n: usize, len: usize| -> Vec<(usize, usize, i32)> {
         let k = len as f32 / n as f32;
@@ -678,17 +737,8 @@ fn noise_table() -> &'static [i32; NOISE] {
     })
 }
 
-/// Keeps the scratch canvases between frames so a frame allocates only its output.
-#[derive(Default)]
-pub struct Renderer {
-    front: Canvas,
-    back: Canvas,
-    haze: Canvas,
-    frame: u32,
-}
-
 /// How much canvas a scene gets: the costly soft ones paint fewer pixels.
-fn detail(scene: Scene) -> f32 {
+pub(crate) fn detail(scene: Scene) -> f32 {
     match scene {
         Scene::Nebula => 0.66,
         Scene::Halftone => 0.72,
@@ -699,163 +749,10 @@ fn detail(scene: Scene) -> f32 {
 }
 
 /// Canvas size for an output size: about half of it times `detail`, smoothed back up on output.
-fn canvas_size(w: u32, h: u32, detail: f32) -> (usize, usize) {
+pub(crate) fn canvas_size(w: u32, h: u32, detail: f32) -> (usize, usize) {
     let cw = ((w as f32 / 2.0 * detail) as usize).clamp(120, 640);
     let ch = (cw * h as usize / w.max(1) as usize).max(68);
     (cw, ch)
-}
-
-pub struct Frame {
-    pub image: SharedPixelBuffer<Rgb8Pixel>,
-    pub frost: Option<SharedPixelBuffer<Rgb8Pixel>>,
-}
-impl Renderer {
-    /// One background frame at `size`, crossfading in from `from` while `mix` runs 0 to 1.
-    pub fn frame(
-        &mut self,
-        look: &Preset,
-        from: Option<(&Preset, f32)>,
-        time: f32,
-        audio: Audio,
-        size: (u32, u32),
-    ) -> Frame {
-        let (w, h) = (size.0.max(1), size.1.max(1));
-        let fine = from.map_or(1.0, |(old, _)| detail(old.scene));
-        let (cw, ch) = canvas_size(w, h, detail(look.scene).min(fine));
-        self.front.resize(cw, ch);
-        paint_look(&mut self.front, look, time, audio);
-        if let Some((old, mix)) = from {
-            self.back.resize(cw, ch);
-            paint_look(&mut self.back, old, time, audio);
-            let t = mix.clamp(0.0, 1.0);
-            let t = t * t * (3.0 - 2.0 * t);
-            for (f, b) in self.front.px.iter_mut().zip(&self.back.px) {
-                *f = draw::mix(*b, *f, t);
-            }
-        }
-        self.frame = self.frame.wrapping_add(1);
-        let mut image = SharedPixelBuffer::<Rgb8Pixel>::new(w, h);
-        upscale(
-            &self.front,
-            image.make_mut_bytes(),
-            w as usize,
-            h as usize,
-            3,
-            look.grain,
-            self.frame,
-        );
-        let frost = (look.style == Style::Glass).then(|| self.frost(w / 2, h / 2));
-        Frame { image, frost }
-    }
-
-    /// A decoded picture or video frame, dimmed like the scenes, with its frosted copy for glass.
-    pub fn media_frame(&mut self, mut px: Vec<u8>, size: (u32, u32), look: &Preset) -> Frame {
-        let (w, h) = (size.0.max(1) as usize, size.1.max(1) as usize);
-        media::shade(&mut px, w, h, look.dim);
-        let frost = (look.style == Style::Glass).then(|| {
-            let (fw, fh) = ((w / 4).max(8), (h / 4).max(6));
-            self.front.resize(fw, fh);
-            for y in 0..fh {
-                let sy = (y * h / fh).min(h - 1);
-                for x in 0..fw {
-                    let sx = (x * w / fw).min(w - 1);
-                    let i = (sy * w + sx) * 3;
-                    self.front.px[y * fw + x] = [0, 1, 2].map(|c| f32::from(px[i + c]) / 255.0);
-                }
-            }
-            self.frost(size.0 / 2, size.1 / 2)
-        });
-        let image = SharedPixelBuffer::<Rgb8Pixel>::clone_from_slice(&px, size.0, size.1);
-        Frame { image, frost }
-    }
-
-    /// The frame blurred and lifted, for glass panels to show what is behind them.
-    fn frost(&mut self, w: u32, h: u32) -> SharedPixelBuffer<Rgb8Pixel> {
-        let (fw, fh) = ((self.front.w / 4).max(8), (self.front.h / 4).max(6));
-        self.haze.resize(fw, fh);
-        for y in 0..fh {
-            for x in 0..fw {
-                let mut sum = [0.0f32; 3];
-                for dy in 0..4 {
-                    for dx in 0..4 {
-                        let sx = (x * 4 + dx).min(self.front.w - 1);
-                        let sy = (y * 4 + dy).min(self.front.h - 1);
-                        sum = draw::add(sum, self.front.px[sy * self.front.w + sx], 1.0 / 16.0);
-                    }
-                }
-                self.haze.px[y * fw + x] = sum;
-            }
-        }
-        for _ in 0..2 {
-            blur(&mut self.haze);
-        }
-        for p in self.haze.px.iter_mut() {
-            *p = draw::mix(*p, [1.0; 3], 0.07);
-        }
-        let mut out = SharedPixelBuffer::<Rgb8Pixel>::new(w.max(1), h.max(1));
-        upscale(
-            &self.haze,
-            out.make_mut_bytes(),
-            w.max(1) as usize,
-            h.max(1) as usize,
-            3,
-            0.0,
-            0,
-        );
-        out
-    }
-}
-
-fn blur(c: &mut Canvas) {
-    let (w, h) = (c.w, c.h);
-    let src = c.px.clone();
-    for y in 0..h {
-        for x in 0..w {
-            let l = src[y * w + x.saturating_sub(1)];
-            let r = src[y * w + (x + 1).min(w - 1)];
-            c.px[y * w + x] =
-                draw::add(draw::scale(src[y * w + x], 0.5), draw::add(l, r, 1.0), 0.25);
-        }
-    }
-    let src = c.px.clone();
-    for y in 0..h {
-        for x in 0..w {
-            let u = src[y.saturating_sub(1) * w + x];
-            let d = src[(y + 1).min(h - 1) * w + x];
-            c.px[y * w + x] =
-                draw::add(draw::scale(src[y * w + x], 0.5), draw::add(u, d, 1.0), 0.25);
-        }
-    }
-}
-/// A gallery card picture with rounded corners, `radius` in output pixels.
-pub fn thumbnail(
-    look: &Preset,
-    w: u32,
-    h: u32,
-    time: f32,
-    radius: f32,
-) -> SharedPixelBuffer<Rgba8Pixel> {
-    let (w, h) = (w.max(8), h.max(8));
-    let mut canvas = Canvas::default();
-    canvas.resize((w as usize).clamp(60, 480), (h as usize).clamp(36, 300));
-    let mut shown = look.clone();
-    if shown.scene == Scene::Classic {
-        shown.dim = 0.0;
-    }
-    paint_look(&mut canvas, &shown, time, Audio::default());
-    let mut out = SharedPixelBuffer::<Rgba8Pixel>::new(w, h);
-    let bytes = out.make_mut_bytes();
-    upscale(&canvas, bytes, w as usize, h as usize, 4, look.grain, 0);
-    for y in 0..h as usize {
-        for x in 0..w as usize {
-            let cx = (x as f32 + 0.5).clamp(radius, w as f32 - radius);
-            let cy = (y as f32 + 0.5).clamp(radius, h as f32 - radius);
-            let d = ((x as f32 + 0.5 - cx).powi(2) + (y as f32 + 0.5 - cy).powi(2)).sqrt();
-            bytes[(y * w as usize + x) * 4 + 3] =
-                ((radius - d + 0.5).clamp(0.0, 1.0) * 255.0) as u8;
-        }
-    }
-    out
 }
 
 pub fn fresh_seed() -> u32 {

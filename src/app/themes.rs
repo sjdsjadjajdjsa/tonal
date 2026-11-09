@@ -1,5 +1,6 @@
 use super::controller::Controller;
-use crate::scenes::{self, Audio, Preset, React, Renderer, Scene, Style, media};
+use crate::scenes::render::{self, Renderer};
+use crate::scenes::{self, Audio, Preset, React, Scene, Style, media};
 use crate::{AppWindow, PaletteRow, ThemeCard, ThemeStudio};
 use parking_lot::{Condvar, Mutex};
 use slint::{Color, ComponentHandle, Image, Model, ModelRc, VecModel};
@@ -174,7 +175,7 @@ fn varied(look: &Preset, offset: u32) -> Preset {
     }
 }
 
-fn post(e: &Arc<Engine>, weak: &slint::Weak<AppWindow>, frame: scenes::Frame) -> bool {
+fn post(e: &Arc<Engine>, weak: &slint::Weak<AppWindow>, frame: render::Frame) -> bool {
     e.busy.store(true, Ordering::Release);
     let e = e.clone();
     let sent = weak.upgrade_in_event_loop(move |w| {
@@ -189,7 +190,7 @@ fn post(e: &Arc<Engine>, weak: &slint::Weak<AppWindow>, frame: scenes::Frame) ->
 
 thread_local! {
     /// A painted frame held for the next wave tick, so both change in one redraw.
-    static PENDING: std::cell::RefCell<Option<(scenes::Frame, Arc<Engine>)>> =
+    static PENDING: std::cell::RefCell<Option<(render::Frame, Arc<Engine>)>> =
         const { std::cell::RefCell::new(None) };
 }
 
@@ -200,7 +201,7 @@ pub fn flush(w: &AppWindow) {
     }
 }
 
-fn show_frame(w: &AppWindow, frame: scenes::Frame, e: &Engine) {
+fn show_frame(w: &AppWindow, frame: render::Frame, e: &Engine) {
     let studio = w.global::<ThemeStudio>();
     studio.set_image(Image::from_rgb8(frame.image));
     if let Some(frost) = frame.frost {
@@ -395,7 +396,7 @@ fn run(e: Arc<Engine>, weak: slint::Weak<AppWindow>) {
             if let Some(h) = &hover {
                 time += 1.0 / 24.0;
                 let pixels =
-                    scenes::thumbnail(&h.look, h.size.0, h.size.1, time, h.size.0 as f32 * 0.07);
+                    render::thumbnail(&h.look, h.size.0, h.size.1, time, h.size.0 as f32 * 0.07);
                 post_thumb(&weak, h.saved, h.index, pixels);
             }
             let wait = if hover.is_some() {
@@ -453,7 +454,7 @@ fn run(e: Arc<Engine>, weak: slint::Weak<AppWindow>) {
         }
         if let Some(h) = &hover {
             let pixels =
-                scenes::thumbnail(&h.look, h.size.0, h.size.1, time, h.size.0 as f32 * 0.07);
+                render::thumbnail(&h.look, h.size.0, h.size.1, time, h.size.0 as f32 * 0.07);
             post_thumb(&weak, h.saved, h.index, pixels);
             fresh = false;
         }
@@ -953,7 +954,7 @@ impl Controller {
                 let lists = [(false, scenes::gallery()), (true, saved)];
                 for (is_saved, looks) in lists {
                     for (i, look) in looks.iter().enumerate() {
-                        let pixels = scenes::thumbnail(look, w, h, 24.0, radius);
+                        let pixels = render::thumbnail(look, w, h, 24.0, radius);
                         post_thumb(&weak, is_saved, i, pixels);
                     }
                 }
