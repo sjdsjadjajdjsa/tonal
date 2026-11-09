@@ -2,6 +2,11 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
+## 0.11.2 - 2026-11-09
+
+### Fixed
+- The Windows build, so this release has a Windows version again.
+
 ## 0.11.1 - 2026-11-09
 
 ### Changed
