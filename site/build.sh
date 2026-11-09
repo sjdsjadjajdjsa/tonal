@@ -8,7 +8,7 @@ out=${1:-public}
 base=${2:-/}
 rm -rf "$out"
 mkdir -p "$out/assets" "$out/fonts"
-cp site/index.html site/404.html site/style.css site/main.js site/music.js site/scenes.js "$out/"
+cp site/index.html site/404.html site/style.css site/main.js site/music.js site/scenes.js site/scenes.wasm "$out/"
 cp -R site/og "$out/og"
 # Each page also lives at its own address, with its own title and share picture.
 page() {
@@ -39,7 +39,7 @@ if [ "$base" != "/" ]; then
     done
 fi
 # Browsers keep old copies of scripts, so every build names its own: ?v=<hash of the code>.
-v=$(cat site/main.js site/music.js site/scenes.js site/style.css | { if command -v shasum >/dev/null; then shasum; else sha1sum; fi; } | cut -c1-10)
+v=$(cat site/main.js site/music.js site/scenes.js site/scenes.wasm site/style.css | { if command -v shasum >/dev/null; then shasum; else sha1sum; fi; } | cut -c1-10)
 for html in $(find "$out" -name '*.html'); do
     sed -i.bak -e "s|style.css\"|style.css?v=$v\"|" -e "s|main.js\"|main.js?v=$v\"|" "$html" && rm "$html.bak"
 done

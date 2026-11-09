@@ -1,7 +1,8 @@
 # tonalplayer.com
 
 One page that feels like opening Tonal: plain HTML, CSS and a little JavaScript, no
-build tools. `build.sh` puts it together in one folder that any web server can serve. Point the
+build tools. The themes come from `scenes.wasm`, Tonal's own scene painter built by
+`site/wasm/build.sh` (run it after changing `src/scenes`; the built file is checked in). `build.sh` puts it together in one folder that any web server can serve. Point the
 server's 404 page at `404.html`. tonalplayer.com runs on the owner's own server.
 
 ## Run it
@@ -16,8 +17,8 @@ push.
 
 ## The idea
 
-The page is the app. The whole site is one Tonal window (after Poolsuite in
-web-refs), and it behaves like Tonal:
+The page is the app. The whole site is Tonal in full screen, filling the browser (after
+Poolsuite in web-refs), and it behaves like Tonal:
 
 - **Pages** have real addresses (`/equalizer/` and so on, each with its own title and
   share picture in `og/`) and swap in with Tonal's page transition.
@@ -27,15 +28,14 @@ web-refs), and it behaves like Tonal:
   and settle when it pauses. The progress bar seeks, the heart rings the like bell, the
   volume slider is the master volume. Nothing makes a sound until the visitor clicks
   something; from then on presets bubble whether or not the song plays.
-- **Living themes** (`scenes.js`): seven of the app's gallery looks painted live behind
-  the window, with the app's palettes. Picking one on the Themes page restyles the
-  window and its accent and is remembered. The Animations switch there stops all motion.
+- **Living themes** (`scenes.js` and `scenes.wasm`): the app's whole gallery, painted live
+  by the app's own code, with the app's previews on the cards and a "Your colors" palette
+  with five pickers. Picking one restyles the window and its accent and is remembered.
+  The Animations switch there stops all motion.
 - **Now playing**: the cover in the bar (or L) opens a big cover and synced lyrics.
 - **Keys**: Ctrl or Cmd K opens quick search, Space plays, 1 to 6 pick presets, the
   arrows step through pages.
 - **Interface sounds**: soft taps on page changes, bubbles on presets, bells on like.
-- **The title bar** matches the visitor's system: traffic lights on a Mac, buttons on
-  the right on Windows, a close button on Linux.
 - **404.html** is the window with nothing loaded and Tonal's error toast.
 
 Home's feature list is a track list: hovering a row shows that screen.
@@ -51,7 +51,7 @@ the pops and the bubble notes (`main.js` ports `src/app/equalizer.rs` and
   centred hero with three cards.
 - Headlines in Unbounded (`site/fonts`, subset to Latin, OFL); everything else in
   Inter, like the app. Inside the window everything follows `ui/theme.slint`.
-- Dark only, with a soft glow behind the window in Tonal's colours: green `#1ed760`,
+- Dark only. Tonal's colours: green `#1ed760`,
   violet `#8b7bff`, coral `#ff6b6b` and teal `#2ec4b6` from the Home mix tiles.
 - Sizes come from the tokens at the top of `style.css`: spacing `--s1` to `--s9`, radii
   `--r-s` to `--r-xl`, type `--t-s` to `--t-xxl`. No other pixel values for spacing.

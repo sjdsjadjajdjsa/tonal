@@ -1,4 +1,4 @@
-import { THEMES, paint } from "./scenes.js";
+import { THEMES, paint, preview as themePreview, setCustom } from "./scenes.js";
 import { createMusic, DURATION, LYRICS } from "./music.js";
 
 const PROJECT = "https://gitlab.com/api/v4/projects/sjdsjadjajdjsa%2Ftonal";
@@ -140,15 +140,15 @@ $(".tracks").addEventListener("pointerleave", () => {
 /* Themes: the window becomes the chosen scene, and Tonal's accent follows it. */
 let theme = THEMES.find((t) => t.name === store.get("tonal-theme", "Northern lights")) || THEMES[1];
 const redraw = paint($(".scene"), () => theme, () => motion, () => {
-  const [low, mid] = music.levels();
-  return low * 0.7 + mid * 0.3;
+  const [low, mid, high = mid] = music.levels();
+  return [low, high, low * 0.6 + mid * 0.4];
 });
 function setTheme(next, sound = true) {
   theme = next;
   store.set("tonal-theme", next.name);
   const root = document.documentElement.style;
   next.colors.forEach((c, i) => root.setProperty(`--c${i}`, c));
-  root.setProperty("--accent", next.scene ? next.colors[4] : "#1ed760");
+  root.setProperty("--accent", next.scene ? next.accent : "#1ed760");
   document.body.classList.toggle("scened", Boolean(next.scene));
   $$(".theme-card").forEach((card) => card.setAttribute("aria-checked", String(card.dataset.name === next.name)));
   redraw();
@@ -161,13 +161,43 @@ for (const t of THEMES) {
   card.className = "theme-card";
   card.dataset.name = t.name;
   card.setAttribute("role", "radio");
-  card.style.setProperty("--g", `linear-gradient(135deg, ${t.colors[1]}, ${t.colors[2]} 55%, ${t.colors[4]})`);
-  card.innerHTML = `<i></i><span></span>`;
-  $("span", card).textContent = t.name;
+  card.innerHTML = `<canvas></canvas><span><b></b><small></small></span>`;
+  $("b", card).textContent = t.name;
+  $("small", card).textContent = t.scene ? `${t.scene} · ${t.palette}` : "See-through";
+  themePreview($("canvas", card), t);
   card.addEventListener("click", () => setTheme(t));
   themesEl.appendChild(card);
 }
 setTheme(theme, false);
+
+/* Your colors: the app's custom palette, repainted as the visitor picks. */
+const mine = THEMES.find((t) => t.palette === "Your colors");
+const mixEl = $("[data-mix]");
+if (mine && mixEl) {
+  const saved = store.get("tonal-mix", "").split(",").filter((c) => /^#[0-9a-f]{6}$/i.test(c));
+  const colors = saved.length === 5 ? saved : ["#140a1c", "#3d1450", "#b8326a", "#ff8a5c", "#ffe2b8"];
+  const apply = () => {
+    colors.forEach((c, i) => setCustom(i, c));
+    mine.colors = colors.slice();
+    mine.accent = colors[4];
+    store.set("tonal-mix", colors.join(","));
+    themePreview($(`.theme-card[data-name="${mine.name}"] canvas`), mine);
+    if (theme === mine) setTheme(mine, false);
+  };
+  colors.forEach((c, i) => {
+    const input = document.createElement("input");
+    input.type = "color";
+    input.value = c;
+    input.setAttribute("aria-label", `Colour ${i + 1} of 5`);
+    input.addEventListener("input", () => {
+      colors[i] = input.value;
+      apply();
+      if (theme !== mine) setTheme(mine, false);
+    });
+    mixEl.appendChild(input);
+  });
+  apply();
+}
 
 function setMotion(on) {
   motion = on;
