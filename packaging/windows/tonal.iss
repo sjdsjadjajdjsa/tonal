@@ -1,7 +1,8 @@
 ; Windows installer (Inno Setup 6). Installs for the current user only, so it
-; needs no admin rights. Built by .github/workflows/release.yml:
+; needs no admin rights. Built by the windows-installer job in .gitlab-ci.yml, after
+; packaging/windows/build.sh has filled dist/tonal:
 ;
-;   iscc /DVersion=0.1.0 /DSource=C:\full\path\to\dist\tonal packaging\windows\tonal.iss
+;   iscc /DVersion=0.1.0 packaging/windows/tonal.iss
 ;
 ; mpv.exe and yt-dlp.exe ship next to tonal.exe. The library and settings live
 ; in %APPDATA%\tonal, so they stay on uninstall. The zip is portable instead: a
