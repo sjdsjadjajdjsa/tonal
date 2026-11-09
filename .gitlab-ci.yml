@@ -1,7 +1,9 @@
 # Pushes to main and merge requests run the checks on Linux. A tag like v1.2.0 builds
 # Tonal for Linux, Windows and macOS and publishes them as the GitLab release for that
-# tag; the tag must match the version in Cargo.toml. Linux and Windows run on GitLab's
-# hosted runners, macOS on a runner tagged "tonal-macos" (see packaging/macos/RUNNER.md).
+# tag; the tag must match the version in Cargo.toml. The Linux release builds on the
+# NixOS PC "cedar" (runner tagged "tonal-linux", /etc/nixos/tonal-runner.nix there),
+# Windows and the checks on GitLab's hosted runners, macOS on a runner tagged
+# "tonal-macos" (see packaging/macos/RUNNER.md).
 
 stages: [check, build, publish]
 
@@ -66,6 +68,7 @@ version:
 linux:
   extends: [.rust-linux, .release-tag]
   stage: build
+  tags: [tonal-linux]
   script:
     - packaging/linux/build-appimage.sh
     - mkdir -p dist/tonal
