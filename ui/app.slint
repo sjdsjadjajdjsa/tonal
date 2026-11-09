@@ -334,6 +334,8 @@ export component AppWindow inherits Window {
             padding-top: root.mini ? root.titlebar-inset : 0px;
             if !root.mini: HorizontalLayout {
                 spacing: 0px;
+                // Nothing here may push the player bar below the window.
+                min-height: 0px;
                 Sidebar {
                     opacity: root.opened || !Motion.on ? 1 : 0;
                     animate opacity { duration: Motion.on ? 380ms : 0ms; easing: Ease.arrive; }

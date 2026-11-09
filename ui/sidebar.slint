@@ -1,4 +1,4 @@
-import { ListView } from "scroll.slint";
+import { ScrollView } from "scroll.slint";
 import { Theme, Icons, Label, Icon, IconButton } from "theme.slint";
 
 export struct PlaylistRow {
@@ -107,51 +107,54 @@ export component Sidebar inherits Rectangle {
         NavItem { compact: root.compact; icon: Icons.home; text: "Home"; active: root.page == "Home"; clicked => { root.navigate("Home"); } }
         NavItem { compact: root.compact; icon: Icons.search; text: "Search"; active: root.page == "Search"; clicked => { root.navigate("Search"); } }
         Rectangle { height: 10px; }
-        if !root.compact: HorizontalLayout {
-            padding-left: 12px;
-            height: 26px;
-            Label { text: "Library"; font-size: 11.5px; font-weight: 600; color: Theme.faint; }
-        }
-        NavItem { compact: root.compact; icon: Icons.heart; text: "Liked songs"; active: root.page == "Liked songs"; clicked => { root.navigate("Liked songs"); } }
-        NavItem { compact: root.compact; icon: Icons.folder; text: "Local files"; active: root.page == "Local files"; clicked => { root.navigate("Local files"); } }
-        NavItem { compact: root.compact; icon: Icons.download; text: "Downloads"; active: root.page == "Downloads"; clicked => { root.navigate("Downloads"); } }
-        Rectangle { height: 10px; }
-        if !root.compact: HorizontalLayout {
-            padding-left: 12px;
-            height: 26px;
-            Label { text: "Mixes"; font-size: 11.5px; font-weight: 600; color: Theme.faint; }
-        }
-        NavItem { compact: root.compact; icon: Icons.repeat; text: "On repeat"; active: root.page == "On repeat"; clicked => { root.navigate("On repeat"); } }
-        NavItem { compact: root.compact; icon: Icons.sparkle; text: "Rediscover"; active: root.page == "Rediscover"; clicked => { root.navigate("Rediscover"); } }
-        NavItem { compact: root.compact; icon: Icons.list-plus; text: "Recently added"; active: root.page == "Recently added"; clicked => { root.navigate("Recently added"); } }
-        Rectangle { height: 10px; }
-        if root.compact: Rectangle { height: 10px; }
-        if !root.compact: HorizontalLayout {
-            height: 30px;
-            padding-left: 12px;
-            Label { text: "Playlists"; font-size: 11.5px; font-weight: 600; color: Theme.faint; }
-            IconButton {
-                icon: Icons.plus;
-                size: 26px;
-                icon-size: 15px;
-                clicked => { root.create(); }
-            }
-        }
-        if root.compact: Rectangle { vertical-stretch: 1; }
-        if !root.compact: Rectangle {
+        // The middle scrolls, so a short window never pushes the player bar out of view.
+        middle := ScrollView {
             vertical-stretch: 1;
             min-height: 0px;
-            if root.playlists.length > 0: ListView {
-                width: parent.width;
-                height: parent.height;
-                for list in root.playlists: NavItem {
-                    text: list.name;
-                    detail: list.count;
-                    active: root.page == "Playlist" && root.active-playlist == list.id;
-                    clicked => { root.playlist(list.id); }
+            VerticalLayout {
+                width: middle.visible-width;
+                spacing: 2px;
+                if !root.compact: HorizontalLayout {
+                    padding-left: 12px;
+                    height: 26px;
+                    Label { text: "Library"; font-size: 11.5px; font-weight: 600; color: Theme.faint; }
+                }
+                NavItem { compact: root.compact; icon: Icons.heart; text: "Liked songs"; active: root.page == "Liked songs"; clicked => { root.navigate("Liked songs"); } }
+                NavItem { compact: root.compact; icon: Icons.folder; text: "Local files"; active: root.page == "Local files"; clicked => { root.navigate("Local files"); } }
+                NavItem { compact: root.compact; icon: Icons.download; text: "Downloads"; active: root.page == "Downloads"; clicked => { root.navigate("Downloads"); } }
+                Rectangle { height: 10px; }
+                if !root.compact: HorizontalLayout {
+                    padding-left: 12px;
+                    height: 26px;
+                    Label { text: "Mixes"; font-size: 11.5px; font-weight: 600; color: Theme.faint; }
+                }
+                NavItem { compact: root.compact; icon: Icons.repeat; text: "On repeat"; active: root.page == "On repeat"; clicked => { root.navigate("On repeat"); } }
+                NavItem { compact: root.compact; icon: Icons.sparkle; text: "Rediscover"; active: root.page == "Rediscover"; clicked => { root.navigate("Rediscover"); } }
+                NavItem { compact: root.compact; icon: Icons.list-plus; text: "Recently added"; active: root.page == "Recently added"; clicked => { root.navigate("Recently added"); } }
+                Rectangle { height: 10px; }
+                if !root.compact: HorizontalLayout {
+                    height: 30px;
+                    padding-left: 12px;
+                    Label { text: "Playlists"; font-size: 11.5px; font-weight: 600; color: Theme.faint; }
+                    IconButton {
+                        icon: Icons.plus;
+                        size: 26px;
+                        icon-size: 15px;
+                        clicked => { root.create(); }
+                    }
+                }
+                if !root.compact: VerticalLayout {
+                    spacing: 2px;
+                    for list in root.playlists: NavItem {
+                        text: list.name;
+                        detail: list.count;
+                        active: root.page == "Playlist" && root.active-playlist == list.id;
+                        clicked => { root.playlist(list.id); }
+                    }
                 }
             }
         }
+        Rectangle { height: 6px; }
         NavItem { compact: root.compact; icon: Icons.palette; text: "Themes"; active: root.page == "Themes"; clicked => { root.navigate("Themes"); } }
         NavItem { compact: root.compact; icon: Icons.settings; text: "Settings"; active: root.page == "Settings"; clicked => { root.navigate("Settings"); } }
     }
