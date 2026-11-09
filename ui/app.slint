@@ -624,7 +624,7 @@ export component AppWindow inherits Window {
                                 root.dialog = "theme-save";
                             }
                             share => {
-                                root.dialog-heading = "Share this theme";
+                                root.dialog-heading = ThemeStudio.picture ? "Share this theme (the code leaves out your picture, so use Export for that)" : "Share this theme";
                                 root.dialog-value = ThemeStudio.code;
                                 root.dialog = "theme-code";
                             }

@@ -1,5 +1,6 @@
 mod depth;
 mod draw;
+pub mod media;
 mod painters;
 #[cfg(test)]
 mod tests;
@@ -94,6 +95,8 @@ pub const PALETTES: &[Palette] = &[
 
 /// The palette that takes its colours from the playing song's cover.
 pub const ALBUM: &str = "From the album";
+/// The palette whose five colours the user picks.
+pub const CUSTOM: &str = "Your colors";
 
 static ALBUM_TINT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(u32::MAX);
 
@@ -126,8 +129,42 @@ fn album_colors(rgb: [u8; 3]) -> [C; 5] {
     ]
 }
 
+/// Where a palette sits in the picker; `CUSTOM` comes after the built-in ones.
 pub fn palette_index(name: &str) -> usize {
+    if name == CUSTOM {
+        return PALETTES.len();
+    }
     PALETTES.iter().position(|p| p.name == name).unwrap_or(0)
+}
+
+/// Reads and writes colours as "#rrggbb" so theme files stay easy to edit.
+mod hex_colors {
+    use serde::{Deserialize, Deserializer, Serializer, de::Error};
+
+    pub fn serialize<S: Serializer>(colors: &[u32; 5], s: S) -> Result<S::Ok, S::Error> {
+        s.collect_seq(colors.iter().map(|c| format!("#{c:06x}")))
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<[u32; 5], D::Error> {
+        let list = Vec::<String>::deserialize(d)?;
+        let colors: Vec<u32> = list
+            .iter()
+            .map(|c| {
+                super::parse_hex(c).ok_or_else(|| D::Error::custom(format!("not a colour: {c}")))
+            })
+            .collect::<Result<_, _>>()?;
+        colors
+            .try_into()
+            .map_err(|_| D::Error::custom("a palette has five colours"))
+    }
+}
+
+/// "#rrggbb" or "rrggbb" as a number.
+pub fn parse_hex(text: &str) -> Option<u32> {
+    let digits = text.trim().trim_start_matches('#');
+    (digits.len() == 6)
+        .then(|| u32::from_str_radix(digits, 16).ok())
+        .flatten()
 }
 
 macro_rules! named_enum {
@@ -180,6 +217,7 @@ named_enum!(Scene {
     Paper => "Paper cut",
     Rain => "City rain",
     Ribbons => "Ribbons",
+    Picture => "Your own",
 });
 
 named_enum!(Style {
@@ -215,6 +253,15 @@ pub struct Preset {
     pub rotate: bool,
     pub rotate_minutes: u32,
     pub fps: u32,
+    /// The colours of the `CUSTOM` palette, darkest first.
+    #[serde(with = "hex_colors")]
+    pub custom: [u32; 5],
+    /// The picture or video behind the `Picture` scene, a file in `media::dir()`.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub media: String,
+    /// The main colour of that picture, which the rest of the theme is coloured from.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub media_rgb: Option<[u8; 3]>,
     /// The cover colour this look was painted with, for the album palette.
     #[serde(skip)]
     pub tint: Option<[u8; 3]>,
@@ -236,6 +283,9 @@ impl Default for Preset {
             rotate: false,
             rotate_minutes: 15,
             fps: 15,
+            custom: PALETTES[1].colors,
+            media: String::new(),
+            media_rgb: None,
             tint: None,
         }
     }
@@ -246,15 +296,29 @@ impl Preset {
         if let Some(rgb) = self.album_rgb() {
             return album_colors(rgb);
         }
+        if self.scene == Scene::Picture {
+            return album_colors(self.media_rgb.unwrap_or([150, 150, 160]));
+        }
+        if self.palette == CUSTOM {
+            return self.custom.map(hex);
+        }
         let p = &PALETTES[palette_index(&self.palette)];
         let shift = (rand(self.seed.wrapping_mul(7919)) - 0.5) * 18.0;
         let light = 0.94 + rand(self.seed.wrapping_mul(104_729)) * 0.12;
         p.colors.map(|c| shift_hue(hex(c), shift, light))
     }
 
+    /// The five colours a palette starts from, before any variation.
+    pub fn base_colors(&self) -> [u32; 5] {
+        if self.palette == CUSTOM {
+            return self.custom;
+        }
+        PALETTES[palette_index(&self.palette)].colors
+    }
+
     /// The cover colour to paint with, when this look uses the album palette.
     fn album_rgb(&self) -> Option<[u8; 3]> {
-        (self.palette == ALBUM)
+        (self.palette == ALBUM && self.scene != Scene::Picture)
             .then(|| self.tint.or_else(album_tint))
             .flatten()
     }
@@ -262,10 +326,24 @@ impl Preset {
     /// Reads a code from `to_code`; anything malformed gives `None`.
     pub fn from_code(code: &str) -> Option<Preset> {
         let (head, name) = code.trim().split_once(':')?;
-        let mut parts = head.strip_prefix("tonal1.")?.split('.');
+        let (version, body) = head.split_once('.')?;
+        if version != "tonal1" && version != "tonal2" {
+            return None;
+        }
+        let mut parts = body.split('.');
         let mut int = || parts.next()?.parse::<i64>().ok();
         let scene = Scene::ALL.get(usize::try_from(int()?).ok()?).copied()?;
-        let palette = PALETTES.get(usize::try_from(int()?).ok()?)?.name;
+        let scene = if scene == Scene::Picture {
+            Scene::Classic
+        } else {
+            scene
+        };
+        let palette = usize::try_from(int()?).ok()?;
+        let palette = match PALETTES.get(palette) {
+            Some(p) => p.name,
+            None if palette == PALETTES.len() && version == "tonal2" => CUSTOM,
+            None => return None,
+        };
         let style = Style::ALL.get(usize::try_from(int()?).ok()?).copied()?;
         let react = React::ALL.get(usize::try_from(int()?).ok()?).copied()?;
         let seed = u32::try_from(int()?).ok()?;
@@ -273,6 +351,12 @@ impl Preset {
         let (speed, strength, dim, grain) = (pct()?, pct()?, pct()?, pct()?);
         let mut int = || parts.next()?.parse::<u32>().ok();
         let (fps, rotate, minutes) = (int()?, int()? == 1, int()?);
+        let mut custom = Preset::default().custom;
+        if version == "tonal2" {
+            for slot in &mut custom {
+                *slot = parse_hex(parts.next()?)?;
+            }
+        }
         Some(Preset {
             name: name.trim().chars().take(40).collect(),
             scene,
@@ -291,15 +375,19 @@ impl Preset {
                 15
             },
             fps: if FPS.contains(&fps) { fps } else { 15 },
+            custom,
+            media: String::new(),
+            media_rgb: None,
             tint: None,
         })
     }
 
-    /// A short text code that holds everything but the cover colour.
+    /// A short text code that holds everything but the cover colour and the picture.
     pub fn to_code(&self) -> String {
         let pct = |v: f32| (v * 100.0).round() as i32;
+        let colors: String = self.custom.iter().map(|c| format!(".{c:06x}")).collect();
         format!(
-            "tonal1.{}.{}.{}.{}.{}.{}.{}.{}.{}.{}.{}.{}:{}",
+            "tonal2.{}.{}.{}.{}.{}.{}.{}.{}.{}.{}.{}.{}{}:{}",
             self.scene.index(),
             palette_index(&self.palette),
             self.style.index(),
@@ -312,27 +400,40 @@ impl Preset {
             self.fps,
             u8::from(self.rotate),
             self.rotate_minutes,
+            colors,
             self.name
         )
     }
 
     pub fn accent(&self) -> [u8; 3] {
-        if let Some(rgb) = self.album_rgb() {
-            return album_colors(rgb)[4].map(|c| (c.clamp(0.0, 1.0) * 255.0) as u8);
+        if self.album_rgb().is_some() || self.scene == Scene::Picture {
+            return self.colors()[4].map(|c| (c.clamp(0.0, 1.0) * 255.0) as u8);
         }
-        PALETTES[palette_index(&self.palette)].colors[4].to_be_bytes()[1..4]
+        self.base_colors()[4].to_be_bytes()[1..4]
             .try_into()
             .unwrap_or([236, 236, 238])
     }
 
     /// Two presets look the same when only their pacing or name differ.
     pub fn same_look(&self, other: &Preset) -> bool {
-        self.scene == other.scene && self.palette == other.palette && self.seed == other.seed
+        self.scene == other.scene
+            && self.palette == other.palette
+            && self.seed == other.seed
+            && self.media == other.media
+            && (self.palette != CUSTOM || self.custom == other.custom)
     }
 
     pub fn detail(&self) -> String {
         if self.scene == Scene::Classic {
             return format!("See-through · {}", self.style.label());
+        }
+        if self.scene == Scene::Picture {
+            let kind = if media::is_still(&self.media) {
+                "Picture"
+            } else {
+                "Moving"
+            };
+            return format!("{kind} · {}", self.style.label());
         }
         format!(
             "{} · {} · {}",
@@ -420,6 +521,8 @@ pub struct Ctx {
     pub colors: [C; 5],
     pub pulse: f32,
     pub sparkle: f32,
+    /// The still of a `Picture` look.
+    pub poster: Option<std::sync::Arc<media::Poster>>,
 }
 
 impl Ctx {
@@ -450,6 +553,12 @@ fn paint(scene: Scene, canvas: &mut Canvas, ctx: &Ctx) {
         Scene::Paper => p::paper(canvas, ctx),
         Scene::Rain => p::rain(canvas, ctx),
         Scene::Ribbons => p::ribbons(canvas, ctx),
+        Scene::Picture => match ctx.poster.as_deref() {
+            Some(poster) => media::paint(canvas, poster),
+            None => canvas.fill(|_, _, u, v| {
+                draw::mix(ctx.colors[2], ctx.colors[0], (v * 0.8 + u * 0.2).min(1.0))
+            }),
+        },
     }
 }
 fn paint_look(canvas: &mut Canvas, look: &Preset, time: f32, audio: Audio) {
@@ -459,6 +568,9 @@ fn paint_look(canvas: &mut Canvas, look: &Preset, time: f32, audio: Audio) {
         colors: look.colors(),
         pulse: audio.pulse,
         sparkle: audio.sparkle,
+        poster: (look.scene == Scene::Picture)
+            .then(|| media::poster(&look.media))
+            .flatten(),
     };
     paint(look.scene, canvas, &ctx);
     depth::apply(look.scene, canvas, &ctx);
@@ -636,6 +748,27 @@ impl Renderer {
         Frame { image, frost }
     }
 
+    /// A decoded picture or video frame, dimmed like the scenes, with its frosted copy for glass.
+    pub fn media_frame(&mut self, mut px: Vec<u8>, size: (u32, u32), look: &Preset) -> Frame {
+        let (w, h) = (size.0.max(1) as usize, size.1.max(1) as usize);
+        media::shade(&mut px, w, h, look.dim);
+        let frost = (look.style == Style::Glass).then(|| {
+            let (fw, fh) = ((w / 4).max(8), (h / 4).max(6));
+            self.front.resize(fw, fh);
+            for y in 0..fh {
+                let sy = (y * h / fh).min(h - 1);
+                for x in 0..fw {
+                    let sx = (x * w / fw).min(w - 1);
+                    let i = (sy * w + sx) * 3;
+                    self.front.px[y * fw + x] = [0, 1, 2].map(|c| f32::from(px[i + c]) / 255.0);
+                }
+            }
+            self.frost(size.0 / 2, size.1 / 2)
+        });
+        let image = SharedPixelBuffer::<Rgb8Pixel>::clone_from_slice(&px, size.0, size.1);
+        Frame { image, frost }
+    }
+
     /// The frame blurred and lifted, for glass panels to show what is behind them.
     fn frost(&mut self, w: u32, h: u32) -> SharedPixelBuffer<Rgb8Pixel> {
         let (fw, fh) = ((self.front.w / 4).max(8), (self.front.h / 4).max(6));
@@ -739,7 +872,7 @@ pub fn surprise() -> Preset {
     let style = Style::ALL[pick(Style::ALL.len(), 2)];
     Preset {
         name: "Surprise".into(),
-        scene: Scene::ALL[1 + pick(Scene::ALL.len() - 1, 1)],
+        scene: Scene::ALL[1 + pick(Scene::ALL.len() - 2, 1)],
         palette: PALETTES[1 + pick(PALETTES.len() - 1, 3)].name.into(),
         style,
         react: React::ALL[1 + pick(React::ALL.len() - 1, 4)],

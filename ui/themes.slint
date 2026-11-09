@@ -1,5 +1,5 @@
 import { ScrollView } from "scroll.slint";
-import { Theme, Icons, Label, Icon, IconButton, Button, Segmented, Switch, Scrubber } from "theme.slint";
+import { Theme, Icons, Label, Icon, IconButton, Button, Segmented, Switch, Scrubber, TextField } from "theme.slint";
 
 export struct ThemeCard {
     name: string,
@@ -43,6 +43,15 @@ export global ThemeStudio {
     in-out property <float> grain;
     in-out property <int> seed;
     in-out property <bool> rotate;
+    in property <[color]> custom;
+    in property <int> custom-pick;
+    in property <float> custom-hue;
+    in property <float> custom-sat;
+    in property <float> custom-val;
+    in property <string> custom-hex;
+    in property <bool> picture;
+    in property <bool> moving;
+    in property <image> media-thumb;
     in-out property <length> tile-width: 200px;
     callback action(string, string);
 }
@@ -278,7 +287,22 @@ export component ThemesView inherits Rectangle {
                     Button { text: "Save"; icon: Icons.plus; primary: true; clicked => { root.save(); } }
                 }
             }
-            if ThemeStudio.saved.length > 0: Label { text: "Your themes"; font-size: 14px; font-weight: 600; }
+            HorizontalLayout {
+                spacing: 8px;
+                VerticalLayout {
+                    alignment: center;
+                    horizontal-stretch: 1;
+                    Label { text: "Your themes"; font-size: 14px; font-weight: 600; }
+                }
+                Button { text: "Import"; icon: Icons.plus; clicked => { ThemeStudio.action("import", ""); } }
+                Button { text: "Export"; icon: Icons.link; clicked => { ThemeStudio.action("export", ""); } }
+            }
+            if ThemeStudio.saved.length == 0: Label {
+                text: "Themes you save or import show up here. You can also drop a .tonaltheme file on the window.";
+                wrap: word-wrap;
+                font-size: 12.5px;
+                color: Theme.muted;
+            }
             if ThemeStudio.saved.length > 0: TileGrid {
                 avail: root.inner;
                 cards: ThemeStudio.saved;
@@ -319,7 +343,35 @@ export component ThemesView inherits Rectangle {
                             }
                         }
                     }
-                    if ThemeStudio.scene != 0: Row {
+                    if ThemeStudio.picture: Row {
+                        label: "Picture";
+                        HorizontalLayout {
+                            spacing: 14px;
+                            Rectangle {
+                                width: 112px;
+                                height: 70px;
+                                border-radius: Theme.radius-m;
+                                clip: true;
+                                background: Theme.raised;
+                                Image { width: 100%; height: 100%; source: ThemeStudio.media-thumb; image-fit: cover; }
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 8px;
+                                HorizontalLayout {
+                                    alignment: start;
+                                    Button { text: "Choose another"; icon: Icons.plus; clicked => { ThemeStudio.action("media-pick", ""); } }
+                                }
+                                Label {
+                                    text: "A picture, GIF or video. Its colours tint the rest of Tonal. You can also drop one on the window.";
+                                    wrap: word-wrap;
+                                    font-size: 12px;
+                                    color: Theme.muted;
+                                }
+                            }
+                        }
+                    }
+                    if ThemeStudio.scene != 0 && !ThemeStudio.picture: Row {
                         label: "Colors";
                         Rectangle {
                             property <int> cols: max(1, floor((root.field + 8px) / 148px));
@@ -334,6 +386,57 @@ export component ThemesView inherits Rectangle {
                                 clicked => { ThemeStudio.action("palette", "\{i}"); }
                             }
                         }
+                    }
+                    if ThemeStudio.scene != 0 && !ThemeStudio.picture && ThemeStudio.palette == ThemeStudio.palettes.length - 1: Row {
+                        label: "Your colors";
+                        VerticalLayout {
+                            spacing: 12px;
+                            HorizontalLayout {
+                                spacing: 10px;
+                                alignment: start;
+                                for c[i] in ThemeStudio.custom: Rectangle {
+                                    width: 34px;
+                                    height: 34px;
+                                    border-radius: 17px;
+                                    background: c;
+                                    border-width: i == ThemeStudio.custom-pick ? 2.5px : 1px;
+                                    border-color: i == ThemeStudio.custom-pick ? Theme.text : Theme.border;
+                                    TouchArea {
+                                        mouse-cursor: pointer;
+                                        clicked => { ThemeStudio.action("custom-pick", "\{i}"); }
+                                    }
+                                }
+                                TextField {
+                                    width: 112px;
+                                    height: 34px;
+                                    text: ThemeStudio.custom-hex;
+                                    committed(t) => { ThemeStudio.action("hex", t); }
+                                }
+                            }
+                            Label {
+                                text: "Darkest on the left, brightest on the right. The last one is the accent.";
+                                font-size: 12px;
+                                color: Theme.muted;
+                            }
+                        }
+                    }
+                    if ThemeStudio.scene != 0 && !ThemeStudio.picture && ThemeStudio.palette == ThemeStudio.palettes.length - 1: Slider {
+                        label: "Hue";
+                        key: "hue";
+                        value: ThemeStudio.custom-hue;
+                        shown: round(ThemeStudio.custom-hue * 360) + "°";
+                    }
+                    if ThemeStudio.scene != 0 && !ThemeStudio.picture && ThemeStudio.palette == ThemeStudio.palettes.length - 1: Slider {
+                        label: "Saturation";
+                        key: "sat";
+                        value: ThemeStudio.custom-sat;
+                        shown: round(ThemeStudio.custom-sat * 100) + "%";
+                    }
+                    if ThemeStudio.scene != 0 && !ThemeStudio.picture && ThemeStudio.palette == ThemeStudio.palettes.length - 1: Slider {
+                        label: "Brightness";
+                        key: "val";
+                        value: ThemeStudio.custom-val;
+                        shown: round(ThemeStudio.custom-val * 100) + "%";
                     }
                     Row {
                         label: "Style";
@@ -352,7 +455,7 @@ export component ThemesView inherits Rectangle {
                         font-size: 12.5px;
                         color: Theme.muted;
                     }
-                    if ThemeStudio.scene != 0: Row {
+                    if ThemeStudio.scene != 0 && !ThemeStudio.picture: Row {
                         label: "Music";
                         HorizontalLayout {
                             alignment: start;
@@ -363,13 +466,13 @@ export component ThemesView inherits Rectangle {
                             }
                         }
                     }
-                    if ThemeStudio.scene != 0 && ThemeStudio.react != 0: Slider {
+                    if ThemeStudio.scene != 0 && !ThemeStudio.picture && ThemeStudio.react != 0: Slider {
                         label: "Strength";
                         key: "strength";
                         value: ThemeStudio.strength;
                         shown: round(ThemeStudio.strength * 100) + "%";
                     }
-                    if ThemeStudio.scene != 0: Slider {
+                    if ThemeStudio.scene != 0 && !ThemeStudio.picture: Slider {
                         label: "Motion";
                         key: "speed";
                         value: ThemeStudio.speed / 3;
@@ -381,13 +484,13 @@ export component ThemesView inherits Rectangle {
                         value: ThemeStudio.dim / 0.85;
                         shown: round(ThemeStudio.dim / 0.85 * 100) + "%";
                     }
-                    if ThemeStudio.scene != 0: Slider {
+                    if ThemeStudio.scene != 0 && !ThemeStudio.picture: Slider {
                         label: "Grain";
                         key: "grain";
                         value: ThemeStudio.grain;
                         shown: round(ThemeStudio.grain * 100) + "%";
                     }
-                    if ThemeStudio.scene != 0: Row {
+                    if ThemeStudio.scene != 0 && !ThemeStudio.picture: Row {
                         label: "Variant";
                         HorizontalLayout {
                             alignment: start;
@@ -398,7 +501,7 @@ export component ThemesView inherits Rectangle {
                             IconButton { icon: Icons.shuffle; clicked => { ThemeStudio.action("seed", "shuffle"); } }
                         }
                     }
-                    if ThemeStudio.scene != 0: Row {
+                    if ThemeStudio.scene != 0 && !ThemeStudio.picture: Row {
                         label: "Rotate";
                         HorizontalLayout {
                             alignment: start;
@@ -417,12 +520,12 @@ export component ThemesView inherits Rectangle {
                             }
                         }
                     }
-                    if ThemeStudio.scene != 0: Row {
-                        label: "Smoothness";
+                    if ThemeStudio.scene != 0 && (!ThemeStudio.picture || ThemeStudio.moving): Row {
+                        label: ThemeStudio.picture ? "Playback" : "Smoothness";
                         HorizontalLayout {
                             alignment: start;
                             Segmented {
-                                options: ["Still", "Calm", "Fluid"];
+                                options: ThemeStudio.picture ? ["Paused", "15 fps", "30 fps"] : ["Still", "Calm", "Fluid"];
                                 selected <=> ThemeStudio.fps;
                                 picked(i) => { ThemeStudio.action("fps", "\{i}"); }
                             }

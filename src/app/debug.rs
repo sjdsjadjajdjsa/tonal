@@ -118,6 +118,7 @@ fn run_script(
                 let (action, value) = rest.split_once(' ').unwrap_or((rest, ""));
                 app.theme_action(action, value);
             }
+            "open" => app.theme_open_file(rest.into()),
             "log" => log::info!("SCRIPT {rest}"),
             _ => log::warn!("SCRIPT unknown step: {line}"),
         }

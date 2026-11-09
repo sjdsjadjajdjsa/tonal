@@ -33,6 +33,9 @@ parking_lot = "0.13"
 rustfft = { version = "6.4", default-features = false }
 cpal = "0.18"
 discord-rich-presence = "1.1"
+rfd = "0.18"
+toml = "1.2"
+zip = { version = "9.5", default-features = false, features = ["deflate"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2"

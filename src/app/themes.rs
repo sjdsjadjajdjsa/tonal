@@ -1,9 +1,10 @@
 use super::controller::Controller;
-use crate::scenes::{self, Audio, Preset, React, Renderer, Scene, Style};
+use crate::scenes::{self, Audio, Preset, React, Renderer, Scene, Style, media};
 use crate::{AppWindow, PaletteRow, ThemeCard, ThemeStudio};
 use parking_lot::{Condvar, Mutex};
 use slint::{Color, ComponentHandle, Image, Model, ModelRc, VecModel};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -41,6 +42,8 @@ struct Engine {
 
 static ENGINE: OnceLock<Arc<Engine>> = OnceLock::new();
 static SAVES: AtomicU64 = AtomicU64::new(0);
+/// Which of the five custom colours the editor is changing.
+static PICK: AtomicUsize = AtomicUsize::new(2);
 /// Counts the window's redraws, so the painter can tell when the compositor stops showing it.
 static DRAWS: AtomicU64 = AtomicU64::new(0);
 /// The painter is waiting for the window to draw again before it paints more.
@@ -87,6 +90,16 @@ pub fn drawn() {
 pub fn set_minimized(minimized: bool) {
     if engine().is_some_and(|e| e.wanted.lock().minimized != minimized) {
         update(|w| w.minimized = minimized);
+    }
+}
+
+/// The window changed size, so a picture background is decoded again to fit.
+pub fn set_size(width: u32, height: u32) {
+    if width >= 64
+        && height >= 64
+        && engine().is_some_and(|e| e.wanted.lock().size != (width, height))
+    {
+        update(|w| w.size = (width, height));
     }
 }
 
@@ -240,6 +253,9 @@ fn run(e: Arc<Engine>, weak: slint::Weak<AppWindow>) {
     let (mut cleared, mut fresh) = (true, true);
     let (mut drew, mut unseen) = (DRAWS.load(Ordering::SeqCst), None::<Instant>);
     let (mut battery, mut checked) = (on_battery(), Instant::now());
+    let mut stream: Option<media::Stream> = None;
+    let mut failed: Option<String> = None;
+    let mut resized = Instant::now();
     loop {
         if checked.elapsed() > Duration::from_secs(30) {
             battery = on_battery();
@@ -263,7 +279,9 @@ fn run(e: Arc<Engine>, weak: slint::Weak<AppWindow>) {
         look.tint = album;
         if generation != seen {
             seen = generation;
-            let both_alive = shown.scene != Scene::Classic && look.scene != Scene::Classic;
+            let both_alive = ![shown.scene, look.scene]
+                .iter()
+                .any(|s| matches!(s, Scene::Classic | Scene::Picture));
             if !shown.same_look(&look) {
                 if both_alive {
                     fade = Some((varied(&shown, offset), Instant::now(), 0.9));
@@ -283,6 +301,12 @@ fn run(e: Arc<Engine>, weak: slint::Weak<AppWindow>) {
             offset = offset.wrapping_add(1);
             rotated = Instant::now();
             fresh = true;
+        }
+        let picture = look.scene == Scene::Picture
+            && !look.media.is_empty()
+            && failed.as_deref() != Some(look.media.as_str());
+        if !picture && stream.is_some() {
+            stream = None;
         }
         if !alive && !cleared {
             clear(&weak);
@@ -319,6 +343,77 @@ fn run(e: Arc<Engine>, weak: slint::Weak<AppWindow>) {
             }
             STALLED.store(false, Ordering::SeqCst);
             last = Instant::now();
+            continue;
+        }
+        if picture {
+            let want = media::frame_size(&look.media, size);
+            let rate = if look.fps == 0 { 15 } else { look.fps };
+            let same = stream
+                .as_ref()
+                .is_some_and(|s| s.media == look.media && s.fps == rate);
+            let stale = stream.as_ref().is_some_and(|s| s.size != want);
+            if !stale {
+                resized = Instant::now();
+            }
+            if !same || (stale && resized.elapsed() > Duration::from_millis(250)) {
+                let start = stream
+                    .as_ref()
+                    .filter(|s| s.media == look.media)
+                    .map_or(0.0, media::Stream::played);
+                drop(stream.take());
+                stream = media::Stream::open(&look.media, want, rate, start);
+                if stream.is_none() {
+                    failed = Some(look.media.clone());
+                    continue;
+                }
+                fresh = true;
+            }
+            let Some(s) = stream.as_mut() else { continue };
+            let playing = !s.is_still() && look.fps > 0 && !battery;
+            let start = Instant::now();
+            if (fresh || playing) && !e.busy.load(Ordering::Acquire) {
+                match s.next() {
+                    Some(px) => {
+                        let frame = renderer.media_frame(px, s.size, &look);
+                        if !post(&e, &weak, frame) {
+                            return;
+                        }
+                        unseen.get_or_insert_with(Instant::now);
+                        cleared = false;
+                        fresh = false;
+                    }
+                    None if s.is_still() => fresh = false,
+                    None => {
+                        log::warn!("The background video {} stopped", look.media);
+                        failed = Some(look.media.clone());
+                        stream = None;
+                        continue;
+                    }
+                }
+            }
+            fade = None;
+            if let Some(h) = &hover {
+                time += 1.0 / 24.0;
+                let pixels =
+                    scenes::thumbnail(&h.look, h.size.0, h.size.1, time, h.size.0 as f32 * 0.07);
+                post_thumb(&weak, h.saved, h.index, pixels);
+            }
+            let wait = if hover.is_some() {
+                Duration::from_secs_f32(1.0 / 24.0).saturating_sub(start.elapsed())
+            } else if stale {
+                Duration::from_millis(260)
+            } else if fresh {
+                Duration::from_millis(16)
+            } else if playing {
+                let fps = if paused { (rate / 4).max(1) } else { rate };
+                Duration::from_secs_f32(1.0 / fps as f32).saturating_sub(start.elapsed())
+            } else {
+                Duration::from_secs(3600)
+            };
+            let mut w = e.wanted.lock();
+            if w.generation == seen {
+                e.wake.wait_for(&mut w, wait.max(Duration::from_millis(4)));
+            }
             continue;
         }
         let moving = look.fps > 0 || fade.is_some() || hover.is_some();
@@ -387,8 +482,8 @@ fn rgb(c: u32) -> Color {
     Color::from_rgb_u8((c >> 16) as u8, (c >> 8) as u8, c as u8)
 }
 
-fn palettes() -> Vec<PaletteRow> {
-    scenes::PALETTES
+fn palettes(custom: [u32; 5]) -> Vec<PaletteRow> {
+    let mut rows: Vec<PaletteRow> = scenes::PALETTES
         .iter()
         .map(|p| {
             let live = Preset {
@@ -412,7 +507,64 @@ fn palettes() -> Vec<PaletteRow> {
                 e: c[4],
             }
         })
-        .collect()
+        .collect();
+    rows.push(custom_row(custom));
+    rows
+}
+
+fn custom_row(custom: [u32; 5]) -> PaletteRow {
+    let c = custom.map(rgb);
+    PaletteRow {
+        name: scenes::CUSTOM.into(),
+        a: c[0],
+        b: c[1],
+        c: c[2],
+        d: c[3],
+        e: c[4],
+    }
+}
+
+/// Hue, saturation and brightness, each 0 to 1.
+fn to_hsv(c: u32) -> (f32, f32, f32) {
+    let [r, g, b] = [16, 8, 0].map(|s| ((c >> s) & 255) as f32 / 255.0);
+    let max = r.max(g).max(b);
+    let d = max - r.min(g).min(b);
+    let h = if d <= 0.0 {
+        0.0
+    } else if max == r {
+        ((g - b) / d).rem_euclid(6.0)
+    } else if max == g {
+        (b - r) / d + 2.0
+    } else {
+        (r - g) / d + 4.0
+    };
+    (h / 6.0, if max > 0.0 { d / max } else { 0.0 }, max)
+}
+
+fn from_hsv(h: f32, s: f32, v: f32) -> u32 {
+    let h = h.rem_euclid(1.0) * 6.0;
+    let c = v * s;
+    let x = c * (1.0 - (h % 2.0 - 1.0).abs());
+    let (r, g, b) = match h as u32 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    let m = v - c;
+    let byte = |v: f32| ((v + m).clamp(0.0, 1.0) * 255.0).round() as u32;
+    byte(r) << 16 | byte(g) << 8 | byte(b)
+}
+
+/// The still of a picture look, for the editor.
+fn media_thumb(name: &str) -> Image {
+    media::poster(name).map_or_else(Image::default, |p| {
+        Image::from_rgb8(slint::SharedPixelBuffer::clone_from_slice(
+            &p.px, p.w as u32, p.h as u32,
+        ))
+    })
 }
 /// Refreshes which card is active, keeping the pictures already in the model.
 fn mark(model: ModelRc<ThemeCard>, looks: &[Preset], current: &Preset) {
@@ -528,7 +680,7 @@ impl Controller {
         let studio = window.global::<ThemeStudio>();
         let names: Vec<slint::SharedString> = Scene::ALL.iter().map(|s| s.label().into()).collect();
         studio.set_scenes(ModelRc::new(VecModel::from(names)));
-        studio.set_palettes(ModelRc::new(VecModel::from(palettes())));
+        studio.set_palettes(ModelRc::new(VecModel::from(palettes(look.custom))));
         studio.set_gallery(cards(&scenes::gallery(), &look));
         studio.set_saved(cards(&saved, &look));
         let size = window.window().size();
@@ -581,6 +733,24 @@ impl Controller {
         st.set_grain(look.grain);
         st.set_seed(look.seed as i32);
         st.set_rotate(look.rotate);
+        let palettes = st.get_palettes();
+        if let Some(last) = palettes.row_count().checked_sub(1) {
+            palettes.set_row_data(last, custom_row(look.custom));
+        }
+        let pick = PICK.load(Ordering::Relaxed).min(4);
+        let colors: Vec<Color> = look.custom.iter().map(|c| rgb(*c)).collect();
+        st.set_custom(ModelRc::new(VecModel::from(colors)));
+        st.set_custom_pick(pick as i32);
+        let (h, s, v) = to_hsv(look.custom[pick]);
+        st.set_custom_hue(h);
+        st.set_custom_sat(s);
+        st.set_custom_val(v);
+        st.set_custom_hex(format!("#{:06x}", look.custom[pick]).into());
+        st.set_picture(look.scene == Scene::Picture);
+        st.set_moving(!look.media.is_empty() && !media::is_still(&look.media));
+        if look.scene == Scene::Picture {
+            st.set_media_thumb(media_thumb(&look.media));
+        }
         let (accent, saved, paused) = {
             let s = self.state.lock();
             (
@@ -626,6 +796,9 @@ impl Controller {
         match action {
             "scene" => {
                 let scene = Scene::at(index);
+                if scene == Scene::Picture && look.media.is_empty() {
+                    return self.theme_pick_media();
+                }
                 if look.scene == Scene::Classic && look.palette == "Mono" && scene != Scene::Classic
                 {
                     look.palette = scenes::PALETTES
@@ -635,6 +808,39 @@ impl Controller {
                 }
                 look.scene = scene;
             }
+            "palette" if index as usize >= scenes::PALETTES.len() => {
+                if look.palette != scenes::CUSTOM {
+                    look.custom = look.base_colors();
+                }
+                look.palette = scenes::CUSTOM.into();
+            }
+            "custom-pick" => {
+                PICK.store(index.clamp(0, 4) as usize, Ordering::Relaxed);
+                let this = self.clone();
+                return self.ui(move |w| this.theme_sync(&w, &look));
+            }
+            "hue" | "sat" | "val" | "hex" => {
+                let pick = PICK.load(Ordering::Relaxed).min(4);
+                let (mut h, mut s, mut v) = to_hsv(look.custom[pick]);
+                match action {
+                    "hue" => h = amount.min(0.999),
+                    "sat" => s = amount,
+                    "val" => v = amount,
+                    _ => {}
+                }
+                look.custom[pick] = if action == "hex" {
+                    match scenes::parse_hex(value) {
+                        Some(c) => c,
+                        None => return self.status("Write a colour like #3ddc97"),
+                    }
+                } else {
+                    from_hsv(h, s, v)
+                };
+                look.palette = scenes::CUSTOM.into();
+            }
+            "media-pick" => return self.theme_pick_media(),
+            "import" => return self.theme_pick_file(),
+            "export" => return self.theme_export(),
             "palette" => {
                 look.palette = scenes::PALETTES
                     [(index.max(0) as usize).min(scenes::PALETTES.len() - 1)]
@@ -754,13 +960,18 @@ impl Controller {
             });
     }
     pub fn theme_save(&self, name: &str) {
+        let mut look = self.shown_look();
+        look.name = name.to_owned();
+        self.theme_keep(look);
+        self.status(format!("Saved \"{name}\""));
+    }
+    /// Puts `look` on screen and in "Your themes", replacing one with the same name.
+    fn theme_keep(&self, look: Preset) {
+        *PINNED.lock() = None;
+        show(&look);
+        let name = look.name.clone();
         let (current, saved) = {
             let mut s = self.state.lock();
-            let mut look = PINNED
-                .lock()
-                .take()
-                .map_or_else(|| s.settings.theme.clone(), |(_, l)| l);
-            look.name = name.to_owned();
             s.settings.theme = look.clone();
             let list = &mut s.settings.saved_themes;
             match list.iter_mut().find(|t| t.name == name) {
@@ -776,7 +987,109 @@ impl Controller {
             this.theme_thumbs();
         });
         self.save_settings();
-        self.status(format!("Saved \"{name}\""));
+    }
+    fn theme_pick_media(&self) {
+        let this = self.clone();
+        tokio::spawn(async move {
+            let kinds: Vec<&str> = media::STILLS.iter().chain(media::MOVING).copied().collect();
+            let picked = rfd::AsyncFileDialog::new()
+                .set_title("Choose a picture or video")
+                .add_filter("Pictures, GIFs and videos", &kinds)
+                .pick_file()
+                .await;
+            if let Some(file) = picked {
+                this.theme_use_media(file.path().to_path_buf());
+            }
+        });
+    }
+    fn theme_pick_file(&self) {
+        let this = self.clone();
+        tokio::spawn(async move {
+            let picked = rfd::AsyncFileDialog::new()
+                .set_title("Import a theme")
+                .add_filter("Tonal themes", &["tonaltheme", "toml"])
+                .pick_file()
+                .await;
+            if let Some(file) = picked {
+                this.theme_import(file.path().to_path_buf());
+            }
+        });
+    }
+    /// A file opened or dropped on the window: a theme to import, or a background to use.
+    pub fn theme_open_file(&self, path: PathBuf) {
+        if media::is_media(&path) {
+            self.theme_use_media(path);
+        } else if path
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("tonaltheme") || e.eq_ignore_ascii_case("toml"))
+        {
+            self.theme_import(path);
+        }
+    }
+    fn theme_use_media(&self, path: PathBuf) {
+        self.status("Getting your background ready…");
+        let this = self.clone();
+        tokio::spawn(async move {
+            let done = tokio::task::spawn_blocking(move || media::import(&path)).await;
+            let Some((name, rgb)) = this.result(done.map_err(Into::into).and_then(|r| r)) else {
+                return;
+            };
+            let mut look = this.shown_look();
+            look.scene = Scene::Picture;
+            look.media = name;
+            look.media_rgb = Some(rgb);
+            look.name = "Your own".into();
+            this.theme_set(look);
+            this.status("Background set. Press Save to keep it with your themes");
+        });
+    }
+    fn theme_import(&self, path: PathBuf) {
+        let this = self.clone();
+        tokio::spawn(async move {
+            let done = tokio::task::spawn_blocking(move || super::theme_files::import(&path)).await;
+            if let Some(look) = this.result(done.map_err(Into::into).and_then(|r| r)) {
+                let name = look.name.clone();
+                this.theme_keep(look);
+                this.status(format!("Added \"{name}\" to your themes"));
+            }
+        });
+    }
+    fn theme_export(&self) {
+        let look = self.shown_look();
+        let this = self.clone();
+        tokio::spawn(async move {
+            let stem: String = look
+                .name
+                .chars()
+                .map(|c| {
+                    if c.is_alphanumeric() || c == ' ' || c == '-' {
+                        c
+                    } else {
+                        '_'
+                    }
+                })
+                .collect();
+            let picked = rfd::AsyncFileDialog::new()
+                .set_title("Export this theme")
+                .set_file_name(format!("{}.tonaltheme", stem.trim()))
+                .add_filter("Tonal theme", &["tonaltheme"])
+                .save_file()
+                .await;
+            let Some(file) = picked else { return };
+            let path = file.path().to_path_buf();
+            let shown = path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let done =
+                tokio::task::spawn_blocking(move || super::theme_files::export(&look, &path)).await;
+            if this
+                .result(done.map_err(Into::into).and_then(|r| r))
+                .is_some()
+            {
+                this.status(format!("Exported {shown}"));
+            }
+        });
     }
     /// The look on screen: a playing playlist's pinned theme, or the user's own.
     fn shown_look(&self) -> Preset {
@@ -796,7 +1109,7 @@ impl Controller {
         let this = self.clone();
         self.ui(move |w| {
             let studio = w.global::<ThemeStudio>();
-            studio.set_palettes(ModelRc::new(VecModel::from(palettes())));
+            studio.set_palettes(ModelRc::new(VecModel::from(palettes(look.custom))));
             if look.palette == scenes::ALBUM {
                 this.theme_sync(&w, &look);
             }

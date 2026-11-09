@@ -55,6 +55,7 @@ Stream YouTube Music, SoundCloud and Audius, play your own files and bring your 
 ### Make it yours
 
 - **Living themes:** 15 animated background scenes (aurora, dunes, ocean tide, misty pines, liquid glass, synthwave, sakura petals, city rain and more), 18 color palettes, endless seed variants that can crossfade on a timer, four panel styles (Clear, Glass, Neon, Solid) and optional music reactivity. A "From the album" palette follows the playing song's cover, playlists can keep their own theme, and themes can be shared as a short code. The default Classic look paints nothing and costs 0% CPU.
+- **Your own themes:** pick your own five colours, or put your own picture, GIF or video behind Tonal and let its colours tint the rest. Export a theme as a `.tonaltheme` file (the picture goes inside it), and import one with the Import button or by dropping it on the window. Inside is a plain `theme.toml` you can edit by hand.
 - **Album colors:** the waves and the equalizer take a soft color from the cover.
 - **Flowing visualizer:** a soft wave across the bottom of the window that moves with the music. It only runs while something plays, and settles into a still line when you pause.
 

@@ -14,6 +14,7 @@ mod search;
 mod settings;
 mod sleep;
 mod state;
+mod theme_files;
 mod themes;
 mod waves;
 
@@ -264,6 +265,10 @@ pub fn run() -> anyhow::Result<()> {
                 }
                 EventResult::Propagate
             }
+            winit::event::WindowEvent::DroppedFile(path) => {
+                c.theme_open_file(path.clone());
+                EventResult::Propagate
+            }
             winit::event::WindowEvent::Focused(focused) => {
                 themes::set_focused(*focused);
                 EventResult::Propagate
@@ -274,6 +279,7 @@ pub fn run() -> anyhow::Result<()> {
             }
             winit::event::WindowEvent::Resized(size) => {
                 themes::set_minimized(size.width == 0 || size.height == 0);
+                themes::set_size(size.width, size.height);
                 EventResult::Propagate
             }
             _ => EventResult::Propagate,

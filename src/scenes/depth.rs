@@ -21,7 +21,7 @@ struct Depth {
 fn depth(scene: Scene) -> Depth {
     let d = |fog, horizon, near| Depth { fog, horizon, near };
     match scene {
-        Scene::Classic | Scene::Halftone => d(0.0, 0.0, Near::None),
+        Scene::Classic | Scene::Halftone | Scene::Picture => d(0.0, 0.0, Near::None),
         Scene::Aurora => d(0.35, 0.78, Near::Motes),
         Scene::Dunes => d(0.3, 0.58, Near::Motes),
         Scene::Tide => d(0.4, 0.52, Near::Motes),
