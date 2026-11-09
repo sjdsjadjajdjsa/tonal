@@ -2,13 +2,14 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
-## Unreleased
+## 0.11.0 - 2026-11-09
 
 ### Added
 - Your own colours: the "Your colors" palette has five colours you set with hue, saturation and brightness, or by typing a hex code.
 - Your own background: the "Your own" scene shows a picture, GIF or video you choose, dimmed like the other scenes, and tints Tonal with its main colour. A video plays muted and on a loop, holds still on battery and stops when the window is hidden.
 - Theme files: Export saves the theme on screen as a `.tonaltheme` file with its picture inside, and Import, or dropping the file on the window, adds it to your themes.
 - Share codes now carry your own colours. Older codes still work.
+- Windows builds are made on Linux now, so every release builds on the project's own machines.
 
 ### Fixed
 - "Add to queue" put the song after the whole album or playlist that was playing. Added songs now play right after the current one, in the order you added them, and a message says so.
