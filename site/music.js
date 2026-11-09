@@ -1,33 +1,43 @@
-// "First Light": a short loop made in code (no recording, so no rights to clear),
+// "First Light": a short waltz for harp and ocarina made in code (no recording, so no rights to clear),
 // played through Tonal's six equalizer bands, plus the app's interface sounds
 // from src/sfx.rs. Nothing makes a sound until the visitor clicks something.
 
-const BPM = 90;
+const BPM = 92;
 const STEP = 60 / BPM / 4;
-const BARS = 16;
-const STEPS = BARS * 16;
+const BAR = 12;
+const BARS = 20;
+const STEPS = BARS * BAR;
 export const DURATION = STEPS * STEP;
 
-const CHORDS = [[53, 57, 60, 64], [53, 57, 59, 64], [52, 55, 59, 62], [55, 59, 60, 64]];
-const ROOTS = [38, 43, 36, 45];
-const LEAD = [
-  [[[2, 74, 2], [4, 76, 2], [6, 77, 4], [10, 76, 2], [12, 74, 4]],
-   [[2, 71, 2], [4, 74, 2], [6, 76, 6], [12, 74, 2], [14, 71, 2]],
-   [[0, 72, 4], [4, 71, 2], [6, 67, 6], [12, 69, 2], [14, 71, 2]],
-   [[0, 72, 6], [8, 76, 4], [12, 79, 4]]],
-  [[[2, 77, 2], [4, 79, 2], [6, 81, 4], [10, 79, 2], [12, 77, 4]],
-   [[2, 74, 2], [4, 77, 2], [6, 79, 6], [12, 77, 2], [14, 74, 2]],
-   [[0, 76, 4], [4, 74, 2], [6, 71, 6], [12, 72, 2], [14, 74, 2]],
-   [[0, 76, 8], [8, 72, 4], [12, 69, 4]]],
+const D = [50, 4], G = [55, 4], A = [45, 4], Bm = [47, 3], Em = [52, 3], Fsm = [54, 3];
+const CHORDS = [D, G, D, A, D, G, Bm, A, D, G, Em, A, G, A, Fsm, Bm, G, A, D, D];
+const MELODY = [
+  [], [], [], [],
+  [[0, 74, 6], [6, 78, 2], [8, 81, 4]],
+  [[0, 83, 8], [8, 81, 2], [10, 79, 2]],
+  [[0, 78, 6], [6, 74, 2], [8, 76, 4]],
+  [[0, 73, 4], [4, 76, 8]],
+  [[0, 74, 6], [6, 78, 2], [8, 81, 4]],
+  [[0, 86, 8], [8, 83, 2], [10, 81, 2]],
+  [[0, 79, 4], [4, 78, 4], [8, 76, 4]],
+  [[0, 81, 12]],
+  [[0, 83, 4], [4, 81, 2], [6, 79, 2], [8, 83, 4]],
+  [[0, 85, 8], [8, 83, 2], [10, 81, 2]],
+  [[0, 81, 4], [4, 78, 4], [8, 73, 4]],
+  [[0, 74, 8], [8, 76, 2], [10, 78, 2]],
+  [[0, 79, 6], [6, 83, 2], [8, 86, 4]],
+  [[0, 88, 6], [6, 86, 2], [8, 85, 4]],
+  [[0, 86, 12]],
+  [],
 ];
 
 /// The song has no words, so the synced lines follow what joins and leaves the mix.
 export const LYRICS = [
-  [0, "♪ Keys and a soft hi-hat"],
-  [4, "♪ Drums and bass come in"],
-  [8, "♪ The melody"],
-  [12, "♪ The melody, higher"],
-].map(([bar, text]) => ({ text, time: bar * 16 * STEP }));
+  [0, "♪ A harp, softly"],
+  [4, "♪ The ocarina comes in"],
+  [12, "♪ Strings and drums join"],
+  [18, "♪ And back to the harp"],
+].map(([bar, text]) => ({ text, time: bar * BAR * STEP }));
 
 const BANDS = [
   ["lowshelf", 60],
@@ -129,103 +139,119 @@ export function createMusic() {
     }
   }
 
-  function piano(note, t, level, length) {
+  function harp(note, t, level) {
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(level, t + 0.004);
+    g.gain.setTargetAtTime(0, t + 0.004, 0.55);
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.setValueAtTime(4200, t);
+    lp.frequency.setTargetAtTime(1400, t, 0.25);
+    g.connect(lp);
+    send(lp, 0.8, 0.6);
+    for (const [type, mul, ratio] of [["triangle", 1, 1], ["sine", 0.3, 2], ["sine", 0.08, 3]]) {
+      const o = ctx.createOscillator();
+      const m = ctx.createGain();
+      m.gain.value = mul;
+      o.type = type;
+      o.frequency.value = hz(note) * ratio;
+      o.connect(m).connect(g);
+      o.start(t);
+      o.stop(t + 3.5);
+    }
+  }
+
+  function ocarina(note, t, length) {
     const f = hz(note);
     const g = ctx.createGain();
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(level, t + 0.006);
-    g.gain.setTargetAtTime(level * 0.35, t + 0.006, 0.35);
-    g.gain.setTargetAtTime(0, t + length, 0.18);
-    const lp = ctx.createBiquadFilter();
-    lp.type = "lowpass";
-    lp.frequency.setValueAtTime(3200, t);
-    lp.frequency.setTargetAtTime(1300, t, 0.4);
-    g.connect(lp);
-    send(lp, 0.9, 0.45);
-    const carrier = ctx.createOscillator();
-    carrier.frequency.value = f;
-    const mod = ctx.createOscillator();
-    mod.frequency.value = f;
-    const depth = ctx.createGain();
-    depth.gain.setValueAtTime(f * 1.4, t);
-    depth.gain.setTargetAtTime(f * 0.15, t, 0.12);
-    mod.connect(depth).connect(carrier.frequency);
-    carrier.connect(g);
-    for (const o of [carrier, mod]) {
-      o.start(t);
-      o.stop(t + length + 1);
-    }
-  }
-
-  function keys(chord, t, level, length) {
-    chord.forEach((note, i) => piano(note, t + i * 0.008, level, length));
-  }
-
-  function bass(note, t, length) {
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(0.3, t + 0.012);
-    g.gain.setTargetAtTime(0.2, t + 0.012, 0.15);
-    g.gain.setTargetAtTime(0, t + length, 0.05);
-    const lp = ctx.createBiquadFilter();
-    lp.type = "lowpass";
-    lp.frequency.setValueAtTime(700, t);
-    lp.frequency.setTargetAtTime(260, t, 0.08);
-    g.connect(lp).connect(musicBus);
-    for (const [type, mul] of [["sine", 1], ["triangle", 0.35]]) {
-      const o = ctx.createOscillator();
-      const m = ctx.createGain();
-      m.gain.value = mul;
-      o.type = type;
-      o.frequency.value = hz(note);
-      o.connect(m).connect(g);
-      o.start(t);
-      o.stop(t + length + 0.4);
-    }
-  }
-
-  function lead(note, t, length) {
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(0.075, t + 0.03);
-    g.gain.setTargetAtTime(0.055, t + 0.03, 0.2);
-    g.gain.setTargetAtTime(0, t + length, 0.08);
-    const lp = ctx.createBiquadFilter();
-    lp.type = "lowpass";
-    lp.frequency.value = 2600;
-    g.connect(lp);
-    send(lp, 1, 0.5, 0.6);
+    g.gain.linearRampToValueAtTime(0.13, t + 0.05);
+    g.gain.setTargetAtTime(0.1, t + 0.05, 0.25);
+    g.gain.setTargetAtTime(0, t + length, 0.07);
+    send(g, 0.85, 0.75, 0.35);
     const vibrato = ctx.createOscillator();
-    vibrato.frequency.value = 5.2;
+    vibrato.frequency.value = 5;
     const amount = ctx.createGain();
     amount.gain.setValueAtTime(0, t);
-    amount.gain.linearRampToValueAtTime(9, t + 0.4);
+    amount.gain.linearRampToValueAtTime(0, t + 0.25);
+    amount.gain.linearRampToValueAtTime(length > 0.6 ? 14 : 5, t + 0.6);
     vibrato.connect(amount);
-    for (const [type, mul, detune] of [["triangle", 1, 0], ["sine", 0.5, 1200], ["sawtooth", 0.06, 4]]) {
+    for (const [mul, ratio] of [[1, 1], [0.07, 2], [0.025, 3]]) {
       const o = ctx.createOscillator();
       const m = ctx.createGain();
       m.gain.value = mul;
-      o.type = type;
-      o.frequency.value = hz(note);
-      o.detune.value = detune;
+      o.frequency.value = f * ratio;
       amount.connect(o.detune);
       o.connect(m).connect(g);
       o.start(t);
-      o.stop(t + length + 0.6);
+      o.stop(t + length + 0.5);
     }
     vibrato.start(t);
-    vibrato.stop(t + length + 0.6);
+    vibrato.stop(t + length + 0.5);
+    const s = ctx.createBufferSource();
+    s.buffer = noise;
+    const bp = ctx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = f * 2;
+    bp.Q.value = 3;
+    const breath = ctx.createGain();
+    breath.gain.setValueAtTime(0, t);
+    breath.gain.linearRampToValueAtTime(0.03, t + 0.02);
+    breath.gain.setTargetAtTime(0.006, t + 0.02, 0.08);
+    breath.gain.setTargetAtTime(0, t + length, 0.05);
+    s.connect(bp).connect(breath).connect(g);
+    s.start(t, Math.random() * 0.5);
+    s.stop(t + length + 0.4);
   }
 
-  function kick(t, level = 0.6) {
+  function strings(chord, t, level, length) {
+    const [root, third] = chord;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(level, t + 0.7);
+    g.gain.setTargetAtTime(0, t + length, 0.35);
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 1100;
+    g.connect(lp);
+    send(lp, 0.6, 0.8);
+    for (const note of [root + 12, root + 12 + third, root + 19]) {
+      for (const detune of [-7, 7]) {
+        const o = ctx.createOscillator();
+        o.type = "sawtooth";
+        o.frequency.value = hz(note);
+        o.detune.value = detune;
+        o.connect(g);
+        o.start(t);
+        o.stop(t + length + 1.5);
+      }
+    }
+  }
+
+  function low(note, t, length) {
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.22, t + 0.03);
+    g.gain.setTargetAtTime(0, t + length * 0.6, 0.3);
+    g.connect(musicBus);
+    const o = ctx.createOscillator();
+    o.frequency.value = hz(note);
+    o.connect(g);
+    o.start(t);
+    o.stop(t + length + 1.5);
+  }
+
+  function drum(t, level) {
     const o = ctx.createOscillator();
     const g = ctx.createGain();
-    o.frequency.setValueAtTime(150, t);
-    o.frequency.exponentialRampToValueAtTime(48, t + 0.09);
-    env(g, t, level, 0.002, 0.13);
-    o.connect(g).connect(musicBus);
+    o.frequency.setValueAtTime(110, t);
+    o.frequency.exponentialRampToValueAtTime(62, t + 0.25);
+    env(g, t, level, 0.004, 0.22);
+    o.connect(g);
+    send(g, 1, 0.5);
     o.start(t);
-    o.stop(t + 0.6);
+    o.stop(t + 1.2);
   }
 
   function hiss(t, type, f, q, peak, decay, wet = 0) {
@@ -241,18 +267,6 @@ export function createMusic() {
     send(g, 1, wet);
     s.start(t, Math.random() * 0.5);
     s.stop(t + decay * 6);
-  }
-
-  function snare(t) {
-    hiss(t, "bandpass", 2200, 0.8, 0.2, 0.06, 0.5);
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.frequency.setValueAtTime(220, t);
-    o.frequency.exponentialRampToValueAtTime(160, t + 0.05);
-    env(g, t, 0.18, 0.001, 0.04);
-    o.connect(g).connect(musicBus);
-    o.start(t);
-    o.stop(t + 0.3);
   }
 
   function bell(freq, t, level, bus) {
@@ -271,27 +285,18 @@ export function createMusic() {
   }
 
   function schedule(s, t) {
-    const bar = Math.floor(s / 16) % BARS, beat = s % 16, chord = bar % 4;
-    const swing = beat % 2 ? STEP * 0.16 : 0;
-    const drums = bar >= 4;
-    if (beat === 0) keys(CHORDS[chord], t, 0.06, STEP * 5);
-    if (beat === 6) keys(CHORDS[chord], t + swing, 0.04, STEP * 3);
-    if (beat === 10) keys(CHORDS[chord].slice(1), t, 0.035, STEP * 5);
-    if (beat % 2 === 0) hiss(t, "highpass", 8000, 0.7, beat % 4 ? 0.03 : 0.045, 0.022);
-    if (beat % 2 && drums) hiss(t + swing, "highpass", 9000, 0.7, 0.012, 0.015);
-    if (beat === 14 && drums) hiss(t, "highpass", 7000, 0.7, 0.04, 0.09);
-    if (drums) {
-      if (beat === 0 || beat === 10 || (beat === 7 && bar % 2)) kick(t + swing, beat === 7 ? 0.4 : 0.6);
-      if (beat === 4 || beat === 12) snare(t);
-      if (beat === 15 && bar % 4 === 3) snare(t + swing);
-      if (beat === 0) bass(ROOTS[chord], t, STEP * 5);
-      if (beat === 6) bass(ROOTS[chord] + 12, t + swing, STEP * 1.5);
-      if (beat === 10) bass(ROOTS[chord] + 7, t, STEP * 3);
-      if (beat === 14) bass(ROOTS[chord] - 2, t, STEP * 1.5);
-    }
-    if (bar >= 8 && bar < 16) {
-      for (const [at, note, length] of LEAD[bar < 12 ? 0 : 1][chord]) if (at === beat) lead(note, t, length * STEP);
-    }
+    const bar = Math.floor(s / BAR) % BARS, at = s % BAR, chord = CHORDS[bar];
+    const [root, third] = chord;
+    const melody = bar >= 4 && bar < 19;
+    const big = bar >= 12 && bar < 19;
+    const arp = [root, root + 7, root + 12, root + 12 + third, root + 19, root + 12];
+    if (at % 2 === 0) harp(arp[at / 2], t, melody ? 0.07 : 0.09);
+    if (at === 0 && melody) low(root - 12, t, BAR * STEP);
+    if (at === 0 && bar >= 8 && bar < 19) strings(chord, t, big ? 0.03 : 0.016, BAR * STEP);
+    if (big && at === 0) drum(t, 0.35);
+    if (big && at === 8 && bar % 2) drum(t, 0.18);
+    if (big && at % 2 === 0) hiss(t, "highpass", 7000, 0.7, at % 4 ? 0.008 : 0.014, 0.03);
+    if (melody) for (const [when, note, length] of MELODY[bar]) if (when === at) ocarina(note, t, length * STEP);
   }
 
   function tick() {

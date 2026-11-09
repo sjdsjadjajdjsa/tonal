@@ -22,9 +22,9 @@ Poolsuite in web-refs), and it behaves like Tonal:
 
 - **Pages** have real addresses (`/equalizer/` and so on, each with its own title and
   share picture in `og/`) and swap in with Tonal's page transition.
-- **The player bar plays a song**, "First Light", made in code by `music.js` (a 16-bar
-  instrumental: electric piano, bass, swung drums and a lead, with a room reverb and an echo,
-  on Web Audio, so there are no rights to clear). It goes through
+- **The player bar plays a song**, "First Light", made in code by `music.js` (a 20-bar
+  waltz for harp and ocarina, with strings, soft drums, a room reverb and an echo, on Web
+  Audio, so there are no rights to clear). It goes through
   Tonal's six equalizer bands and a limiter; the waves along the bar follow its levels
   and settle when it pauses. The progress bar seeks, the heart rings the like bell, the
   volume slider is the master volume. Nothing makes a sound until the visitor clicks
