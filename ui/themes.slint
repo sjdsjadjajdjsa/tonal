@@ -287,6 +287,44 @@ export component ThemesView inherits Rectangle {
                     Button { text: "Save"; icon: Icons.plus; primary: true; clicked => { root.save(); } }
                 }
             }
+            Rectangle {
+                height: 84px;
+                border-radius: Theme.radius-l;
+                background: pick.has-hover ? Theme.hover : Theme.surface;
+                border-width: 1px;
+                border-color: Theme.border;
+                animate background { duration: 120ms; }
+                pick := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { ThemeStudio.action("media-pick", ""); }
+                }
+                HorizontalLayout {
+                    padding-left: 14px;
+                    padding-right: 18px;
+                    spacing: 14px;
+                    Rectangle {
+                        y: 12px;
+                        width: 96px;
+                        height: 60px;
+                        border-radius: Theme.radius-m;
+                        background: Theme.raised;
+                        clip: true;
+                        if ThemeStudio.picture: Image { width: 100%; height: 100%; source: ThemeStudio.media-thumb; image-fit: cover; }
+                        if !ThemeStudio.picture: Icon { data: Icons.plus; width: 22px; height: 22px; tint: Theme.muted; }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        horizontal-stretch: 1;
+                        spacing: 3px;
+                        Label { text: ThemeStudio.picture ? "Your background" : "Use your own background"; font-size: 15px; font-weight: 700; overflow: elide; }
+                        Label { text: "A picture, GIF or video (MP4, WebM, MOV). Or drop a file on the window."; font-size: 12px; color: Theme.muted; overflow: elide; }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Button { text: ThemeStudio.picture ? "Change" : "Choose file"; icon: Icons.plus; primary: true; clicked => { ThemeStudio.action("media-pick", ""); } }
+                    }
+                }
+            }
             HorizontalLayout {
                 spacing: 8px;
                 VerticalLayout {
