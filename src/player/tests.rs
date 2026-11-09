@@ -305,7 +305,7 @@ async fn real_mpv_remove_tail_emits_near_end_once() {
         1
     );
     engine
-        .command(Cmd::Enqueue(vec![tone.tracks()[1].clone()], false))
+        .command(Cmd::Enqueue(vec![tone.tracks()[1].clone()], Place::End))
         .await
         .unwrap();
     engine.command(Cmd::Remove(1)).await.unwrap();
@@ -676,7 +676,7 @@ async fn real_mpv_queued_eof_after_jump_is_ignored() {
     engine
         .command(Cmd::Enqueue(
             vec![track("C", tone.0.to_str().unwrap())],
-            false,
+            Place::End,
         ))
         .await
         .unwrap();
@@ -1196,6 +1196,40 @@ async fn position(rx: &mut UnboundedReceiver<PlayerEvent>, min: f64) {
 }
 
 #[test]
+fn added_songs_play_after_the_current_one_in_the_order_added() {
+    let mut queue = Queue::default();
+    let album = (0..5)
+        .map(|i| track(&format!("a{i}"), "unused"))
+        .collect::<Vec<_>>();
+    queue.replace(album.clone(), 1);
+    queue.insert(vec![track("q1", "unused")], Place::Queue);
+    queue.insert(vec![track("q2", "unused")], Place::Queue);
+    queue.insert(vec![track("n", "unused")], Place::Next);
+    let ids = |q: &Queue| {
+        q.tracks()
+            .into_iter()
+            .map(|t| t.source_id)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(ids(&queue), ["a0", "a1", "n", "q1", "q2", "a2", "a3", "a4"]);
+    queue.current = queue.next(RepeatMode::Off, true);
+    queue.insert(vec![track("q3", "unused")], Place::Queue);
+    assert_eq!(
+        ids(&queue),
+        ["a0", "a1", "n", "q1", "q2", "q3", "a2", "a3", "a4"]
+    );
+    queue.set_shuffle(true);
+    assert_eq!(ids(&queue)[..6], ["a0", "a1", "n", "q1", "q2", "q3"]);
+    queue.set_shuffle(false);
+    assert_eq!(
+        ids(&queue),
+        ["a0", "a1", "n", "q1", "q2", "q3", "a2", "a3", "a4"]
+    );
+    queue.insert(vec![track("r", "unused")], Place::End);
+    assert_eq!(ids(&queue).last().map(String::as_str), Some("r"));
+}
+
+#[test]
 fn queue_restores_order_and_preserves_duplicate_identity() {
     let mut queue = Queue::default();
     let tracks = (0..12)
@@ -1207,7 +1241,7 @@ fn queue_restores_order_and_preserves_duplicate_identity() {
     assert_eq!(queue.key(), current);
     queue.set_shuffle(false);
     assert_eq!(queue.tracks(), tracks);
-    queue.insert(vec![tracks[4].clone()], true);
+    queue.insert(vec![tracks[4].clone()], Place::Next);
     assert_ne!(queue.key_at(4), queue.key_at(5));
     assert_eq!(queue.current, Some(4));
     queue.move_track(4, 1);

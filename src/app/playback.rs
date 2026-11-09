@@ -54,7 +54,7 @@ impl Controller {
                     tracks.retain(|t| !s.queue.iter().any(|q| q.id == t.id));
                 }
                 this.playable(&mut tracks);
-                this.player.enqueue(tracks);
+                this.player.enqueue(tracks, crate::player::Place::End);
             }
         });
     }

@@ -166,6 +166,7 @@ use anyhow::Result;
 pub use mpv::AudioDevice;
 use mpv::{Disconnected, Launch, Message, Mpv};
 use quality::Quality;
+pub use queue::Place;
 use queue::Queue;
 use serde_json::{Value, json};
 use tokio::{
@@ -176,7 +177,7 @@ use tokio::{
 enum Cmd {
     Play(Vec<Track>, usize),
     Restore(Vec<Track>, usize, f64),
-    Enqueue(Vec<Track>, bool),
+    Enqueue(Vec<Track>, Place),
     Remove(usize),
     Replace(u64, Track),
     SkipFailed(u64),
@@ -224,11 +225,8 @@ impl PlayerHandle {
     pub fn restore_tracks(&self, tracks: Vec<Track>, start: usize, position: f64) {
         let _ = self.tx.send(Cmd::Restore(tracks, start, position));
     }
-    pub fn enqueue(&self, tracks: Vec<Track>) {
-        let _ = self.tx.send(Cmd::Enqueue(tracks, false));
-    }
-    pub fn play_next(&self, tracks: Vec<Track>) {
-        let _ = self.tx.send(Cmd::Enqueue(tracks, true));
+    pub fn enqueue(&self, tracks: Vec<Track>, place: Place) {
+        let _ = self.tx.send(Cmd::Enqueue(tracks, place));
     }
     pub fn remove(&self, index: usize) {
         let _ = self.tx.send(Cmd::Remove(index));
@@ -784,9 +782,9 @@ impl Engine {
                 self.start_at = Some(position).filter(|p| p.is_finite() && *p > 0.0);
                 self.start_current().await?;
             }
-            Cmd::Enqueue(tracks, next) => {
+            Cmd::Enqueue(tracks, place) => {
                 self.cancel_fade().await?;
-                self.queue.insert(tracks, next);
+                self.queue.insert(tracks, place);
                 self.queue_changed();
                 self.sync_prefetch().await?;
             }

@@ -86,14 +86,24 @@ impl Controller {
         match action {
             "Play" => self.play(index),
             "Play next" | "Add to queue" => {
+                let title = track.title.clone();
                 let mut tracks = vec![track];
                 self.playable(&mut tracks);
-                if action == "Play next" {
-                    self.player.play_next(tracks);
-                } else {
-                    self.player.enqueue(tracks);
-                }
+                let next = action == "Play next";
+                self.player.enqueue(
+                    tracks,
+                    if next {
+                        crate::player::Place::Next
+                    } else {
+                        crate::player::Place::Queue
+                    },
+                );
                 self.sound(crate::sfx::Sound::Queued);
+                self.status(if next {
+                    format!("\"{title}\" plays next")
+                } else {
+                    format!("Added \"{title}\" to the queue")
+                });
             }
             "Like / Unlike" => self.like(track),
             "Download" => self.download(track),

@@ -11,6 +11,19 @@ const ARTIST_GAP: usize = 2;
 struct Entry {
     key: u64,
     track: Track,
+    /// Added with "Play next" or "Add to queue", so it plays before the rest.
+    queued: bool,
+}
+
+/// Where new songs go in the queue.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Place {
+    /// Right after the song playing now.
+    Next,
+    /// After the song playing now and the songs added before, ahead of the rest.
+    Queue,
+    /// At the very end, as radio does.
+    End,
 }
 
 #[derive(Default)]
@@ -67,7 +80,7 @@ impl Queue {
         self.entries.clear();
         self.original.clear();
         self.current = None;
-        self.insert(tracks, false);
+        self.splice(0, tracks, false);
         self.current = if self.entries.is_empty() {
             None
         } else {
@@ -75,22 +88,37 @@ impl Queue {
         };
     }
 
-    pub fn insert(&mut self, tracks: Vec<Track>, next: bool) {
-        let index = if next {
-            self.current.map_or(0, |i| i + 1)
-        } else {
-            self.entries.len()
+    pub fn insert(&mut self, tracks: Vec<Track>, place: Place) {
+        let after = self.current.map_or(self.entries.len(), |i| i + 1);
+        let index = match place {
+            Place::Next => after,
+            Place::Queue => after + self.queued_from(after),
+            Place::End => self.entries.len(),
         };
-        let anchor = if next { self.key() } else { None };
-        let original_index = anchor
+        self.splice(index, tracks, place != Place::End);
+    }
+
+    /// How many songs added by hand wait in a row from `index`.
+    fn queued_from(&self, index: usize) -> usize {
+        self.entries
+            .get(index..)
+            .map_or(0, |rest| rest.iter().take_while(|e| e.queued).count())
+    }
+
+    fn splice(&mut self, index: usize, tracks: Vec<Track>, queued: bool) {
+        let index = index.min(self.entries.len());
+        let original_index = index
+            .checked_sub(1)
+            .and_then(|i| self.key_at(i))
             .and_then(|key| self.original.iter().position(|k| *k == key))
-            .map_or(self.original.len(), |i| i + 1);
+            .map_or(0, |i| i + 1);
         let mut entries = Vec::new();
         for track in tracks {
             self.serial += 1;
             entries.push(Entry {
                 key: self.serial,
                 track,
+                queued,
             });
         }
         self.original.splice(
@@ -175,6 +203,7 @@ impl Queue {
 
     fn shuffle_rest(&mut self) {
         let upcoming = self.current.map_or(0, |index| index + 1);
+        let upcoming = upcoming + self.queued_from(upcoming);
         let mut rest: Vec<Entry> = self.entries.drain(upcoming..).collect();
         rest.shuffle(&mut rand::rng());
         let (fresh, heard): (Vec<_>, Vec<_>) = rest
