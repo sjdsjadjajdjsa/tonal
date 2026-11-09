@@ -210,6 +210,27 @@ pub(super) fn debug_hooks(app: &Controller, window: &AppWindow) {
     if let Ok(preset) = std::env::var("TONAL_DEBUG_EQ") {
         app.eq_choose(&preset);
     }
+    if let Ok(active) = std::env::var("TONAL_DEBUG_LYRICS") {
+        let active = active.parse::<usize>().ok();
+        let lines = [
+            "I'ma mess up, wear colours, then hide it in a puffer",
+            "'Cause my friends told me, \"If we all look the same, then we'll look tougher\"",
+            "No funds left, all spent on something vintage that I'll never wear again",
+            "I look fly when I pull up tonight and you say \"What's up?\"",
+            "One too many late nights, another delayed flight",
+            "",
+            "I just landed, random country, and I'm under stage lights",
+            "Got no time for stage fright, pitch black, still no daylight",
+            "I don't have a clue for what's in store, just pray that fate might (I pray)",
+            "I just hope that fate knows where I'm going because I don't know (Don't know)",
+            "Taking flights to make these",
+        ];
+        let lyrics = crate::integrations::lyrics::Lyrics {
+            synced: lines.iter().enumerate().map(|(i, l)| (i as f64 * 4.0, l.to_string())).collect(),
+            ..Default::default()
+        };
+        window.set_lyrics(slint::ModelRc::new(slint::VecModel::from(super::models::lyrics(Some(&lyrics), active))));
+    }
     if let Ok(theme) = std::env::var("TONAL_DEBUG_THEME") {
         app.theme_action("apply", &format!("g:{theme}"));
     }

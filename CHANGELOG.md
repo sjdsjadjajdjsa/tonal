@@ -2,6 +2,11 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
+## Unreleased
+
+### Fixed
+- Long synced lyric lines wrap with room between them instead of piling on top of each other.
+
 ## 0.11.3 - 2026-11-09
 
 ### Fixed
