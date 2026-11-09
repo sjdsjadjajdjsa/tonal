@@ -2,6 +2,11 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
+## 0.11.1 - 2026-11-09
+
+### Changed
+- Your own background has its own card at the top of the Themes page, with a button to choose a picture, GIF or video, instead of hiding among the scenes.
+
 ## 0.11.0 - 2026-11-09
 
 ### Added
