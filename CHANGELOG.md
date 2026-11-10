@@ -2,6 +2,13 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
+## 0.11.5 - 2026-11-09
+
+### Changed
+- Tonal is back on GitHub: github.com/sjdsjadjajdjsa/tonal. Downloads, issues and pull requests are there, and GitLab is a backup copy.
+- Settings, Updates, the Windows installer and the AppImage's own updater look for new versions on GitHub.
+- Releases are built on GitHub's runners for Linux, Windows and macOS.
+
 ## 0.11.4 - 2026-11-09
 
 ### Fixed
