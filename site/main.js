@@ -1,8 +1,8 @@
 import { THEMES, paint, preview as themePreview, setCustom } from "./scenes.js";
 import { createMusic, DURATION, LYRICS } from "./music.js";
 
-const PROJECT = "https://gitlab.com/api/v4/projects/sjdsjadjajdjsa%2Ftonal";
-const FILES = "https://gitlab.com/sjdsjadjajdjsa/tonal/-/releases/permalink/latest/downloads/";
+const LATEST = "https://api.github.com/repos/sjdsjadjajdjsa/tonal/releases/latest";
+const FILES = "https://github.com/sjdsjadjajdjsa/tonal/releases/latest/download/";
 const VIEWS = ["home", "equalizer", "themes", "light", "download"];
 const TITLES = { home: "Home", equalizer: "Equalizer", themes: "Themes", light: "Light", download: "Download" };
 const PRESETS = [
@@ -90,14 +90,14 @@ const step = (by) => go(VIEWS[(VIEWS.indexOf(current) + by + VIEWS.length) % VIE
 $$("[data-step]").forEach((b) => b.addEventListener("click", () => step(Number(b.dataset.step))));
 $("[data-eq-toggle]").addEventListener("click", () => go(current === "equalizer" && np.hidden ? previous : "equalizer"));
 
-/* Version and downloads from GitLab's latest release, asked at most once an hour. */
+/* Version and downloads from GitHub's latest release, asked at most once an hour. */
 const cached = JSON.parse(store.get("tonal-release", "null") || "null");
 (cached && Date.now() - cached.at < 3600e3
   ? Promise.resolve(cached.release)
-  : fetch(`${PROJECT}/releases/permalink/latest`)
+  : fetch(LATEST)
       .then((r) => (r.ok ? r.json() : null))
       .then((r) => {
-        if (r) store.set("tonal-release", JSON.stringify({ at: Date.now(), release: { tag_name: r.tag_name, released_at: r.released_at } }));
+        if (r) store.set("tonal-release", JSON.stringify({ at: Date.now(), release: { tag_name: r.tag_name, released_at: r.published_at } }));
         return r;
       }))
   .then((release) => {

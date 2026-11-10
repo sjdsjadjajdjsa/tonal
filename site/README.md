@@ -60,8 +60,8 @@ the pops and the bubble notes (`main.js` ports `src/app/equalizer.rs` and
   `--r-s` to `--r-xl`, type `--t-s` to `--t-xxl`. No other pixel values for spacing.
 - Real screenshots of the app only. Every number has a source line under it (the memory
   chart comes from the README's benchmark table).
-- Download links point at GitLab's "latest release" files, so nothing changes per
-  release; the version line is fetched from the GitLab API.
+- Download links point at GitHub's "latest release" files, so nothing changes per
+  release; the version line is fetched from the GitHub API.
 - Motion: the window opens once, pages swap in, buttons press in, the bar's waves, the
   EQ demo. The play button and reduced motion stop all of it. On phones the sidebar
   becomes Tonal's bottom tab row and the window fills the screen; big screens show the
@@ -70,7 +70,7 @@ the pops and the bubble notes (`main.js` ports `src/app/equalizer.rs` and
   nothing outside the panel, no console errors.
 - The share pictures in `og/` are screenshots of each page at 1200 by 630; take them
   again when a page changes a lot.
-- The version line asks GitLab's API at most once an hour per visitor, so a busy day
+- The version line asks GitHub's API at most once an hour per visitor, so a busy day
   doesn't hit its rate limit.
 
 ## The domain
