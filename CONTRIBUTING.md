@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping. Issues and merge requests are welcome on [GitLab](https://gitlab.com/sjdsjadjajdjsa/tonal).
+Thanks for helping. Issues and pull requests are welcome on [GitHub](https://github.com/sjdsjadjajdjsa/tonal).
 
 ## Set up
 
@@ -10,7 +10,7 @@ Install [Rust](https://rustup.rs), [mpv](https://mpv.io) and [yt-dlp](https://gi
 cargo run --release
 ```
 
-## Before you open a merge request
+## Before you open a pull request
 
 ```
 cargo fmt
@@ -25,6 +25,6 @@ The tests play short generated tones through mpv on a null output, so they are s
 ## Guidelines
 
 - Keep it light. Nothing may redraw or poll while the app is idle; measure CPU and memory before and after a change that could affect them.
-- One topic per merge request, with a short scoped title like `fix(lyrics): ...` or `feat(player): ...`.
+- One topic per pull request, with a short scoped title like `fix(lyrics): ...` or `feat(player): ...`.
 - Follow the module layout in [docs/architecture.md](docs/architecture.md).
 - No comments that restate the code; explain only what isn't obvious.

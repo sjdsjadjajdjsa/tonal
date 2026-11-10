@@ -1,5 +1,5 @@
 ; Windows installer (Inno Setup 6). Installs for the current user only, so it
-; needs no admin rights. Built by the windows-installer job in .gitlab-ci.yml, after
+; needs no admin rights. Built by the windows job in .github/workflows/release.yml, after
 ; packaging/windows/build.sh has filled dist/tonal:
 ;
 ;   iscc /DVersion=0.1.0 packaging/windows/tonal.iss
@@ -24,8 +24,8 @@ AppVerName=Tonal {#Version}
 AppPublisher=cj
 AppCopyright=cj, MIT
 VersionInfoDescription=Tonal installer
-AppSupportURL=https://gitlab.com/sjdsjadjajdjsa/tonal
-AppUpdatesURL=https://gitlab.com/sjdsjadjajdjsa/tonal/-/releases
+AppSupportURL=https://github.com/sjdsjadjajdjsa/tonal
+AppUpdatesURL=https://github.com/sjdsjadjajdjsa/tonal/releases
 DefaultDirName={userpf}\Tonal
 DisableProgramGroupPage=yes
 DisableDirPage=yes

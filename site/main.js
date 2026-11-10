@@ -14,7 +14,7 @@ const PRESETS = [
   ["Late night", [4, 2, 0, -2, -5, -8]],
 ];
 
-/// Where the site lives: "/" on its own domain, "/tonal/" on GitLab's address.
+/// The path the site is served from, "/" on its own domain.
 const BASE = document.querySelector('meta[name="base"]')?.content || "/";
 const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];

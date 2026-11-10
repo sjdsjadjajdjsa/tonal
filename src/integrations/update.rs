@@ -1,4 +1,4 @@
-//! Updates from Tonal's GitLab releases. The Mac app, the Windows installer and the
+//! Updates from Tonal's GitHub releases. The Mac app, the Windows installer and the
 //! AppImage replace themselves and start again; other installs open the release page.
 
 use anyhow::Result;
@@ -6,9 +6,8 @@ use parking_lot::Mutex;
 use serde::Deserialize;
 use std::{path::PathBuf, process::Command, time::Duration};
 
-const LATEST: &str =
-    "https://gitlab.com/api/v4/projects/sjdsjadjajdjsa%2Ftonal/releases/permalink/latest";
-pub const PAGE: &str = "https://gitlab.com/sjdsjadjajdjsa/tonal/-/releases/permalink/latest";
+const LATEST: &str = "https://api.github.com/repos/sjdsjadjajdjsa/tonal/releases/latest";
+pub const PAGE: &str = "https://github.com/sjdsjadjajdjsa/tonal/releases/latest";
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -39,19 +38,13 @@ pub fn set_state(state: State) {
 #[derive(Deserialize)]
 struct Release {
     tag_name: String,
-    assets: Assets,
+    assets: Vec<Asset>,
 }
 
 #[derive(Deserialize)]
-struct Assets {
-    links: Vec<Link>,
-}
-
-#[derive(Deserialize)]
-struct Link {
+struct Asset {
     name: String,
-    url: String,
-    direct_asset_url: Option<String>,
+    browser_download_url: String,
 }
 
 fn parse(version: &str) -> Option<(u64, u64, u64)> {
@@ -92,10 +85,11 @@ fn asset() -> Option<&'static str> {
     }
 }
 
-/// Asks GitLab for the latest release.
+/// Asks GitHub for the latest release.
 pub async fn check() -> Result<State> {
     let release: Release = super::client()
         .get(LATEST)
+        .header("Accept", "application/vnd.github+json")
         .send()
         .await?
         .error_for_status()?
@@ -107,10 +101,9 @@ pub async fn check() -> Result<State> {
     let url = asset().and_then(|name| {
         release
             .assets
-            .links
             .into_iter()
-            .find(|l| l.name == name)
-            .map(|l| l.direct_asset_url.unwrap_or(l.url))
+            .find(|a| a.name == name)
+            .map(|a| a.browser_download_url)
     });
     Ok(State::Available {
         version: release.tag_name.trim_start_matches('v').to_owned(),
@@ -267,20 +260,17 @@ mod tests {
     }
 
     #[test]
-    fn reads_a_gitlab_release() {
-        let json = r#"{"tag_name":"v1.2.0","assets":{"count":2,"sources":[],"links":[
-            {"id":1,"name":"tonal-macos-arm64.dmg","url":"https://gitlab.com/api/v4/projects/1/packages/generic/tonal/1.2.0/tonal-macos-arm64.dmg","direct_asset_url":"https://gitlab.com/sjdsjadjajdjsa/tonal/-/releases/v1.2.0/downloads/tonal-macos-arm64.dmg","link_type":"package"},
-            {"id":2,"name":"SHA256SUMS","url":"https://example.com/SHA256SUMS","link_type":"other"}]}}"#;
+    fn reads_a_github_release() {
+        let json = r#"{"tag_name":"v1.2.0","published_at":"2026-11-10T00:00:00Z","assets":[
+            {"id":1,"name":"tonal-macos-arm64.dmg","size":9124409,"browser_download_url":"https://github.com/sjdsjadjajdjsa/tonal/releases/download/v1.2.0/tonal-macos-arm64.dmg"},
+            {"id":2,"name":"SHA256SUMS","size":542,"browser_download_url":"https://github.com/sjdsjadjajdjsa/tonal/releases/download/v1.2.0/SHA256SUMS"}]}"#;
         let release: Release = serde_json::from_str(json).unwrap();
         assert_eq!(release.tag_name, "v1.2.0");
-        let dmg = &release.assets.links[0];
-        assert_eq!(dmg.name, "tonal-macos-arm64.dmg");
+        assert_eq!(release.assets[0].name, "tonal-macos-arm64.dmg");
         assert!(
-            dmg.direct_asset_url
-                .as_deref()
-                .unwrap()
-                .ends_with("/downloads/tonal-macos-arm64.dmg")
+            release.assets[0]
+                .browser_download_url
+                .ends_with("/download/v1.2.0/tonal-macos-arm64.dmg")
         );
-        assert!(release.assets.links[1].direct_asset_url.is_none());
     }
 }

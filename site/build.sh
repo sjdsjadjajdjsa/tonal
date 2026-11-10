@@ -4,7 +4,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 out=${1:-public}
-# Where the site is served from: "/" on its own domain, "/tonal/" on GitLab's address.
+# The path the site is served from, "/" on its own domain.
 base=${2:-/}
 rm -rf "$out"
 mkdir -p "$out/assets" "$out/fonts"

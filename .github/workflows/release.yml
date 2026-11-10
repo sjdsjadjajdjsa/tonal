@@ -1,0 +1,148 @@
+name: release
+
+# A tag like v1.2.0 builds Tonal for Linux, Windows and macOS on GitHub's runners and
+# publishes the downloads as the GitHub release for that tag, with the notes from
+# CHANGELOG.md. The tag must match the version in Cargo.toml. Windows is built on Linux
+# with cargo-xwin and packed with Inno Setup in a container.
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: read
+
+env:
+  TAG: ${{ github.ref_name }}
+  TONAL_DISCORD_APP: ${{ vars.DISCORD_APP_ID }}
+
+jobs:
+  version:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Check the tag against Cargo.toml
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          [ "v$version" = "$TAG" ] || { echo "Tag $TAG but Cargo.toml says $version"; exit 1; }
+
+  linux:
+    needs: version
+    runs-on: ubuntu-24.04
+    # The oldest supported Ubuntu LTS, so the build runs on glibc 2.35 or newer.
+    container: ubuntu:22.04
+    steps:
+      - name: System libraries
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: apt-get update -qq && apt-get install -y -qq --no-install-recommends ca-certificates curl file git build-essential pkg-config libsqlite3-dev libdbus-1-dev libasound2-dev libfontconfig-dev libxkbcommon-dev
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: AppImage
+        run: packaging/linux/build-appimage.sh
+      - name: Pack
+        run: |
+          mkdir -p dist/tonal
+          cp target/release/tonal target/appimage/yt-dlp README.md LICENSE THIRD-PARTY-NOTICES.md dist/tonal/
+          cp ui/fonts/Inter-LICENSE.txt dist/tonal/FONTS-LICENSE.txt
+          cp packaging/linux/tonal.desktop ui/icon.png dist/tonal/
+          tar czf tonal-linux-x86_64.tar.gz -C dist tonal
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux
+          path: |
+            tonal-linux-x86_64.tar.gz
+            tonal-x86_64.AppImage
+            tonal-x86_64.AppImage.zsync
+
+  windows:
+    needs: version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: xwin
+      - name: Tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends clang lld llvm p7zip-full zip
+      - name: Build
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          llvm=$(find /usr/lib -maxdepth 1 -name 'llvm-*' | sort -V | tail -1)
+          export PATH="$llvm/bin:$PATH"
+          sh packaging/windows/build.sh
+      - name: Installer
+        run: |
+          chmod -R a+rwX .
+          docker run --rm -v "$PWD:/work" -w /work --entrypoint iscc amake/innosetup:latest /Q "/DVersion=${TAG#v}" packaging/windows/tonal.iss
+          test -f tonal-setup-x86_64.exe
+      - name: Portable zip
+        run: |
+          touch dist/tonal/portable
+          (cd dist && zip -qr ../tonal-windows-x86_64.zip tonal)
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows
+          path: |
+            tonal-setup-x86_64.exe
+            tonal-windows-x86_64.zip
+
+  macos:
+    needs: version
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: App and disk image
+        run: |
+          TONAL_NO_INSTALL=1 sh packaging/macos/build-app.sh
+          mkdir -p dist/Tonal
+          cp -R target/release/Tonal.app dist/Tonal/
+          ln -s /Applications dist/Tonal/Applications
+          cp README.md LICENSE THIRD-PARTY-NOTICES.md dist/Tonal/
+          cp ui/fonts/Inter-LICENSE.txt dist/Tonal/FONTS-LICENSE.txt
+          hdiutil create -volname Tonal -srcfolder dist/Tonal -ov -format UDZO tonal-macos-arm64.dmg
+          hdiutil verify tonal-macos-arm64.dmg
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos
+          path: tonal-macos-arm64.dmg
+
+  publish:
+    needs: [linux, windows, macos]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd assets
+          sha256sum tonal-* | tee SHA256SUMS
+          awk -v v="## ${TAG#v} " 'index($0, v) == 1 {on = 1; next} on && /^## / {exit} on' ../CHANGELOG.md > ../notes.md
+          gh release create "$TAG" tonal-* SHA256SUMS --repo "$GITHUB_REPOSITORY" --title "Tonal $TAG" --notes-file ../notes.md --verify-tag
