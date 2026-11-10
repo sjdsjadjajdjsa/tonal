@@ -333,7 +333,8 @@ async fn real_mpv_crash_restarts_same_track_position_and_pause() {
                 let resumed_position = message.instance != instance
                     && message.value["name"] == "time-pos"
                     && message.value["data"].as_f64().is_some_and(|pos| pos > 2.5);
-                engine.message(message).await.unwrap();
+                let result = engine.message(message).await;
+                engine.handle_result(result).await.unwrap();
                 if resumed_position {
                     break;
                 }
