@@ -7,12 +7,11 @@
 
 <br><br>
 
-[![release](https://img.shields.io/gitlab/v/release/sjdsjadjajdjsa/tonal?style=flat-square&label=release&labelColor=0e0f12&color=1ed760)](https://gitlab.com/sjdsjadjajdjsa/tonal/-/releases/permalink/latest)
-[![ci](https://img.shields.io/gitlab/pipeline-status/sjdsjadjajdjsa/tonal?branch=main&style=flat-square&label=ci&labelColor=0e0f12&color=1ed760)](https://gitlab.com/sjdsjadjajdjsa/tonal/-/pipelines)
+[![release](https://img.shields.io/github/v/release/sjdsjadjajdjsa/tonal?style=flat-square&label=release&labelColor=0e0f12&color=1ed760)](https://github.com/sjdsjadjajdjsa/tonal/releases/latest)
 [![platforms](https://img.shields.io/badge/Linux%20·%20Windows%20·%20macOS-1ed760?style=flat-square&label=runs%20on&labelColor=0e0f12)](#install)
 [![license](https://img.shields.io/badge/MIT-1ed760?style=flat-square&label=license&labelColor=0e0f12)](LICENSE)
 
-**[tonalplayer.com](https://tonalplayer.com)** &nbsp;·&nbsp; **[Download](https://gitlab.com/sjdsjadjajdjsa/tonal/-/releases/permalink/latest)** &nbsp;·&nbsp; [Features](#features) &nbsp;·&nbsp; [Screenshots](#screenshots) &nbsp;·&nbsp; [Install](#install) &nbsp;·&nbsp; [Benchmarks](#benchmarks) &nbsp;·&nbsp; [How it works](#how-it-works)
+**[tonalplayer.com](https://tonalplayer.com)** &nbsp;·&nbsp; **[Download](https://github.com/sjdsjadjajdjsa/tonal/releases/latest)** &nbsp;·&nbsp; [Features](#features) &nbsp;·&nbsp; [Screenshots](#screenshots) &nbsp;·&nbsp; [Install](#install) &nbsp;·&nbsp; [Benchmarks](#benchmarks) &nbsp;·&nbsp; [How it works](#how-it-works)
 
 <br>
 
@@ -84,7 +83,7 @@ Stream YouTube Music, SoundCloud and Audius, play your own files and bring your 
 
 ## Install
 
-<a href="https://gitlab.com/sjdsjadjajdjsa/tonal/-/releases/permalink/latest">
+<a href="https://github.com/sjdsjadjajdjsa/tonal/releases/latest">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/install-dark.svg">
   <img alt="Linux: tonal-x86_64.AppImage. Windows: tonal-setup-x86_64.exe. macOS: tonal-macos-arm64.dmg. Arch Linux: packaging/aur/tonal" src="docs/images/install-light.svg" width="100%">
@@ -190,7 +189,7 @@ Right-click a song for play next, add to queue, start radio, download and add to
 Needs [Rust](https://rustup.rs) 1.90 or newer, plus mpv and yt-dlp on your `PATH`. On Debian or Ubuntu you also need `libsqlite3-dev libdbus-1-dev libasound2-dev libfontconfig-dev libxkbcommon-dev`.
 
 ```
-git clone https://gitlab.com/sjdsjadjajdjsa/tonal
+git clone https://github.com/sjdsjadjajdjsa/tonal
 cd tonal
 cargo run --release
 ```
