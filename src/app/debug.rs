@@ -226,10 +226,16 @@ pub(super) fn debug_hooks(app: &Controller, window: &AppWindow) {
             "Taking flights to make these",
         ];
         let lyrics = crate::integrations::lyrics::Lyrics {
-            synced: lines.iter().enumerate().map(|(i, l)| (i as f64 * 4.0, l.to_string())).collect(),
+            synced: lines
+                .iter()
+                .enumerate()
+                .map(|(i, l)| (i as f64 * 4.0, l.to_string()))
+                .collect(),
             ..Default::default()
         };
-        window.set_lyrics(slint::ModelRc::new(slint::VecModel::from(super::models::lyrics(Some(&lyrics), active))));
+        window.set_lyrics(slint::ModelRc::new(slint::VecModel::from(
+            super::models::lyrics(Some(&lyrics), active),
+        )));
     }
     if let Ok(theme) = std::env::var("TONAL_DEBUG_THEME") {
         app.theme_action("apply", &format!("g:{theme}"));
