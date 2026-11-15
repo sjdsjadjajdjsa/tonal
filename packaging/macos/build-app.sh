@@ -15,11 +15,15 @@ sed "s/@VERSION@/$version/g" packaging/macos/Info.plist > "$app/Contents/Info.pl
 iconset=$(mktemp -d)/tonal.iconset
 mkdir -p "$iconset"
 for size in 16 32 128 256 512; do
-    sips -z "$size" "$size" ui/icon.png --out "$iconset/icon_${size}x${size}.png" >/dev/null
+    sips -z "$size" "$size" packaging/macos/icon.png --out "$iconset/icon_${size}x${size}.png" >/dev/null
     double=$((size * 2))
-    sips -z "$double" "$double" ui/icon.png --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
+    sips -z "$double" "$double" packaging/macos/icon.png --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
 done
 iconutil -c icns "$iconset" -o "$app/Contents/Resources/tonal.icns"
+# Licences ship inside the app, so the .dmg window only shows Tonal and Applications.
+cp LICENSE "$app/Contents/Resources/LICENSE.txt"
+cp THIRD-PARTY-NOTICES.md "$app/Contents/Resources/THIRD-PARTY-NOTICES.md"
+cp ui/fonts/Inter-LICENSE.txt "$app/Contents/Resources/FONTS-LICENSE.txt"
 sh packaging/macos/fetch-mpv.sh "$app"
 
 # Ad-hoc signing. macOS ignores Full Disk Access for apps signed with an

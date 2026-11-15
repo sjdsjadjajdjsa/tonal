@@ -49,6 +49,18 @@ def wave(period, amp, mid, harmonics, width, H=H):
     return f"M0,{H} L" + " L".join(points) + f" L{int(width)},{H} Z"
 
 
+def squircle(x, y, size, steps=240, n=5):
+    """The icon's tile outline (a superellipse, like Apple's app icon shape)."""
+    pts = []
+    for i in range(steps):
+        t = 2 * math.pi * i / steps
+        c, s = math.cos(t), math.sin(t)
+        px = math.copysign(abs(c) ** (2 / n), c)
+        py = math.copysign(abs(s) ** (2 / n), s)
+        pts.append(f"{x + (px + 1) / 2 * size:.2f},{y + (py + 1) / 2 * size:.2f}")
+    return "M" + "L".join(pts) + "Z"
+
+
 def banner(look, H=H, rx=28):
     c = LOOKS[look]
     drop, lift = H - 360, (H - 360) * 0.55
@@ -86,7 +98,7 @@ def banner(look, H=H, rx=28):
 </g>
 <g transform="translate(0 {lift:.0f})">
 <image x="{left:.1f}" y="68" width="{icon_size}" height="{icon_size}" href="data:image/png;base64,{icon}"/>
-<rect x="{left + 0.5:.1f}" y="68.5" width="{icon_size - 1}" height="{icon_size - 1}" rx="27" fill="none" stroke="{c["text"]}" stroke-opacity="{c["ring"]}"/>
+<path d="{squircle(left + 0.5, 68.5, icon_size - 1)}" fill="none" stroke="{c["text"]}" stroke-opacity="{c["ring"]}"/>
 <path transform="translate({text_x:.1f} 166)" d="{word}" fill="{c["text"]}"/>
 <path transform="translate({text_x + 6:.1f} 218)" d="{line_one}" fill="{c["text"]}" fill-opacity="0.92"/>
 <path transform="translate({text_x + 6:.1f} 252)" d="{line_two}" fill="{c["muted"]}"/>

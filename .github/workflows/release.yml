@@ -113,13 +113,9 @@ jobs:
       - name: App and disk image
         run: |
           TONAL_NO_INSTALL=1 sh packaging/macos/build-app.sh
-          mkdir -p dist/Tonal
-          cp -R target/release/Tonal.app dist/Tonal/
-          ln -s /Applications dist/Tonal/Applications
-          cp README.md LICENSE THIRD-PARTY-NOTICES.md dist/Tonal/
-          cp ui/fonts/Inter-LICENSE.txt dist/Tonal/FONTS-LICENSE.txt
-          cp target/release/Tonal.app/Contents/Resources/mpv-LICENSE.GPL.txt dist/Tonal/
-          hdiutil create -volname Tonal -srcfolder dist/Tonal -ov -format UDZO tonal-macos-arm64.dmg
+          python3 -m venv .dmg-venv
+          .dmg-venv/bin/pip install --quiet dmgbuild==1.6.5
+          .dmg-venv/bin/dmgbuild -s packaging/macos/dmg.py Tonal tonal-macos-arm64.dmg
           hdiutil verify tonal-macos-arm64.dmg
       - uses: actions/upload-artifact@v7
         with:
