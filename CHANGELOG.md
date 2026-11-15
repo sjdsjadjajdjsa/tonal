@@ -2,7 +2,7 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
-## Unreleased
+## 0.11.6 - 2026-11-15
 
 ### Changed
 - Tonal for Mac plays without Homebrew. mpv is inside the app (on macOS 15 and newer), and the first time Tonal opens it downloads yt-dlp by itself when it isn't installed. Homebrew's yt-dlp is still used when it's there. Settings → YouTube → yt-dlp → Update keeps Tonal's own copy up to date.
