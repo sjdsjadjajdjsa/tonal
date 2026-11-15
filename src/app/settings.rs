@@ -236,6 +236,24 @@ impl Controller {
             }
         });
     }
+
+    /// Downloads yt-dlp when none is installed (macOS).
+    #[cfg(target_os = "macos")]
+    pub(super) fn set_up_ytdlp(&self) {
+        self.status("Setting up yt-dlp for YouTube and SoundCloud…");
+        let this = self.clone();
+        tokio::spawn(async move {
+            match crate::sources::ytdlp_setup::install().await {
+                Ok(message) => this.status(message),
+                Err(e) => {
+                    log::warn!("yt-dlp setup: {e:#}");
+                    this.status(format!(
+                        "Couldn't set up yt-dlp: {e} · Settings → YouTube → yt-dlp → Update tries again"
+                    ));
+                }
+            }
+        });
+    }
 }
 
 fn seconds(value: &str) -> Option<f64> {

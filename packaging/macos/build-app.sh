@@ -1,5 +1,5 @@
 #!/bin/sh
-# Builds Tonal.app and installs it to /Applications.
+# Builds Tonal.app, with mpv inside (fetch-mpv.sh), and installs it to /Applications.
 # With TONAL_NO_INSTALL=1 it only builds target/release/Tonal.app.
 set -eu
 cd "$(dirname "$0")/../.."
@@ -20,6 +20,7 @@ for size in 16 32 128 256 512; do
     sips -z "$double" "$double" ui/icon.png --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
 done
 iconutil -c icns "$iconset" -o "$app/Contents/Resources/tonal.icns"
+sh packaging/macos/fetch-mpv.sh "$app"
 
 # Ad-hoc signing. macOS ignores Full Disk Access for apps signed with an
 # untrusted self-made certificate, so the local certificate is opt-in only.
