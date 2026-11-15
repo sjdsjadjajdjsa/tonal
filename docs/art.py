@@ -131,7 +131,7 @@ def features(c):
 PLATFORMS = [
     ("Linux", "tonal-x86_64.AppImage", ["Make it executable and run it.", "Install mpv first."]),
     ("Windows", "tonal-setup-x86_64.exe", ["Run it, no admin rights needed.", "mpv and yt-dlp are inside."]),
-    ("macOS", "tonal-macos-arm64.dmg", ["Drag Tonal to Applications.", "brew install mpv yt-dlp deno"]),
+    ("macOS", "tonal-macos-arm64.dmg", ["Drag Tonal to Applications.", "mpv is inside."]),
     ("Arch Linux", "packaging/aur/tonal", ["makepkg -si from a clone.", "Uses your own mpv."]),
 ]
 
