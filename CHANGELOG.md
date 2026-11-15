@@ -2,6 +2,12 @@
 
 All notable changes to Tonal. Versions follow [Semantic Versioning](https://semver.org).
 
+## 0.11.7 - 2026-11-15
+
+### Changed
+- New app icon, redrawn sharp at every size. On the Mac it follows Apple's icon shape, so macOS no longer puts it on a white tile.
+- The Mac `.dmg` opens to a proper install window: Tonal, an arrow and your Applications folder. The licence files moved inside the app.
+
 ## 0.11.6 - 2026-11-15
 
 ### Changed
