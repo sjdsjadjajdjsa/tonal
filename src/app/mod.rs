@@ -428,6 +428,15 @@ pub fn run() -> anyhow::Result<()> {
     app.refresh_playlists();
     app.go(browse::Nav::Page("Home".into()));
     let missing = crate::sources::missing_tools();
+    // On macOS Tonal downloads yt-dlp itself. Without mpv too (macOS 14 without
+    // Homebrew) the message asks for both, as Homebrew's mpv brings yt-dlp along.
+    #[cfg(target_os = "macos")]
+    let missing = if missing == ["yt-dlp"] {
+        app.set_up_ytdlp();
+        Vec::new()
+    } else {
+        missing
+    };
     if !missing.is_empty() {
         app.status(format!(
             "Missing tools: {} · Install these to play online music",

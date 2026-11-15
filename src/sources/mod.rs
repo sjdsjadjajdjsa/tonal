@@ -5,6 +5,8 @@ mod pot;
 mod soundcloud;
 mod youtube;
 mod youtube_browse;
+#[cfg(target_os = "macos")]
+pub mod ytdlp_setup;
 
 use crate::model::{AlbumPage, AlbumRef, ArtistPage, ArtistRef, SourceKind, Track};
 use std::sync::OnceLock;
@@ -145,12 +147,17 @@ pub fn js_runtime() -> Option<&'static str> {
         .find(|name| on_path(name))
 }
 
-/// Updates yt-dlp: Homebrew's with `brew upgrade`, the standalone build
-/// (bundled or downloaded) in place. Returns what changed, or an error that
-/// says how to update it when another package manager owns it.
+/// Updates yt-dlp: Homebrew's with `brew upgrade`, the one Tonal downloaded on
+/// macOS by downloading the newest (or a first one when there is none), the
+/// standalone build (bundled or downloaded) in place. Returns what changed, or an
+/// error that says how to update it when another package manager owns it.
 pub async fn update_ytdlp() -> anyhow::Result<String> {
     if homebrew_owns_ytdlp() {
         return brew_upgrade_ytdlp().await;
+    }
+    #[cfg(target_os = "macos")]
+    if ytdlp_setup::owns_ytdlp() || !on_path("yt-dlp") {
+        return ytdlp_setup::install().await;
     }
     let output = tokio::time::timeout(
         Duration::from_secs(120),

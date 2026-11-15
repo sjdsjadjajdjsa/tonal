@@ -242,14 +242,16 @@ impl Mpv {
         ));
         // The hook runs Tonal as its yt-dlp: the same yt-dlp Tonal probes with,
         // and it waits until YouTube's stream links work before mpv opens them.
+        // Before Tonal has downloaded its yt-dlp (macOS) there is none yet; the
+        // wrapper then looks it up on PATH each time mpv runs it.
         #[cfg(not(test))]
-        if let (Some(real), Some(wrapper)) = (
-            crate::sources::find_on_path("yt-dlp"),
-            std::env::current_exe()
-                .ok()
-                .and_then(|path| path.to_str().map(str::to_owned))
-                .filter(|path| !path.contains(',')),
-        ) {
+        if let Some(wrapper) = std::env::current_exe()
+            .ok()
+            .and_then(|path| path.to_str().map(str::to_owned))
+            .filter(|path| !path.contains(','))
+        {
+            let real = crate::sources::find_on_path("yt-dlp")
+                .map_or_else(|| "yt-dlp".into(), PathBuf::into_os_string);
             command.arg(format!("--script-opts=ytdl_hook-ytdl_path={wrapper}"));
             command.env(crate::ytdl_wait::REAL, real);
         }
